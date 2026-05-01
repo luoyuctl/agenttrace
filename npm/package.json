@@ -4,7 +4,7 @@
   "description": "AI Agent Session Analyzer — find hanging, token waste, thinking redaction & quality regressions",
   "main": "install.js",
   "bin": {
-    "agenttrace": "./run.js"
+    "agenttrace": "run.js"
   },
   "files": [
     "install.js",
@@ -32,8 +32,15 @@
     "hermes"
   ],
   "license": "MIT",
-  "os": ["darwin", "linux", "win32"],
-  "cpu": ["x64", "arm64"],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
   "engines": {
     "node": ">=16"
   }
