@@ -57,6 +57,7 @@ const (
 	viewOverview view = iota
 	viewList
 	viewDetail
+	viewDiff // diff two sessions side-by-side
 	viewCompare
 )
 
@@ -94,6 +95,13 @@ type Model struct {
 	compareLines []string
 	compareTable table.Model
 	compareReady bool
+
+	// Diff view
+	diffResult    engine.SessionDiff
+	fixSuggestions []engine.FixSuggestion
+	toolWarnings   []engine.ToolWarning
+	costAlert      engine.CostAlert
+	healthTrend    engine.HealthTrend
 
 	// Dimensions
 	width  int
@@ -281,6 +289,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.view = viewDetail
 				m.openDetail()
 			case viewDetail:
+				m.view = viewDiff
+			case viewDiff:
 				m.view = viewCompare
 			case viewCompare:
 				m.view = viewOverview
@@ -333,7 +343,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 退出筛选模式
 				m.filterActive = false
 				m.filterInput = ""
-			} else if m.view == viewDetail || m.view == viewCompare {
+			} else if m.view == viewDetail || m.view == viewCompare || m.view == viewDiff {
 				m.view = viewList
 			}
 		case "backspace":
@@ -384,6 +394,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.applyFilter()
 			}
 
+		case "d":
+			if m.view == viewList {
+				cursor := m.table.Cursor()
+				if cursor+1 < len(m.sessions) {
+					m.diffResult = engine.DiffSessions(m.sessions[cursor], m.sessions[cursor+1])
+					m.view = viewDiff
+				}
+			} else if m.view == viewDetail {
+				idx := m.findSessionIndex()
+				if idx > 0 {
+					m.diffResult = engine.DiffSessions(m.sessions[idx-1], m.sessions[idx])
+					m.view = viewDiff
+				}
+			}
+
 		default:
 			// 筛选输入模式：捕获按键
 			if m.filterActive {
@@ -403,6 +428,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case viewDetail:
 				m.viewport, cmd = m.viewport.Update(msg)
+			case viewDiff:
+				// No sub-component in diff view
 			case viewCompare:
 				m.compareTable, cmd = m.compareTable.Update(msg)
 				if msg.String() == "h" && m.compareReady {
@@ -431,12 +458,18 @@ func (m *Model) openDetail() {
 		m.viewport.SetContent(text)
 		m.detailReady = true
 
+		// Load fix suggestions, tool warnings, cost alert
+		m.fixSuggestions = engine.GenerateFixes(s.Metrics, s.Anomalies, string(m.lang))
+		m.costAlert = engine.PredictCostAnomaly(m.sessions, s)
+
 		// 循环检测：解析会话事件并分析循环
 		events, err := engine.Parse(s.Path)
 		if err == nil {
 			m.loopResult = engine.AnalyzeLoops(events)
+			m.toolWarnings = engine.ValidateToolPatterns(events)
 		} else {
 			m.loopResult = engine.LoopResult{}
+			m.toolWarnings = nil
 		}
 	}
 }
@@ -584,10 +617,31 @@ func (m Model) View() string {
 			if loopSection != "" {
 				detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, "", loopSection)
 			}
+
+			// 修复建议
+			fixSection := m.renderFixSuggestions()
+			if fixSection != "" {
+				detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, "", fixSection)
+			}
+
+			// 工具调用警告
+			toolWarnSection := m.renderToolWarnings()
+			if toolWarnSection != "" {
+				detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, "", toolWarnSection)
+			}
+
+			// 成本预警
+			costAlertSection := m.renderCostAlert()
+			if costAlertSection != "" {
+				detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, "", costAlertSection)
+			}
+
 			content = baseStyle.Render(detailContent)
 		} else {
 			content = baseStyle.Render(dimStyle.Render(i18n.T("select_session_hint")))
 		}
+	case viewDiff:
+		content = m.renderDiff()
 	case viewCompare:
 		if len(m.sessions) == 0 {
 			content = baseStyle.Render(lipgloss.NewStyle().Padding(1).Render(i18n.T("empty_sessions_hint")))
@@ -603,7 +657,7 @@ func (m Model) View() string {
 }
 
 func (m Model) renderTabs() string {
-	tabs := []string{i18n.T("tab_overview"), i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_compare")}
+	tabs := []string{i18n.T("tab_overview"), i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_diff"), i18n.T("tab_compare")}
 	var rendered []string
 	for i, t := range tabs {
 		active := int(m.view) == i
@@ -639,6 +693,8 @@ func (m Model) renderHelp() string {
 		}
 	case viewDetail:
 		keys = i18n.T("help_detail")
+	case viewDiff:
+		keys = i18n.T("help_diff")
 	case viewCompare:
 		keys = i18n.T("help_compare")
 	}
@@ -676,6 +732,116 @@ func (m Model) renderLoopAnalysis() string {
 		greenStyle.Render("✅"),
 		i18n.T("no_loop"))
 	return loopCard.Render(content)
+}
+
+// renderFixSuggestions renders fix suggestions for the current detail view.
+func (m Model) renderFixSuggestions() string {
+	if len(m.fixSuggestions) == 0 {
+		return ""
+	}
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42")).Render(i18n.T("fix_title"))
+	var lines []string
+	lines = append(lines, title)
+	for _, fs := range m.fixSuggestions {
+		msg := fmt.Sprintf("【%s】%s → %s", fs.Title, fs.Description, fs.Action)
+		card := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("42")).
+			Padding(0, 1).
+			Render(greenStyle.Render("  • " + msg))
+		lines = append(lines, card)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// renderToolWarnings renders tool call warnings for the current detail view.
+func (m Model) renderToolWarnings() string {
+	if len(m.toolWarnings) == 0 {
+		return ""
+	}
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220")).Render(i18n.T("tool_warn_title"))
+	var lines []string
+	lines = append(lines, title)
+	for _, tw := range m.toolWarnings {
+		msg := fmt.Sprintf("[%s] %s (×%d)", tw.Pattern, tw.Detail, tw.Count)
+		card := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("220")).
+			Padding(0, 1).
+			Render(yellowStyle.Render("  ⚠ " + msg))
+		lines = append(lines, card)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// renderCostAlert renders cost anomaly alerts for the current detail view.
+func (m Model) renderCostAlert() string {
+	if !m.costAlert.Triggered {
+		return ""
+	}
+	title := lipgloss.NewStyle().Bold(true).Render(i18n.T("cost_alert_title"))
+	var lines []string
+	lines = append(lines, title)
+
+	msg := m.costAlert.Message
+
+	borderColor := lipgloss.Color("196")
+	if m.costAlert.Level == "warning" {
+		borderColor = lipgloss.Color("220")
+	}
+	card := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Render(msg)
+	lines = append(lines, card)
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// renderDiff renders the side-by-side session diff view.
+func (m Model) renderDiff() string {
+	dr := m.diffResult
+
+	// Header
+	headerA := lipgloss.NewStyle().Bold(true).Width(22).Render(dr.SessionA)
+	headerB := lipgloss.NewStyle().Bold(true).Width(22).Foreground(lipgloss.Color("39")).Render(dr.SessionB)
+	header := lipgloss.JoinHorizontal(lipgloss.Top, headerA, lipgloss.NewStyle().Width(3).Render(""), headerB)
+
+	// Separator
+	sep := dimStyle.Render("──────────────────────────────────────────────")
+
+	rows := []string{header, sep}
+
+	// Render each diff entry
+	for _, e := range dr.Entries {
+		valA := lipgloss.NewStyle().Width(22).Render(fmt.Sprintf("%s: %s", e.Field, e.ValueA))
+		var valBStyle lipgloss.Style
+		if e.Better == "B" {
+			valBStyle = lipgloss.NewStyle().Width(22).Foreground(lipgloss.Color("42"))
+		} else if e.Better == "A" {
+			valBStyle = lipgloss.NewStyle().Width(22).Foreground(lipgloss.Color("196"))
+		} else {
+			valBStyle = lipgloss.NewStyle().Width(22)
+		}
+		valB := valBStyle.Render(fmt.Sprintf("%s: %s %s", e.Field, e.ValueB, e.Delta))
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, valA, lipgloss.NewStyle().Width(3).Render(""), valB))
+	}
+
+	rows = append(rows, sep)
+
+	// Summary
+	summary := greenStyle.Render(dr.Summary)
+	rows = append(rows, summary)
+
+	return baseStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+}
+
+// findSessionIndex returns the index of the currently-viewed session in m.sessions.
+func (m *Model) findSessionIndex() int {
+	if !m.detailReady || len(m.sessions) == 0 {
+		return -1
+	}
+	return m.table.Cursor()
 }
 
 // refreshColumns rebuilds column titles for both tables after a language switch.
@@ -874,9 +1040,29 @@ func (m Model) renderOverview() string {
 
 	bottomPanel := anomalyCard.Render(anomalyContent)
 
+	// Health trend indicator
+	m.healthTrend = engine.AnalyzeHealthTrend(m.sessions)
+	var trendLine string
+	if m.healthTrend.Regressing {
+		trendLine = redStyle.Render(m.healthTrend.Message)
+	} else if m.healthTrend.Direction == "down" {
+		trendLine = redStyle.Render(m.healthTrend.Message)
+	} else if m.healthTrend.Direction == "up" {
+		trendLine = cyanStyle.Render(m.healthTrend.Message)
+	} else {
+		trendLine = greenStyle.Render(m.healthTrend.Message)
+	}
+
+	trendCard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63")).
+		Padding(1, 2).
+		Width(40).
+		Render(boldStyle.Render(i18n.T("trend_title")) + "\n" + trendLine)
+
 	// Layout
 	topRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", midPanel, "  ", rightPanel)
-	result := lipgloss.JoinVertical(lipgloss.Left, topRow, "", bottomPanel)
+	result := lipgloss.JoinVertical(lipgloss.Left, topRow, "", lipgloss.JoinHorizontal(lipgloss.Top, bottomPanel, "  ", trendCard))
 
 	return baseStyle.Render(result)
 }

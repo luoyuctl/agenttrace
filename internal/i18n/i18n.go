@@ -524,6 +524,59 @@ var translations = map[string]map[Lang]string{
 		EN: "Tab",
 		ZH: "Tab",
 	},
+
+	// ── Fix suggestions ──
+	"fix_title": {EN: "💡 Fix Suggestions", ZH: "💡 修复建议"},
+	"fix_hanging": {EN: "Add tool timeout protection — detected %d gaps >60s", ZH: "添加工具超时保护 — 检测到 %d 个间隔 >60s"},
+	"fix_tool_fail": {EN: "Check tool schemas — %d/%d calls failed", ZH: "检查工具 Schema — %d/%d 调用失败"},
+	"fix_shallow": {EN: "Increase reasoning depth — avg %.0f chars per block", ZH: "增加推理深度 — 平均每块 %.0f 字符"},
+	"fix_redaction": {EN: "Review redaction config — %d blocks hidden", ZH: "检查脱敏配置 — %d 思维块被隐藏"},
+	"fix_no_tools": {EN: "Enable tool calling for this agent", ZH: "为此 agent 启用工具调用"},
+
+	// ── Diff ──
+	"diff_title": {EN: "Session Diff", ZH: "会话对比"},
+	"diff_field_health": {EN: "Health", ZH: "健康"},
+	"diff_field_cost": {EN: "Cost", ZH: "费用"},
+	"diff_field_turns": {EN: "Turns", ZH: "轮次"},
+	"diff_field_tools": {EN: "Tools", ZH: "工具"},
+	"diff_field_success": {EN: "Success", ZH: "成功率"},
+	"diff_field_fail": {EN: "Fail", ZH: "失败"},
+	"diff_field_duration": {EN: "Duration", ZH: "时长"},
+	"diff_field_model": {EN: "Model", ZH: "模型"},
+	"diff_field_anomalies": {EN: "Anomalies", ZH: "异常"},
+	"diff_better": {EN: "better", ZH: "更好"},
+	"diff_worse": {EN: "worse", ZH: "更差"},
+	"diff_same": {EN: "same", ZH: "相同"},
+
+	// ── Cost alert ──
+	"cost_alert_title": {EN: "🚨 Cost Alert", ZH: "🚨 成本预警"},
+	"cost_alert_critical": {EN: "This session cost $%.2f/turn (%.0fx avg $%.2f/turn)", ZH: "本会话单轮 $%.2f（是平均 $%.2f 的 %.0f 倍）"},
+	"cost_alert_warning": {EN: "Loop cost is %.0f%% of total — consider adding circuit breaker", ZH: "循环成本占总成本 %.0f%% — 建议添加熔断机制"},
+
+	// ── Health trend ──
+	"trend_title": {EN: "Health Trend", ZH: "健康趋势"},
+	"trend_regressing": {EN: "📉 Declining: %d→%d→%d", ZH: "📉 持续下降: %d→%d→%d"},
+	"trend_stable": {EN: "📊 Stable at %d", ZH: "📊 稳定在 %d"},
+	"trend_improving": {EN: "📈 Improving: %d→%d→%d", ZH: "📈 持续上升: %d→%d→%d"},
+
+	// ── Tool warnings ──
+	"tool_warn_title": {EN: "⚠️ Tool Warnings", ZH: "⚠️ 工具调用警告"},
+	"tool_warn_dead_loop": {EN: "%s called %dx consecutively — possible dead loop", ZH: "%s 连续调用 %d 次 — 疑似死循环"},
+	"tool_warn_empty_args": {EN: "%s called with empty arguments", ZH: "%s 调用参数为空"},
+	"tool_warn_retry": {EN: "%s retried %dx after failures", ZH: "%s 失败后重试 %d 次"},
+	"tool_warn_redundant": {EN: "%s called %dx with same args — redundant", ZH: "%s 重复调用 %d 次 — 冗余"},
+
+	// ── Prompt impact ──
+	"prompt_impact_title": {EN: "📝 Prompt Impact", ZH: "📝 Prompt 影响"},
+	"prompt_impact_improving": {EN: "Trend: improving — keep current approach", ZH: "趋势: 改善中 — 保持当前策略"},
+	"prompt_impact_worsening": {EN: "Trend: worsening — consider rolling back", ZH: "趋势: 恶化 — 考虑回滚"},
+	"prompt_impact_mixed": {EN: "Trend: mixed — need more data", ZH: "趋势: 波动 — 需要更多数据"},
+
+	// ── Tab ──
+	"tab_diff": {EN: "D Diff", ZH: "D 对比"},
+
+	// ── Help ──
+	"help_diff": {EN: "Esc: back · Tab: overview · q: quit", ZH: "Esc: 返回 · Tab: 概览 · q: 退出"},
 }
 
 // T returns the translation for key in the current language.

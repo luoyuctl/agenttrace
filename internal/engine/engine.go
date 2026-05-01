@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.0.5"
+const Version = "0.0.6"
 
 // ── Pricing (USD per 1M tokens) ──
 
@@ -1606,7 +1606,7 @@ func round4(v float64) float64 {
 	return math.Round(v*10000) / 10000
 }
 
-func fmtDuration(sec float64) string {
+func FmtDuration(sec float64) string {
 	if sec < 60 {
 		return fmt.Sprintf("%.0fs", sec)
 	}
@@ -1639,5 +1639,844 @@ func SuccessRate(ok, total int) string {
 		return "N/A"
 	}
 	return fmt.Sprintf("%.0f%%", float64(ok)/float64(total)*100)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 1. 智能修复建议 (Tier 0)
+// ═══════════════════════════════════════════════════════════════
+
+// FixSuggestion 修复建议
+type FixSuggestion struct {
+	Title       string // 标题 e.g. "添加工具超时"
+	Description string // 描述 e.g. "检测到 %d 个间隔 >60s"
+	Action      string // 可操作的建议 e.g. "为长时间运行的工具添加 timeout 参数"
+	Severity    string // "high"/"medium"/"low"
+	Category    string // "hanging"/"tool_failure"/"thinking"/"redaction"/"no_tools"
+}
+
+// GenerateFixes 根据异常和指标生成智能修复建议列表。
+// lang 参数: "zh" 返回中文建议, "en" 返回英文建议。
+func GenerateFixes(m Metrics, anomalies []Anomaly, lang string) []FixSuggestion {
+	var fixes []FixSuggestion
+	totalTools := m.ToolCallsOK + m.ToolCallsFail
+	var failRate float64
+	if totalTools > 0 {
+		failRate = float64(m.ToolCallsFail) / float64(totalTools)
+	}
+
+	for _, a := range anomalies {
+		switch a.Type {
+		case "hanging":
+			if lang == "zh" {
+				fixes = append(fixes, FixSuggestion{
+					Title:       "添加工具超时保护",
+					Description: fmt.Sprintf("检测到 %d 个间隔 >60s, 最长=%.0fs", len(m.GapsSec), maxGap(m.GapsSec)),
+					Action:      "为工具调用添加 timeout 并限制重试次数",
+					Severity:    a.Severity,
+					Category:    "hanging",
+				})
+			} else {
+				fixes = append(fixes, FixSuggestion{
+					Title:       "Add Tool Timeout Protection",
+					Description: fmt.Sprintf("Detected %d gaps >60s, max=%.0fs", len(m.GapsSec), maxGap(m.GapsSec)),
+					Action:      "Add timeout to tool calls and limit retry attempts",
+					Severity:    a.Severity,
+					Category:    "hanging",
+				})
+			}
+
+		case "tool_failures":
+			if failRate > 0.30 {
+				if lang == "zh" {
+					fixes = append(fixes, FixSuggestion{
+						Title:       "检查工具 Schema",
+						Description: fmt.Sprintf("工具失败率 %.0f%% (%d/%d)", failRate*100, m.ToolCallsFail, totalTools),
+						Action:      "验证工具参数格式，确保 LLM 传入正确类型的参数",
+						Severity:    a.Severity,
+						Category:    "tool_failure",
+					})
+				} else {
+					fixes = append(fixes, FixSuggestion{
+						Title:       "Check Tool Schema",
+						Description: fmt.Sprintf("Tool failure rate %.0f%% (%d/%d)", failRate*100, m.ToolCallsFail, totalTools),
+						Action:      "Validate tool parameter formats, ensure LLM passes correct argument types",
+						Severity:    a.Severity,
+						Category:    "tool_failure",
+					})
+				}
+			} else if failRate > 0.15 {
+				if lang == "zh" {
+					fixes = append(fixes, FixSuggestion{
+						Title:       "优化工具描述",
+						Description: fmt.Sprintf("工具失败率 %.0f%% (%d/%d)", failRate*100, m.ToolCallsFail, totalTools),
+						Action:      "在 tool description 中提供更精确的参数示例和约束",
+						Severity:    a.Severity,
+						Category:    "tool_failure",
+					})
+				} else {
+					fixes = append(fixes, FixSuggestion{
+						Title:       "Improve Tool Descriptions",
+						Description: fmt.Sprintf("Tool failure rate %.0f%% (%d/%d)", failRate*100, m.ToolCallsFail, totalTools),
+						Action:      "Provide more precise parameter examples and constraints in tool descriptions",
+						Severity:    a.Severity,
+						Category:    "tool_failure",
+					})
+				}
+			}
+
+		case "shallow_thinking":
+			if lang == "zh" {
+				fixes = append(fixes, FixSuggestion{
+					Title:       "增加推理深度",
+					Description: fmt.Sprintf("平均推理仅 %.0f 字符", safeAvgReason(m)),
+					Action:      "在 system prompt 中添加 '请一步步思考' 或增加 max_tokens",
+					Severity:    a.Severity,
+					Category:    "thinking",
+				})
+			} else {
+				fixes = append(fixes, FixSuggestion{
+					Title:       "Increase Reasoning Depth",
+					Description: fmt.Sprintf("Average reasoning only %.0f chars", safeAvgReason(m)),
+					Action:      "Add 'Think step by step' to system prompt or increase max_tokens",
+					Severity:    a.Severity,
+					Category:    "thinking",
+				})
+			}
+
+		case "redaction":
+			if lang == "zh" {
+				fixes = append(fixes, FixSuggestion{
+					Title:       "检查脱敏配置",
+					Description: fmt.Sprintf("发现 %d 个思维块被脱敏", m.ReasoningRedact),
+					Action:      "推理内容被脱敏，检查 hermes config 中的 redact 设置",
+					Severity:    a.Severity,
+					Category:    "redaction",
+				})
+			} else {
+				fixes = append(fixes, FixSuggestion{
+					Title:       "Check Redaction Config",
+					Description: fmt.Sprintf("Found %d redacted thinking blocks", m.ReasoningRedact),
+					Action:      "Reasoning content is redacted, check the redact setting in hermes config",
+					Severity:    a.Severity,
+					Category:    "redaction",
+				})
+			}
+
+		case "no_tools":
+			if lang == "zh" {
+				fixes = append(fixes, FixSuggestion{
+					Title:       "启用工具调用",
+					Description: fmt.Sprintf("共 %d 轮对话，零工具调用", m.AssistantTurns),
+					Action:      "当前为纯对话模式，考虑为 agent 配置工具以提升效率",
+					Severity:    a.Severity,
+					Category:    "no_tools",
+				})
+			} else {
+				fixes = append(fixes, FixSuggestion{
+					Title:       "Enable Tool Calling",
+					Description: fmt.Sprintf("%d turns with zero tool calls", m.AssistantTurns),
+					Action:      "Currently in chat-only mode, consider configuring tools for the agent",
+					Severity:    a.Severity,
+					Category:    "no_tools",
+				})
+			}
+		}
+	}
+
+	return fixes
+}
+
+// maxGap 返回 gaps 列表中的最大值
+func maxGap(gaps []float64) float64 {
+	if len(gaps) == 0 {
+		return 0
+	}
+	m := gaps[0]
+	for _, g := range gaps[1:] {
+		if g > m {
+			m = g
+		}
+	}
+	return m
+}
+
+// safeAvgReason 安全计算平均推理字符数
+func safeAvgReason(m Metrics) float64 {
+	if m.ReasoningBlocks == 0 {
+		return 0
+	}
+	return float64(m.ReasoningChars) / float64(m.ReasoningBlocks)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 2. Session Diff (Tier 0)
+// ═══════════════════════════════════════════════════════════════
+
+// DiffEntry 单条差异
+type DiffEntry struct {
+	Field  string // 字段名
+	ValueA string // 会话A的值
+	ValueB string // 会话B的值
+	Delta  string // 变化方向 "↑"/"↓"/"→"
+	Better string // "A"/"B"/"same" 哪个更好
+}
+
+// SessionDiff 会话差异报告
+type SessionDiff struct {
+	SessionA string
+	SessionB string
+	Entries  []DiffEntry
+	Summary  string // 一句话总结
+}
+
+// DiffSessions 逐字段对比两个会话并生成差异报告。
+func DiffSessions(a, b Session) SessionDiff {
+	diff := SessionDiff{
+		SessionA: a.Name,
+		SessionB: b.Name,
+	}
+
+	// turns (少更好, 假设少=高效但需结合成功率)
+	diff.Entries = append(diff.Entries, compareInt("turns", a.Metrics.AssistantTurns, b.Metrics.AssistantTurns, "lower"))
+
+	// tools (多可能好=充分利用工具)
+	diff.Entries = append(diff.Entries, compareInt("tools", a.Metrics.ToolCallsTotal, b.Metrics.ToolCallsTotal, "higher"))
+
+	// success_rate (高更好)
+	srA := successRateVal(a.Metrics)
+	srB := successRateVal(b.Metrics)
+	diff.Entries = append(diff.Entries, compareFloat("success_rate", srA, srB, "higher"))
+
+	// fail_count (少更好)
+	diff.Entries = append(diff.Entries, compareInt("fail_count", a.Metrics.ToolCallsFail, b.Metrics.ToolCallsFail, "lower"))
+
+	// cost (低更好)
+	diff.Entries = append(diff.Entries, compareFloat("cost", a.Metrics.CostEstimated, b.Metrics.CostEstimated, "lower"))
+
+	// health (高更好)
+	diff.Entries = append(diff.Entries, compareInt("health", a.Health, b.Health, "higher"))
+
+	// duration (短更好但需看产出)
+	diff.Entries = append(diff.Entries, compareFloat("duration", a.Metrics.DurationSec, b.Metrics.DurationSec, "lower"))
+
+	// model (不同=降级/升级)
+	diff.Entries = append(diff.Entries, DiffEntry{
+		Field:  "model",
+		ValueA: a.Metrics.ModelUsed,
+		ValueB: b.Metrics.ModelUsed,
+		Delta:  deltaStr(a.Metrics.ModelUsed, b.Metrics.ModelUsed),
+		Better: "same",
+	})
+
+	// anomaly_count (少更好)
+	diff.Entries = append(diff.Entries, compareInt("anomaly_count", len(a.Anomalies), len(b.Anomalies), "lower"))
+
+	// 构建 summary
+	diff.Summary = buildDiffSummary(a, b)
+
+	return diff
+}
+
+// compareInt 比较整数字段并返回 DiffEntry
+func compareInt(field string, va, vb int, prefer string) DiffEntry {
+	entry := DiffEntry{
+		Field:  field,
+		ValueA: fmt.Sprintf("%d", va),
+		ValueB: fmt.Sprintf("%d", vb),
+	}
+	if va > vb {
+		entry.Delta = "↓"
+		if prefer == "lower" {
+			entry.Better = "B"
+		} else {
+			entry.Better = "A"
+		}
+	} else if va < vb {
+		entry.Delta = "↑"
+		if prefer == "lower" {
+			entry.Better = "A"
+		} else {
+			entry.Better = "B"
+		}
+	} else {
+		entry.Delta = "→"
+		entry.Better = "same"
+	}
+	return entry
+}
+
+// compareFloat 比较浮点字段并返回 DiffEntry
+func compareFloat(field string, va, vb float64, prefer string) DiffEntry {
+	entry := DiffEntry{
+		Field:  field,
+		ValueA: fmt.Sprintf("%.4f", va),
+		ValueB: fmt.Sprintf("%.4f", vb),
+	}
+	if va > vb {
+		entry.Delta = "↓"
+		if prefer == "lower" {
+			entry.Better = "B"
+		} else {
+			entry.Better = "A"
+		}
+	} else if va < vb {
+		entry.Delta = "↑"
+		if prefer == "lower" {
+			entry.Better = "A"
+		} else {
+			entry.Better = "B"
+		}
+	} else {
+		entry.Delta = "→"
+		entry.Better = "same"
+	}
+	return entry
+}
+
+// deltaStr 比较字符串并返回变化方向字符串
+func deltaStr(a, b string) string {
+	if a != b {
+		return "→"
+	}
+	return "→"
+}
+
+// successRateVal 计算工具调用成功率
+func successRateVal(m Metrics) float64 {
+	total := m.ToolCallsOK + m.ToolCallsFail
+	if total == 0 {
+		return 0
+	}
+	return float64(m.ToolCallsOK) / float64(total) * 100
+}
+
+// buildDiffSummary 构建人类可读的差异总结
+func buildDiffSummary(a, b Session) string {
+	healthDelta := b.Health - a.Health
+	costDelta := b.Metrics.CostEstimated - a.Metrics.CostEstimated
+
+	parts := []string{}
+	parts = append(parts, fmt.Sprintf("Session %s vs %s", b.Name, a.Name))
+
+	if healthDelta > 0 {
+		parts = append(parts, fmt.Sprintf("health +%d", healthDelta))
+	} else if healthDelta < 0 {
+		parts = append(parts, fmt.Sprintf("health %d", healthDelta))
+	} else {
+		parts = append(parts, "health unchanged")
+	}
+
+	if costDelta > 0.0001 {
+		parts = append(parts, fmt.Sprintf("cost +$%.4f", costDelta))
+	} else if costDelta < -0.0001 {
+		parts = append(parts, fmt.Sprintf("cost -$%.4f", -costDelta))
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. 成本异常预测 (Tier 0)
+// ═══════════════════════════════════════════════════════════════
+
+// CostAlert 成本预警
+type CostAlert struct {
+	Triggered bool
+	Level     string  // "critical"/"warning"/"info"
+	Message   string  // 预警消息
+	Current   float64 // 当前值
+	Baseline  float64 // 基线值
+	Ratio     float64 // 比值
+}
+
+// PredictCostAnomaly 预测当前会话是否存在成本异常。
+// sessions: 历史会话列表（用于计算基线），current: 当前会话。
+func PredictCostAnomaly(sessions []Session, current Session) CostAlert {
+	if len(sessions) == 0 {
+		return CostAlert{Triggered: false, Level: "info", Message: "无历史数据用于比较"}
+	}
+
+	// 计算所有 session 的平均 cost/turn
+	var totalCostTurn float64
+	var totalLoopTurn float64
+	var count int
+	for _, s := range sessions {
+		if s.Metrics.AssistantTurns > 0 {
+			totalCostTurn += s.Metrics.CostEstimated / float64(s.Metrics.AssistantTurns)
+			totalLoopTurn += s.LoopCost.TotalLoopCost / float64(s.Metrics.AssistantTurns)
+			count++
+		}
+	}
+	if count == 0 {
+		return CostAlert{Triggered: false, Level: "info", Message: "无有效历史数据"}
+	}
+
+	avgCostTurn := totalCostTurn / float64(count)
+
+	// 当前 session 的 cost/turn
+	var curCostTurn float64
+	if current.Metrics.AssistantTurns > 0 {
+		curCostTurn = current.Metrics.CostEstimated / float64(current.Metrics.AssistantTurns)
+	}
+
+	var curLoopTurn float64
+	if current.Metrics.AssistantTurns > 0 {
+		curLoopTurn = current.LoopCost.TotalLoopCost / float64(current.Metrics.AssistantTurns)
+	}
+
+	alert := CostAlert{
+		Current:  curCostTurn,
+		Baseline: avgCostTurn,
+	}
+
+	if avgCostTurn > 0 {
+		alert.Ratio = curCostTurn / avgCostTurn
+	}
+
+	// 判断预警级别
+	if curCostTurn > avgCostTurn*3 {
+		alert.Triggered = true
+		alert.Level = "critical"
+		alert.Message = fmt.Sprintf("本会话单轮成本($%.4f)是平均($%.4f)的%.1f倍",
+			curCostTurn, avgCostTurn, alert.Ratio)
+	} else if curCostTurn > avgCostTurn*2 {
+		alert.Triggered = true
+		alert.Level = "warning"
+		alert.Message = fmt.Sprintf("本会话单轮成本($%.4f)是平均($%.4f)的%.1f倍",
+			curCostTurn, avgCostTurn, alert.Ratio)
+	} else if current.Metrics.CostEstimated > 0 && current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated > 0.50 {
+		alert.Triggered = true
+		alert.Level = "critical"
+		alert.Message = fmt.Sprintf("循环成本($%.4f)占总成本($%.4f)的%.0f%%",
+			current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated,
+			current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated*100)
+	} else if current.Metrics.CostEstimated > 0 && current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated > 0.30 {
+		alert.Triggered = true
+		alert.Level = "warning"
+		alert.Message = fmt.Sprintf("循环成本($%.4f)占总成本($%.4f)的%.0f%%",
+			current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated,
+			current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated*100)
+	} else {
+		alert.Triggered = false
+		alert.Level = "info"
+		alert.Message = fmt.Sprintf("单轮成本 $%.4f，在正常范围内 (平均 $%.4f)", curCostTurn, avgCostTurn)
+	}
+
+	// 同时检查 loop_cost 占比
+	_ = curLoopTurn
+
+	return alert
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. 健康趋势 + 退化检测 (Tier 1)
+// ═══════════════════════════════════════════════════════════════
+
+// TrendPoint 趋势数据点
+type TrendPoint struct {
+	Name   string
+	Health int
+	Cost   float64
+}
+
+// HealthTrend 健康趋势分析
+type HealthTrend struct {
+	Points     []TrendPoint // 最近10个session的趋势点
+	Direction  string       // "up"/"down"/"stable"
+	AvgHealth  float64
+	Regressing bool   // 是否在退化
+	Message    string // 趋势描述
+}
+
+// AnalyzeHealthTrend 分析最近 10 个 session 的健康趋势。
+// 使用 3 点移动平均平滑数据，检测退化信号。
+func AnalyzeHealthTrend(sessions []Session) HealthTrend {
+	trend := HealthTrend{}
+
+	if len(sessions) == 0 {
+		trend.Message = "无可用会话数据"
+		return trend
+	}
+
+	// 取最近 10 个 session
+	n := len(sessions)
+	if n > 10 {
+		n = 10
+	}
+	recent := sessions[:n]
+
+	// 构建趋势点
+	for _, s := range recent {
+		trend.Points = append(trend.Points, TrendPoint{
+			Name:   s.Name,
+			Health: s.Health,
+			Cost:   s.Metrics.CostEstimated,
+		})
+	}
+
+	// 3 点移动平均
+	smoothed := make([]float64, len(trend.Points))
+	for i := range trend.Points {
+		sum := 0
+		cnt := 0
+		for j := i - 1; j <= i+1; j++ {
+			if j >= 0 && j < len(trend.Points) {
+				sum += trend.Points[j].Health
+				cnt++
+			}
+		}
+		smoothed[i] = float64(sum) / float64(cnt)
+	}
+
+	// 计算平均健康分
+	sumHealth := 0.0
+	for _, p := range trend.Points {
+		sumHealth += float64(p.Health)
+	}
+	trend.AvgHealth = sumHealth / float64(len(trend.Points))
+
+	// 判断方向
+	if len(smoothed) >= 2 {
+		first := smoothed[0]
+		last := smoothed[len(smoothed)-1]
+		diff := last - first
+		if diff > 5 {
+			trend.Direction = "up"
+		} else if diff < -5 {
+			trend.Direction = "down"
+		} else {
+			trend.Direction = "stable"
+		}
+	} else {
+		trend.Direction = "stable"
+	}
+
+	// 检测退化: 最近 3 个点持续下降 + 最后 1 个 < 平均
+	if len(smoothed) >= 3 {
+		last3 := smoothed[len(smoothed)-3:]
+		descending := true
+		for i := 1; i < len(last3); i++ {
+			if last3[i] >= last3[i-1] {
+				descending = false
+				break
+			}
+		}
+		if descending && last3[len(last3)-1] < trend.AvgHealth {
+			trend.Regressing = true
+		}
+	}
+
+	// 构建 Message
+	if trend.Regressing {
+		last3Vals := []string{}
+		startIdx := len(trend.Points) - 3
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		for i := startIdx; i < len(trend.Points); i++ {
+			last3Vals = append(last3Vals, fmt.Sprintf("%d", trend.Points[i].Health))
+		}
+		trend.Message = fmt.Sprintf("健康分持续下降: %s", strings.Join(last3Vals, "→"))
+	} else {
+		trend.Message = fmt.Sprintf("健康分稳定在 %.0f", trend.AvgHealth)
+	}
+
+	return trend
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5. Tool Call 模式校验 (Tier 1)
+// ═══════════════════════════════════════════════════════════════
+
+// ToolWarning 工具使用警告
+type ToolWarning struct {
+	ToolName string
+	Pattern  string // "dead_loop"/"empty_args"/"fail_retry_chain"/"redundant"
+	Count    int    // 出现次数
+	Detail   string // 详细描述
+	Severity string
+}
+
+// ValidateToolPatterns 分析事件流中的工具调用模式，检测异常使用模式。
+func ValidateToolPatterns(events []Event) []ToolWarning {
+	var warnings []ToolWarning
+
+	// dead_loop: 同一 tool 连续调用 5+ 次（不管参数）
+	type consecKey struct {
+		name string
+	}
+	var lastTool string
+	consecutive := 0
+	for _, ev := range events {
+		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 {
+			for _, tc := range ev.ToolCalls {
+				if tc.Name == lastTool {
+					consecutive++
+				} else {
+					if consecutive >= 5 {
+						warnings = append(warnings, ToolWarning{
+							ToolName: lastTool,
+							Pattern:  "dead_loop",
+							Count:    consecutive,
+							Detail:   fmt.Sprintf("工具 '%s' 连续调用 %d 次，可能存在死循环", lastTool, consecutive),
+							Severity: "high",
+						})
+					}
+					consecutive = 1
+					lastTool = tc.Name
+				}
+			}
+		}
+	}
+	// 检查最后一段
+	if consecutive >= 5 && lastTool != "" {
+		warnings = append(warnings, ToolWarning{
+			ToolName: lastTool,
+			Pattern:  "dead_loop",
+			Count:    consecutive,
+			Detail:   fmt.Sprintf("工具 '%s' 连续调用 %d 次，可能存在死循环", lastTool, consecutive),
+			Severity: "high",
+		})
+	}
+
+	// empty_args: tool call 时 content 为空或 "{}"（近似检测）
+	emptyCounts := make(map[string]int)
+	for _, ev := range events {
+		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 {
+			if ev.Content == "" || ev.Content == "{}" {
+				for _, tc := range ev.ToolCalls {
+					emptyCounts[tc.Name]++
+				}
+			}
+		}
+	}
+	for name, count := range emptyCounts {
+		if count > 0 {
+			warnings = append(warnings, ToolWarning{
+				ToolName: name,
+				Pattern:  "empty_args",
+				Count:    count,
+				Detail:   fmt.Sprintf("工具 '%s' 有 %d 次调用参数为空", name, count),
+				Severity: "medium",
+			})
+		}
+	}
+
+	// fail_retry_chain: 失败后立即重试同一 tool 3+ 次
+	type failRetry struct {
+		lastFail string
+		chain    int
+		started  bool
+	}
+	var fr failRetry
+	for _, ev := range events {
+		if ev.Role == "tool" && ev.IsError {
+			// 尝试找到关联的 tool call（通过 ToolCallID 或最近的 tool call）
+			fr.lastFail = ""
+			fr.chain = 0
+			fr.started = true
+		} else if ev.Role == "assistant" && len(ev.ToolCalls) > 0 && fr.started {
+			for _, tc := range ev.ToolCalls {
+				if tc.Name == fr.lastFail || fr.lastFail == "" {
+					fr.lastFail = tc.Name
+					fr.chain++
+				} else {
+					if fr.chain >= 3 {
+						warnings = append(warnings, ToolWarning{
+							ToolName: fr.lastFail,
+							Pattern:  "fail_retry_chain",
+							Count:    fr.chain,
+							Detail:   fmt.Sprintf("工具 '%s' 失败后连续重试 %d 次", fr.lastFail, fr.chain),
+							Severity: "high",
+						})
+					}
+					fr.lastFail = tc.Name
+					fr.chain = 1
+				}
+			}
+		}
+	}
+	if fr.chain >= 3 && fr.lastFail != "" {
+		warnings = append(warnings, ToolWarning{
+			ToolName: fr.lastFail,
+			Pattern:  "fail_retry_chain",
+			Count:    fr.chain,
+			Detail:   fmt.Sprintf("工具 '%s' 失败后连续重试 %d 次", fr.lastFail, fr.chain),
+			Severity: "high",
+		})
+	}
+
+	// redundant: 在不同轮次调用同一 tool 多次（如 read_file 同一文件多次）
+	toolCallTurns := make(map[string][]int) // toolName → turn indices
+	turnIdx := 0
+	for _, ev := range events {
+		if ev.Role == "user" {
+			turnIdx++
+		}
+		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 {
+			for _, tc := range ev.ToolCalls {
+				toolCallTurns[tc.Name] = append(toolCallTurns[tc.Name], turnIdx)
+			}
+		}
+	}
+	for name, turns := range toolCallTurns {
+		if len(turns) >= 4 {
+			// 检查是否在多个不同轮次中调用
+			uniqueTurns := make(map[int]bool)
+			for _, t := range turns {
+				uniqueTurns[t] = true
+			}
+			if len(uniqueTurns) >= 3 {
+				warnings = append(warnings, ToolWarning{
+					ToolName: name,
+					Pattern:  "redundant",
+					Count:    len(turns),
+					Detail:   fmt.Sprintf("工具 '%s' 在 %d 个轮次中被调用 %d 次，可能存在冗余调用", name, len(uniqueTurns), len(turns)),
+					Severity: "low",
+				})
+			}
+		}
+	}
+
+	return warnings
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 6. Prompt 变更影响分析 (Tier 1)
+// ═══════════════════════════════════════════════════════════════
+
+// PromptChange 一次 prompt 变更
+type PromptChange struct {
+	SessionName string
+	Before      string  // 变更前摘要
+	After       string  // 变更后摘要
+	Impact      string  // 影响描述
+	HealthDelta int
+	CostDelta   float64
+}
+
+// PromptImpact 变更影响分析
+type PromptImpact struct {
+	Changes    []PromptChange
+	Trend      string // "improving"/"worsening"/"mixed"
+	Suggestion string
+}
+
+// AnalyzePromptImpact 分析同名 agent 的连续 session，评估 prompt 变更的影响。
+// 名称前缀相同的 session 视为同一 agent 的多次运行。
+func AnalyzePromptImpact(sessions []Session) PromptImpact {
+	impact := PromptImpact{}
+
+	if len(sessions) < 2 {
+		impact.Trend = "stable"
+		impact.Suggestion = "需要至少 2 个同名 session 才能分析趋势"
+		return impact
+	}
+
+	// 按名称前缀分组（使用名称中的公共前缀，去掉数字/日期后缀）
+	groups := groupByPrefix(sessions)
+
+	// 分析每组内相邻 session 的变化
+	var allDeltas []int
+	for _, group := range groups {
+		if len(group) < 2 {
+			continue
+		}
+		// 按名称排序（假设名称反映时间顺序）
+		sort.Slice(group, func(i, j int) bool {
+			return group[i].Name < group[j].Name
+		})
+
+		for i := 1; i < len(group); i++ {
+			prev := group[i-1]
+			curr := group[i]
+			healthDelta := curr.Health - prev.Health
+			costDelta := curr.Metrics.CostEstimated - prev.Metrics.CostEstimated
+
+			allDeltas = append(allDeltas, healthDelta)
+
+			ch := PromptChange{
+				SessionName: curr.Name,
+				Before:      fmt.Sprintf("health=%d cost=$%.4f", prev.Health, prev.Metrics.CostEstimated),
+				After:       fmt.Sprintf("health=%d cost=$%.4f", curr.Health, curr.Metrics.CostEstimated),
+				HealthDelta: healthDelta,
+				CostDelta:   costDelta,
+			}
+
+			if healthDelta > 0 && costDelta <= 0 {
+				ch.Impact = "positive"
+			} else if healthDelta < 0 && costDelta >= 0 {
+				ch.Impact = "negative"
+			} else if healthDelta > 0 {
+				ch.Impact = "positive (higher cost)"
+			} else if healthDelta < 0 {
+				ch.Impact = "negative (lower cost)"
+			} else {
+				ch.Impact = "neutral"
+			}
+
+			impact.Changes = append(impact.Changes, ch)
+		}
+	}
+
+	// 判断整体趋势
+	if len(allDeltas) == 0 {
+		impact.Trend = "stable"
+		impact.Suggestion = "无足够数据判断趋势"
+		return impact
+	}
+
+	improving := 0
+	worsening := 0
+	for _, d := range allDeltas {
+		if d > 0 {
+			improving++
+		} else if d < 0 {
+			worsening++
+		}
+	}
+
+	if improving > worsening && worsening == 0 {
+		impact.Trend = "improving"
+		impact.Suggestion = "健康分稳步提升，prompt 优化方向正确，建议继续保持"
+	} else if worsening > improving && improving == 0 {
+		impact.Trend = "worsening"
+		impact.Suggestion = "健康分持续下降，建议回滚最近的 prompt 变更并重新评估"
+	} else {
+		impact.Trend = "mixed"
+		impact.Suggestion = "健康分波动较大，建议逐一排查每次变更的影响，找出正负因素"
+	}
+
+	return impact
+}
+
+// groupByPrefix 按名称的公共前缀对 sessions 分组。
+// 提取规则：去掉尾部的数字、日期、UUID 之类后缀。
+func groupByPrefix(sessions []Session) map[string][]Session {
+	groups := make(map[string][]Session)
+	for _, s := range sessions {
+		prefix := extractPrefix(s.Name)
+		groups[prefix] = append(groups[prefix], s)
+	}
+	return groups
+}
+
+// extractPrefix 提取 session 名称的公共前缀（去掉数字/日期后缀）。
+func extractPrefix(name string) string {
+	// 去掉常见的后缀模式：数字、日期、短横线、下划线 + 数字等
+	name = strings.TrimRight(name, "0123456789-_")
+	// 去掉尾部 .json/.jsonl 残留
+	name = strings.TrimSuffix(name, ".json")
+	name = strings.TrimSuffix(name, ".jsonl")
+	// 如果去后缀后为空，返回原名
+	if name == "" {
+		return name
+	}
+	// 再去一次尾部数字
+	name = strings.TrimRight(name, "0123456789-_")
+	if name == "" {
+		return name
+	}
+	return name
 }
 

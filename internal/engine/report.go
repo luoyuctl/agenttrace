@@ -81,7 +81,7 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	} else {
 		w("  " + i18n.T("no_gap_data"))
 	}
-	w("  "+i18n.T("duration"), fmtDuration(m.DurationSec))
+	w("  "+i18n.T("duration"), FmtDuration(m.DurationSec))
 	w("")
 
 	// Top Tools
@@ -214,7 +214,7 @@ func ReportJSON(m Metrics, anoms []Anomaly, h int) string {
 			"start":             m.SessionStart,
 			"end":               m.SessionEnd,
 			"duration_seconds":  m.DurationSec,
-			"duration_human":    fmtDuration(m.DurationSec),
+			"duration_human":    FmtDuration(m.DurationSec),
 		},
 		"tokens": map[string]int{
 			"input":       m.TokensInput,
