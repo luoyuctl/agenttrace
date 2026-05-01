@@ -1,4 +1,4 @@
-// Package engine provides the core analysis engine for agenttrace.
+// Package engine provides the core analysis engine for agentwaste.
 // Pure Go. Supports 6 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw.
 package engine
 
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/luoyuctl/agenttrace/internal/i18n"
+	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
 const Version = "0.0.7"
@@ -45,17 +45,17 @@ type Event struct {
 	Timestamp   string
 	Reasoning   string
 	Redacted    bool
-	ToolCalls   []ToolCall
-	ToolCallID  string
-	IsError     bool
+	ToolCalls   []ToolCall `json:"tool_calls"`
+	ToolCallID  string     `json:"tool_call_id"`
+	IsError     bool       `json:"is_error"`
 	Usage       map[string]int
 	ModelUsed   string
 	SourceTool  string // which tool produced this session
 }
 
 type ToolCall struct {
-	ID   string
-	Name string
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // ── Metrics ──
@@ -375,10 +375,18 @@ func DetectFormat(path string) FormatInfo {
 		}
 	}
 
-	// JSONL: check first few lines
-	firstLine := strings.SplitN(content, "\n", 2)[0]
+	// JSONL: check first few valid lines (skip empty and comments)
 	var firstLineObj map[string]interface{}
-	if err := json.Unmarshal([]byte(firstLine), &firstLineObj); err == nil {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if err := json.Unmarshal([]byte(line), &firstLineObj); err == nil {
+			break
+		}
+	}
+	if firstLineObj != nil {
 		fi.Raw = data
 
 		// Hermes JSONL: role=session_meta or role with timestamp
@@ -549,6 +557,18 @@ func parseHermesJSON(doc map[string]interface{}) ([]Event, error) {
 		model = m
 	}
 
+	// Extract session-level timestamps (messages lack per-message timestamps)
+	sessionStart, _ := doc["session_start"].(string)
+	sessionEnd, _ := doc["last_updated"].(string)
+
+	// Bug 2 fix: extract top-level usage as meta event
+	if usage, ok := doc["usage"]; ok {
+		ev := Event{Role: "meta", ModelUsed: model, SourceTool: "hermes_json"}
+		ub, _ := json.Marshal(usage)
+		json.Unmarshal(ub, &ev.Usage)
+		events = append(events, ev)
+	}
+
 	msgs, _ := doc["messages"].([]interface{})
 	for _, raw := range msgs {
 		msg, ok := raw.(map[string]interface{})
@@ -557,6 +577,11 @@ func parseHermesJSON(doc map[string]interface{}) ([]Event, error) {
 		}
 
 		role, _ := msg["role"].(string)
+
+		// Bug 1 fix: skip tool messages in first pass; handled in second pass
+		if role == "tool" {
+			continue
+		}
 
 		// Reasonings
 		reasoning, _ := msg["reasoning"].(string)
@@ -582,9 +607,13 @@ func parseHermesJSON(doc map[string]interface{}) ([]Event, error) {
 		// Content
 		content, _ := msg["content"].(string)
 
+		// Bug 3 fix: extract timestamp
+		ts, _ := msg["timestamp"].(string)
+
 		ev := Event{
 			Role:       role,
 			Content:    content,
+			Timestamp:  ts,
 			Reasoning:  reasoning,
 			Redacted:   redacted,
 			ToolCalls:  toolCalls,
@@ -606,14 +635,45 @@ func parseHermesJSON(doc map[string]interface{}) ([]Event, error) {
 		}
 		content, _ := msg["content"].(string)
 		isErr, _ := msg["is_error"].(bool)
+		ts, _ := msg["timestamp"].(string)
 
 		events = append(events, Event{
 			Role:       "tool",
 			Content:    content,
+			Timestamp:  ts,
 			ToolCallID: str(msg, "tool_call_id"),
 			IsError:    isErr,
 			SourceTool: "hermes_json",
 		})
+	}
+
+	// Inject session timestamps if messages lack them
+	if sessionStart != "" || sessionEnd != "" {
+		hasTimestamps := false
+		for _, ev := range events {
+			if ev.Timestamp != "" {
+				hasTimestamps = true
+				break
+			}
+		}
+		if !hasTimestamps && len(events) > 0 {
+			for i := range events {
+				if events[i].Role != "meta" && events[i].Role != "session_meta" {
+					if sessionStart != "" {
+						events[i].Timestamp = sessionStart
+					}
+					break
+				}
+			}
+			for i := len(events) - 1; i >= 0; i-- {
+				if events[i].Role != "meta" && events[i].Role != "session_meta" {
+					if sessionEnd != "" {
+						events[i].Timestamp = sessionEnd
+					}
+					break
+				}
+			}
+		}
 	}
 
 	return events, nil
@@ -652,12 +712,14 @@ func parseClaudeCode(doc map[string]interface{}, arr []interface{}) ([]Event, er
 			continue
 		}
 		role, _ := msg["role"].(string)
+		// Bug 3 fix: extract timestamp
+		ts, _ := msg["timestamp"].(string)
 
 		content := msg["content"]
 		switch c := content.(type) {
 		case string:
 			events = append(events, Event{
-				Role: role, Content: c,
+				Role: role, Content: c, Timestamp: ts,
 				SourceTool: "claude_code",
 			})
 		case []interface{}:
@@ -671,7 +733,7 @@ func parseClaudeCode(doc map[string]interface{}, arr []interface{}) ([]Event, er
 				case "text":
 					text, _ := b["text"].(string)
 					events = append(events, Event{
-						Role: role, Content: text,
+						Role: role, Content: text, Timestamp: ts,
 						SourceTool: "claude_code",
 					})
 				case "thinking":
@@ -679,6 +741,7 @@ func parseClaudeCode(doc map[string]interface{}, arr []interface{}) ([]Event, er
 					redacted, _ := b["redacted"].(bool)
 					events = append(events, Event{
 						Role:       "assistant",
+						Timestamp:  ts,
 						Reasoning:  think,
 						Redacted:   redacted,
 						SourceTool: "claude_code",
@@ -687,16 +750,17 @@ func parseClaudeCode(doc map[string]interface{}, arr []interface{}) ([]Event, er
 					id, _ := b["id"].(string)
 					name, _ := b["name"].(string)
 					events = append(events, Event{
-						Role: "assistant",
+						Role: "assistant", Timestamp: ts,
 						ToolCalls: []ToolCall{{ID: id, Name: name}},
 						SourceTool: "claude_code",
 					})
 				case "tool_result":
 					tid, _ := b["tool_use_id"].(string)
 					isErr, _ := b["is_error"].(bool)
-					ct, _ := b["content"].(string)
+					ct := extractToolResultContent(b)
 					events = append(events, Event{
 						Role:       "tool",
+						Timestamp:  ts,
 						ToolCallID: tid,
 						Content:    ct,
 						IsError:    isErr,
@@ -713,6 +777,7 @@ func parseClaudeCode(doc map[string]interface{}, arr []interface{}) ([]Event, er
 // ── Codex CLI (OpenAI API format) ──
 
 func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([]Event, error) {
+	_ = raw // Bug 8 fix: suppress unused warning; kept for API compatibility
 	var events []Event
 
 	var messages []interface{}
@@ -743,6 +808,9 @@ func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([
 		}
 		role, _ := msg["role"].(string)
 
+		// Bug 3 fix: extract timestamp
+		ts, _ := msg["timestamp"].(string)
+
 		// OpenAI reasoning (o1/o3 models)
 		reasoning, _ := msg["reasoning_content"].(string)
 		if reasoning == "" {
@@ -766,16 +834,27 @@ func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([
 			}
 		}
 
-		// Codex CLI also stores assistant message per tool_use (Anthropic-format hybrid)
+		// Bug 4 fix: Codex CLI also stores assistant message with Anthropic blocks;
+		// extract tool_use AND text blocks from content array.
 		if role == "assistant" && len(toolCalls) == 0 {
-			// Check for Anthropic-style tool_use blocks in content
 			if cArr, ok := msg["content"].([]interface{}); ok {
 				for _, blk := range cArr {
 					if b, ok := blk.(map[string]interface{}); ok {
-						if tp, _ := b["type"].(string); tp == "tool_use" {
+						tp, _ := b["type"].(string)
+						switch tp {
+						case "tool_use":
 							toolCalls = append(toolCalls, ToolCall{
 								ID: str(b, "id"), Name: str(b, "name"),
 							})
+						case "text":
+							if text, _ := b["text"].(string); text != "" {
+								// If content was empty from string assertion, use text block
+								if content == "" {
+									content = text
+								} else {
+									content += "\n" + text
+								}
+							}
 						}
 					}
 				}
@@ -785,6 +864,7 @@ func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([
 		ev := Event{
 			Role:       role,
 			Content:    content,
+			Timestamp:  ts,
 			Reasoning:  reasoning,
 			ToolCalls:  toolCalls,
 			ModelUsed:  model,
@@ -795,6 +875,10 @@ func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([
 		if role == "tool" {
 			ev.ToolCallID = str(msg, "tool_call_id")
 			ev.IsError, _ = msg["is_error"].(bool)
+			// Bug 11 fix: tool content may be array (multi-modal)
+			if ev.Content == "" {
+				ev.Content = extractToolResultContent(msg)
+			}
 		}
 
 		events = append(events, ev)
@@ -808,8 +892,26 @@ func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([
 func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 	var events []Event
 
+	// Bug 5 fix: extract model and usage metadata from Gemini responses
+	model := "unknown"
+
 	// Single JSON blob with contents
 	if doc != nil {
+		if mv, ok := doc["modelVersion"].(string); ok && mv != "" {
+			model = mv
+		}
+		// Extract usage metadata
+		if um, ok := doc["usageMetadata"]; ok {
+			ev := Event{Role: "meta", ModelUsed: model, SourceTool: "gemini_cli"}
+			ub, _ := json.Marshal(um)
+			json.Unmarshal(ub, &ev.Usage)
+			events = append(events, ev)
+		}
+		// Also check top-level timestamp
+		if ts, _ := doc["timestamp"].(string); ts != "" {
+			// Will be used below
+			_ = ts
+		}
 		if contents, ok := doc["contents"].([]interface{}); ok {
 			for _, item := range contents {
 				cItem, ok := item.(map[string]interface{})
@@ -817,6 +919,8 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 					continue
 				}
 				role, _ := cItem["role"].(string)
+				// Bug 3 fix: extract timestamp from content item
+				ts, _ := cItem["timestamp"].(string)
 				parts, _ := cItem["parts"].([]interface{})
 				for _, part := range parts {
 					p, ok := part.(map[string]interface{})
@@ -826,7 +930,7 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 					text, _ := p["text"].(string)
 					if text != "" {
 						events = append(events, Event{
-							Role: role, Content: text,
+							Role: role, Content: text, Timestamp: ts,
 							SourceTool: "gemini_cli",
 						})
 					}
@@ -835,7 +939,7 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 						fcJSON, _ := json.Marshal(fc)
 						events = append(events, Event{
 							Role:    role,
-							Content: string(fcJSON),
+							Content: string(fcJSON), Timestamp: ts,
 							SourceTool: "gemini_cli",
 						})
 					}
@@ -843,7 +947,7 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 						frJSON, _ := json.Marshal(fr)
 						events = append(events, Event{
 							Role:    "tool",
-							Content: string(frJSON),
+							Content: string(frJSON), Timestamp: ts,
 							SourceTool: "gemini_cli",
 						})
 					}
@@ -863,6 +967,21 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 		if err := json.Unmarshal([]byte(line), &obj); err != nil {
 			continue
 		}
+
+		// Bug 5 fix: extract model and usage from JSONL lines
+		lineModel := model
+		if mv, ok := obj["modelVersion"].(string); ok && mv != "" {
+			lineModel = mv
+		}
+		if um, ok := obj["usageMetadata"]; ok {
+			ev := Event{Role: "meta", ModelUsed: lineModel, SourceTool: "gemini_cli"}
+			ub, _ := json.Marshal(um)
+			json.Unmarshal(ub, &ev.Usage)
+			events = append(events, ev)
+		}
+		// Bug 3 fix: extract timestamp
+		ts, _ := obj["timestamp"].(string)
+
 		if contents, ok := obj["contents"].([]interface{}); ok {
 			for _, item := range contents {
 				cItem, ok := item.(map[string]interface{})
@@ -879,7 +998,7 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 					text, _ := p["text"].(string)
 					if text != "" {
 						events = append(events, Event{
-							Role: role, Content: text,
+							Role: role, Content: text, Timestamp: ts,
 							SourceTool: "gemini_cli",
 						})
 					}
@@ -904,7 +1023,7 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 						text, _ := p["text"].(string)
 						if text != "" {
 							events = append(events, Event{
-								Role: role, Content: text,
+								Role: role, Content: text, Timestamp: ts,
 								SourceTool: "gemini_cli",
 							})
 						}
@@ -959,12 +1078,14 @@ func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
 			continue
 		}
 		role, _ := msg["role"].(string)
+		// Bug 3 fix: extract timestamp
+		ts, _ := msg["timestamp"].(string)
 
 		content := msg["content"]
 		switch c := content.(type) {
 		case string:
 			events = append(events, Event{
-				Role: role, Content: c,
+				Role: role, Content: c, Timestamp: ts,
 				SourceTool: "opencode",
 			})
 		case []interface{}:
@@ -978,7 +1099,7 @@ func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
 				case "text":
 					text, _ := b["text"].(string)
 					events = append(events, Event{
-						Role: role, Content: text,
+						Role: role, Content: text, Timestamp: ts,
 						SourceTool: "opencode",
 					})
 				case "thinking":
@@ -986,6 +1107,7 @@ func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
 					redacted, _ := b["redacted"].(bool)
 					events = append(events, Event{
 						Role:      "assistant",
+						Timestamp: ts,
 						Reasoning: think,
 						Redacted:  redacted,
 						SourceTool: "opencode",
@@ -994,16 +1116,17 @@ func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
 					id, _ := b["id"].(string)
 					name, _ := b["name"].(string)
 					events = append(events, Event{
-						Role: "assistant",
+						Role: "assistant", Timestamp: ts,
 						ToolCalls: []ToolCall{{ID: id, Name: name}},
 						SourceTool: "opencode",
 					})
 				case "tool_result":
 					tid, _ := b["tool_use_id"].(string)
 					isErr, _ := b["is_error"].(bool)
-					ct, _ := b["content"].(string)
+					ct := extractToolResultContent(b)
 					events = append(events, Event{
 						Role:       "tool",
+						Timestamp:  ts,
 						ToolCallID: tid,
 						Content:    ct,
 						IsError:    isErr,
@@ -1025,7 +1148,7 @@ func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
 					}
 				}
 				events = append(events, Event{
-					Role: role, ToolCalls: tcList,
+					Role: role, ToolCalls: tcList, Timestamp: ts,
 					SourceTool: "opencode",
 				})
 			}
@@ -1042,12 +1165,18 @@ func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
 		if role != "tool" {
 			continue
 		}
-		content, _ := msg["content"].(string)
+		// Bug 11 fix: tool content may be array
+		content := extractToolResultContent(msg)
+		if content == "" {
+			content, _ = msg["content"].(string)
+		}
 		isErr, _ := msg["is_error"].(bool)
+		ts, _ := msg["timestamp"].(string)
 
 		events = append(events, Event{
 			Role:       "tool",
 			Content:    content,
+			Timestamp:  ts,
 			ToolCallID: str(msg, "tool_call_id"),
 			IsError:    isErr,
 			SourceTool: "opencode",
@@ -1079,6 +1208,8 @@ func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
 			continue
 		}
 		role, _ := msg["role"].(string)
+		// Bug 3 fix: extract timestamp
+		ts, _ := msg["timestamp"].(string)
 
 		// Content can be string or array of blocks (Anthropic-style)
 		content := msg["content"]
@@ -1087,6 +1218,7 @@ func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
 			events = append(events, Event{
 				Role:       role,
 				Content:    c,
+				Timestamp:  ts,
 				SourceTool: "openclaw",
 			})
 		case []interface{}:
@@ -1102,6 +1234,7 @@ func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
 					events = append(events, Event{
 						Role:       role,
 						Content:    text,
+						Timestamp:  ts,
 						SourceTool: "openclaw",
 					})
 				case "thinking":
@@ -1109,6 +1242,7 @@ func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
 					redacted, _ := b["redacted"].(bool)
 					events = append(events, Event{
 						Role:       "assistant",
+						Timestamp:  ts,
 						Reasoning:  think,
 						Redacted:   redacted,
 						SourceTool: "openclaw",
@@ -1117,16 +1251,17 @@ func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
 					id, _ := b["id"].(string)
 					name, _ := b["name"].(string)
 					events = append(events, Event{
-						Role: "assistant",
+						Role: "assistant", Timestamp: ts,
 						ToolCalls: []ToolCall{{ID: id, Name: name}},
 						SourceTool: "openclaw",
 					})
 				case "tool_result":
 					tid, _ := b["tool_use_id"].(string)
 					isErr, _ := b["is_error"].(bool)
-					ct, _ := b["content"].(string)
+					ct := extractToolResultContent(b)
 					events = append(events, Event{
 						Role:       "tool",
+						Timestamp:  ts,
 						ToolCallID: tid,
 						Content:    ct,
 						IsError:    isErr,
@@ -1149,6 +1284,7 @@ func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
 				}
 				events = append(events, Event{
 					Role:       role,
+					Timestamp:  ts,
 					ToolCalls:  tcList,
 					SourceTool: "openclaw",
 				})
@@ -1166,12 +1302,18 @@ func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
 		if role != "tool" {
 			continue
 		}
-		content, _ := msg["content"].(string)
+		// Bug 11 fix: tool content may be array
+		content := extractToolResultContent(msg)
+		if content == "" {
+			content, _ = msg["content"].(string)
+		}
 		isErr, _ := msg["is_error"].(bool)
+		ts, _ := msg["timestamp"].(string)
 
 		events = append(events, Event{
 			Role:       "tool",
 			Content:    content,
+			Timestamp:  ts,
 			ToolCallID: str(msg, "tool_call_id"),
 			IsError:    isErr,
 			SourceTool: "openclaw",
@@ -1221,7 +1363,8 @@ func parseGeneric(raw string) ([]Event, error) {
 		return arr, nil
 	}
 
-	return events, nil
+	// Bug 7 fix: return error instead of silently returning empty events
+	return nil, fmt.Errorf("generic: unable to parse as JSONL or JSON array")
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1334,6 +1477,12 @@ func Analyze(events []Event, model string) Metrics {
 		}
 	}
 
+	// Normalize: ToolCallsOK must not exceed ToolCallsTotal
+	// (some parsers may count tool results differently from requests)
+	if m.ToolCallsOK > m.ToolCallsTotal-m.ToolCallsFail {
+		m.ToolCallsOK = m.ToolCallsTotal - m.ToolCallsFail
+	}
+
 	m.CostEstimated = round4(
 		float64(m.TokensInput)/1e6*pricing.Input +
 			float64(m.TokensOutput)/1e6*pricing.Output +
@@ -1440,9 +1589,11 @@ func DetectAnomalies(m Metrics) []Anomaly {
 
 func HealthScore(m Metrics, anoms []Anomaly) int {
 	score := 100
+	// Normalize severity to lowercase for lookup
 	penalties := map[string]int{"high": 30, "medium": 12, "low": 4}
 	for _, a := range anoms {
-		score -= penalties[a.Severity]
+		sev := strings.ToLower(a.Severity)
+		score -= penalties[sev]
 	}
 	if score < 0 {
 		score = 0
@@ -1541,10 +1692,44 @@ func FindSessionFiles(dir string) []string {
 // ═══════════════════════════════════════════════════════════════
 
 func str(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
 	if v, ok := m[key].(string); ok {
 		return v
 	}
 	return ""
+}
+
+// extractToolResultContent handles tool_result content that may be string, array of blocks, or other types.
+func extractToolResultContent(b map[string]interface{}) string {
+	switch v := b["content"].(type) {
+	case string:
+		return v
+	case []interface{}:
+		// Take the text from the first text block
+		for _, item := range v {
+			if m, ok := item.(map[string]interface{}); ok {
+				if t, _ := m["type"].(string); t == "text" {
+					if ct, _ := m["text"].(string); ct != "" {
+						return ct
+					}
+				}
+			}
+		}
+		// Fallback: try to serialize
+		if jb, err := json.Marshal(v); err == nil {
+			return string(jb)
+		}
+		return ""
+	default:
+		if v != nil {
+			if jb, err := json.Marshal(v); err == nil {
+				return string(jb)
+			}
+		}
+		return ""
+	}
 }
 
 func parseTS(raw string) time.Time {

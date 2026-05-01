@@ -1,4 +1,4 @@
-// Package i18n provides bilingual (English/Chinese) translation support for agenttrace.
+// Package i18n provides bilingual (English/Chinese) translation support for agentwaste.
 package i18n
 
 // Lang represents a language code.
@@ -17,18 +17,18 @@ var Current Lang = "en"
 var translations = map[string]map[Lang]string{
 	// ── Report title ──
 	"title": {
-		EN: "AGENTTRACE v%s — AI Agent Session Performance Report",
-		ZH: "AGENTTRACE v%s — AI 代理会话性能报告",
+		EN: "AGENTWASTE v%s — AI Agent Session Performance Report",
+		ZH: "AGENTWASTE v%s — AI 代理会话性能报告",
 	},
 	"compare_title": {
-		EN: "AGENTTRACE — Multi-Session Comparison",
-		ZH: "AGENTTRACE — 多会话对比",
+		EN: "AGENTWASTE — Multi-Session Comparison",
+		ZH: "AGENTWASTE — 多会话对比",
 	},
 
 	// ── Section headers ──
-	"token_cost": {
-		EN: "💰 TOKEN COST",
-		ZH: "💰 TOKEN 费用",
+	"waste_cost": {
+		EN: "💸 MONEY WASTE",
+		ZH: "💸 金钱浪费",
 	},
 	"activity": {
 		EN: "📊 ACTIVITY",
@@ -77,8 +77,8 @@ var translations = map[string]map[Lang]string{
 		ZH: "总计 tokens:  %10d",
 	},
 	"est_cost": {
-		EN: "Est. cost:    $%11.4f  (model: %s)",
-		ZH: "预估费用:     $%11.4f  (模型: %s)",
+		EN: "Money wasted: $%11.4f  (model: %s)",
+		ZH: "烧掉的钱:   $%11.4f  (模型: %s)",
 	},
 
 	// ── Activity labels ──
@@ -204,9 +204,9 @@ var translations = map[string]map[Lang]string{
 	},
 
 	// ── TUI views ──
-	"agenttrace_title": {
-		EN: "🔍 AGENTTRACE v%s",
-		ZH: "🔍 AGENTTRACE v%s",
+	"agentwaste_title": {
+		EN: "💸 AGENTWASTE v%s",
+		ZH: "💸 AGENTWASTE v%s",
 	},
 	"sessions_count": {
 		EN: " %d sessions ",
@@ -249,8 +249,8 @@ var translations = map[string]map[Lang]string{
 
 	// ── CLI / main ──
 	"supported_models": {
-		EN: "agenttrace v%s — Supported Models",
-		ZH: "agenttrace v%s — 支持模型",
+		EN: "agentwaste v%s — Supported Models",
+		ZH: "agentwaste v%s — 支持模型",
 	},
 	"model_header": {
 		EN: "Model",
@@ -327,8 +327,8 @@ var translations = map[string]map[Lang]string{
 
 	// ── Empty state ──
 	"empty_sessions_hint": {
-		EN: " No AI agent sessions found.\n\n Try: agenttrace --latest -d ~/.hermes/sessions\n      agenttrace --compare -d ~/.hermes/sessions\n\n Place session JSON/JSONL files in ~/.hermes/sessions/ ",
-		ZH: " 未找到 AI 代理会话。\n\n 尝试: agenttrace --latest -d ~/.hermes/sessions\n       agenttrace --compare -d ~/.hermes/sessions\n\n 将会话 JSON/JSONL 文件放在 ~/.hermes/sessions/ ",
+		EN: " No AI agent sessions found.\n\n Try: agentwaste --latest -d ~/.hermes/sessions\n      agentwaste --compare -d ~/.hermes/sessions\n\n Place session JSON/JSONL files in ~/.hermes/sessions/ ",
+		ZH: " 未找到 AI 代理会话。\n\n 尝试: agentwaste --latest -d ~/.hermes/sessions\n       agentwaste --compare -d ~/.hermes/sessions\n\n 将会话 JSON/JSONL 文件放在 ~/.hermes/sessions/ ",
 	},
 	"lang_label": {
 		EN: "EN",
@@ -411,8 +411,8 @@ var translations = map[string]map[Lang]string{
 		ZH: "检测到异常",
 	},
 	"total_cost": {
-		EN: "Total Cost",
-		ZH: "总费用",
+		EN: "Money Wasted",
+		ZH: "烧掉的钱",
 	},
 	"health_trend": {
 		EN: "Health Trend",
@@ -549,9 +549,9 @@ var translations = map[string]map[Lang]string{
 	"diff_same": {EN: "same", ZH: "相同"},
 
 	// ── Cost alert ──
-	"cost_alert_title": {EN: "🚨 Cost Alert", ZH: "🚨 成本预警"},
-	"cost_alert_critical": {EN: "This session cost $%.2f/turn (%.0fx avg $%.2f/turn)", ZH: "本会话单轮 $%.2f（是平均 $%.2f 的 %.0f 倍）"},
-	"cost_alert_warning": {EN: "Loop cost is %.0f%% of total — consider adding circuit breaker", ZH: "循环成本占总成本 %.0f%% — 建议添加熔断机制"},
+	"cost_alert_title": {EN: "🚨 Waste Alert", ZH: "🚨 浪费预警"},
+	"cost_alert_critical": {EN: "This session burned $%.2f/turn (%.0fx avg $%.2f/turn)", ZH: "本会话单轮烧掉 $%.2f（是平均 $%.2f 的 %.0f 倍）"},
+	"cost_alert_warning": {EN: "Loop waste is %.0f%% of total — consider adding circuit breaker", ZH: "循环浪费占总浪费 %.0f%% — 建议添加熔断机制"},
 
 	// ── Health trend ──
 	"trend_title": {EN: "Health Trend", ZH: "健康趋势"},

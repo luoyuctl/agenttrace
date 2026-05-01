@@ -1,4 +1,4 @@
-module github.com/luoyuctl/agenttrace
+module github.com/luoyuctl/agentwaste
 
 go 1.24.2
 

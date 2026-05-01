@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero-banner.png" alt="agenttrace — AI Agent Session Analyzer" width="100%">
+  <img src="assets/hero-banner.png" alt="agentwaste — find where your AI agents waste money & time" width="100%">
 </p>
 
 <p align="center">
@@ -10,15 +10,15 @@
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
 </p>
 
-<h3 align="center">🔍 Find hanging, token waste, thinking redaction & quality regressions in your AI coding sessions</h3>
+<h3 align="center">💸 Stop burning cash and hours on invisible AI agent waste</h3>
 
 ---
 
-## What is agenttrace?
+## What is agentwaste?
 
-AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce session logs — but nobody analyzes them systematically. Developers waste tokens, miss quality regressions, and can't compare tools objectively.
+AI coding agents (Claude Code, Gemini CLI, Codex CLI) burn tokens in loops, retry failures silently, and leave you with a surprise bill. You're wasting **money** on dead tokens and **time** on broken sessions — and you can't even see where.
 
-**agenttrace** gives you the analytics dashboard your AI agent deserves.
+**agentwaste** finds the waste in both — so you stop paying for nothing and start shipping faster.
 
 ## ✨ Features
 
@@ -27,7 +27,7 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 | 🚀 **Single Binary** | 7.5 MB — `curl -sL ... \| sh` install, no runtime deps |
 | 🖥️ **Bubble Tea TUI** | Modern terminal UI: Session List → Detail → Compare (3 views) |
 | 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Gemini CLI / OpenClaw — all parsed seamlessly |
-| 💰 **Token Cost Estimation** | Dynamic pricing from LiteLLM (900+ models) — `--update-pricing` for latest |
+| 💸 **Cost & Time Waste** | How much 💰 you burned + ⏱️ time lost to loops, retries, failures |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
 | 💯 **Health Score** | 0-100 composite with visual bar and emoji |
@@ -42,61 +42,61 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 
 ```bash
 # Linux / macOS
-curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+curl -sL https://raw.githubusercontent.com/luoyuctl/agentwaste/master/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/luoyuctl/agentwaste/master/install.ps1 | iex
 ```
 
 ### npm (cross-platform)
 
 ```bash
-npm install -g agenttrace
+npm install -g agentwaste
 ```
 
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew install luoyuctl/tap/agenttrace
+brew install luoyuctl/tap/agentwaste
 ```
 
 ### Manual build
 
 ```bash
-git clone https://github.com/luoyuctl/agenttrace.git
-cd agenttrace/go
-go build -ldflags="-s -w" -o agenttrace ./cmd/agenttrace/
-sudo mv agenttrace /usr/local/bin/
+git clone https://github.com/luoyuctl/agentwaste.git
+cd agentwaste/go
+go build -ldflags="-s -w" -o agentwaste ./cmd/agentwaste/
+sudo mv agentwaste /usr/local/bin/
 ```
 
 ### Usage
 
 ```bash
 # Launch TUI dashboard (default, no flags)
-agenttrace
+agentwaste
 
 # Analyze latest session
-agenttrace --latest
+agentwaste --latest
 
 # Compare all sessions
-agenttrace --compare -d ~/.hermes/sessions
+agentwaste --compare -d ~/.hermes/sessions
 
 # JSON output (CI/CD)
-agenttrace --latest -f json
+agentwaste --latest -f json
 
 # List all model pricings (900+ from LiteLLM when cached)
-agenttrace --list-models
+agentwaste --list-models
 
 # Update pricing from LiteLLM community database
-agenttrace --update-pricing
+agentwaste --update-pricing
 
 # Update + list in one go
-agenttrace --update-pricing --list-models
+agentwaste --update-pricing --list-models
 
 # Specify session language for cost estimation
-agenttrace --latest --lang zh    # Chinese (supports zh, ja, ko, en)
+agentwaste --latest --lang zh    # Chinese (supports zh, ja, ko, en)
 ```
 
 ### TUI Navigation
@@ -115,11 +115,11 @@ agenttrace --latest --lang zh    # Chinese (supports zh, ja, ko, en)
 Zero dependencies. Still fully functional.
 
 ```bash
-git clone https://github.com/luoyuctl/agenttrace.git
-cd agenttrace
-python3 agenttrace.py --latest -d ~/.hermes/sessions
-python3 agenttrace.py --compare -d ~/.hermes/sessions
-python3 agenttrace.py --list-models
+git clone https://github.com/luoyuctl/agentwaste.git
+cd agentwaste
+python3 agentwaste.py --latest -d ~/.hermes/sessions
+python3 agentwaste.py --compare -d ~/.hermes/sessions
+python3 agentwaste.py --list-models
 ```
 
 ---
@@ -128,7 +128,7 @@ python3 agenttrace.py --list-models
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v0.0.4 — AI Agent Session Performance Report
+  AGENTWASTE v0.0.4 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST
@@ -190,7 +190,7 @@ python3 agenttrace.py --list-models
 
 ```
 ===============================================================
-  AGENTTRACE — Multi-Session Comparison (12 sessions)
+  AGENTWASTE — Multi-Session Comparison (12 sessions)
 ===============================================================
 Session                   Turns  Tools   Succ     Cost  Health
 ---------------------------------------------------------------
@@ -229,7 +229,7 @@ Session                   Turns  Tools   Succ     Cost  Health
 
 ```
 go/
-├── cmd/agenttrace/main.go      # CLI entry: flags, TUI/CLI dispatch
+├── cmd/agentwaste/main.go      # CLI entry: flags, TUI/CLI dispatch
 └── internal/
     ├── engine/
     │   ├── engine.go           # Core: pricing, parsers, anomaly detection, health score
@@ -243,18 +243,18 @@ go/
 ## 🤝 Contributing
 
 ```bash
-git clone https://github.com/luoyuctl/agenttrace.git
-cd agenttrace/go
+git clone https://github.com/luoyuctl/agentwaste.git
+cd agentwaste/go
 go build ./internal/...    # verify compilation
-go build -o agenttrace ./cmd/agenttrace/
-./agenttrace --latest      # smoke test
+go build -o agentwaste ./cmd/agentwaste/
+./agentwaste --latest      # smoke test
 ```
 
 ---
 
 ## 📄 License
 
-MIT © 2025 agenttrace contributors
+MIT © 2025 agentwaste contributors
 
 ---
 

@@ -1,18 +1,18 @@
 # homebrew-tap
 
-Homebrew tap for [agenttrace](https://github.com/luoyuctl/agenttrace) — AI Agent Session Analyzer.
+Homebrew tap for [agentwaste](https://github.com/luoyuctl/agentwaste) — AI Agent Session Analyzer.
 
 ## Install
 
 ```bash
 brew tap luoyuctl/tap
-brew install agenttrace
+brew install agentwaste
 ```
 
 ## Update
 
 ```bash
-brew upgrade agenttrace
+brew upgrade agentwaste
 ```
 
-Formulas in this tap are auto-updated by GitHub Actions on every `v*` tag push to [luoyuctl/agenttrace](https://github.com/luoyuctl/agenttrace).
+Formulas in this tap are auto-updated by GitHub Actions on every `v*` tag push to [luoyuctl/agentwaste](https://github.com/luoyuctl/agentwaste).

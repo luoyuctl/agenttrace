@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// agenttrace npm runner — delegates to the platform binary
+// agentwaste npm runner — delegates to the platform binary
 const { spawnSync } = require('child_process');
 const path = require('path');
 const os = require('os');
@@ -13,13 +13,13 @@ const candidates = [];
 if (process.env.AGENTRACE_BIN) {
     candidates.push(process.env.AGENTRACE_BIN);
 }
-candidates.push(path.join(binDir, 'agenttrace' + ext));
+candidates.push(path.join(binDir, 'agentwaste' + ext));
 
 // also check /usr/local/bin and ~/.local/bin
 const nixCandidates = [
-    '/usr/local/bin/agenttrace',
-    path.join(os.homedir(), '.local/bin/agenttrace'),
-    path.join(os.homedir(), 'bin/agenttrace'),
+    '/usr/local/bin/agentwaste',
+    path.join(os.homedir(), '.local/bin/agentwaste'),
+    path.join(os.homedir(), 'bin/agentwaste'),
 ];
 candidates.push(...nixCandidates);
 
@@ -32,10 +32,10 @@ for (const c of candidates) {
 }
 
 if (!binary) {
-    console.error('❌ agenttrace binary not found. Install it:');
-    console.error('   npm install -g agenttrace');
-    console.error('   brew install luoyuctl/tap/agenttrace');
-    console.error('   curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh');
+    console.error('❌ agentwaste binary not found. Install it:');
+    console.error('   npm install -g agentwaste');
+    console.error('   brew install luoyuctl/tap/agentwaste');
+    console.error('   curl -sL https://raw.githubusercontent.com/luoyuctl/agentwaste/master/install.sh | sh');
     process.exit(1);
 }
 

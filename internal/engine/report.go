@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/luoyuctl/agenttrace/internal/i18n"
+	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
 // ReportText generates the formatted text report.
@@ -355,7 +355,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 
 	w(sep)
-	w("  AGENTTRACE v%s — "+i18n.T("overview_title")+"  (%d "+i18n.T("sessions_label")+")", Version, ov.TotalSessions)
+	w("  AGENTWASTE v%s — "+i18n.T("overview_title")+"  (%d "+i18n.T("sessions_label")+")", Version, ov.TotalSessions)
 	w(sep)
 	w("")
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// agenttrace npm install script — downloads platform-specific binary on postinstall
+// agentwaste npm install script — downloads platform-specific binary on postinstall
 
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { execSync } = require('child_process');
 
-const REPO = 'luoyuctl/agenttrace';
+const REPO = 'luoyuctl/agentwaste';
 const VERSION = '0.0.4';
 
 function getPlatform() {
@@ -52,7 +52,7 @@ async function download(url, dest) {
 
 async function main() {
     const { goos, goarch, ext } = getPlatform();
-    const binary = 'agenttrace' + ext;
+    const binary = 'agentwaste' + ext;
     const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${binary}-${goos}-${goarch}${ext}`;
 
     // install to node_modules/.bin/ sibling
@@ -61,7 +61,7 @@ async function main() {
 
     const dest = path.join(binDir, binary);
 
-    console.log(`📦 agenttrace: downloading for ${goos}/${goarch}...`);
+    console.log(`📦 agentwaste: downloading for ${goos}/${goarch}...`);
     console.log(`   ${url}`);
 
     // skip if already installed (check size > 1MB)
@@ -77,8 +77,8 @@ async function main() {
 }
 
 main().catch((err) => {
-    console.error('❌ agenttrace install failed:', err.message);
-    console.log('   Try manual install: brew install luoyuctl/tap/agenttrace');
-    console.log('   Or: curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh');
+    console.error('❌ agentwaste install failed:', err.message);
+    console.log('   Try manual install: brew install luoyuctl/tap/agentwaste');
+    console.log('   Or: curl -sL https://raw.githubusercontent.com/luoyuctl/agentwaste/master/install.sh | sh');
     // don't fail the npm install — user can still install manually
 });
