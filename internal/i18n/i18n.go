@@ -577,6 +577,25 @@ var translations = map[string]map[Lang]string{
 
 	// ── Help ──
 	"help_diff": {EN: "Esc: back · Tab: overview · q: quit", ZH: "Esc: 返回 · Tab: 概览 · q: 退出"},
+
+	// ── Waste Analysis ──
+	"waste_title":          {EN: "WASTE ANALYSIS", ZH: "浪费分析"},
+	"waste_score_label":    {EN: "Waste Score", ZH: "浪费评分"},
+	"waste_wasted_label":   {EN: "Wasted", ZH: "浪费金额"},
+	"waste_cache_label":    {EN: "Cache", ZH: "缓存"},
+	"waste_bloat_label":    {EN: "Tool Bloat", ZH: "工具膨胀"},
+	"waste_stuck_label":    {EN: "Stuck", ZH: "卡死"},
+	"waste_actions_label":  {EN: "Actions", ZH: "优化建议"},
+	"waste_none":           {EN: "none", ZH: "无"},
+	"tab_waste":            {EN: "W Waste", ZH: "W 浪费"},
+	"waste_level_red":      {EN: "SEVERE", ZH: "严重浪费"},
+	"waste_level_orange":   {EN: "HIGH", ZH: "高浪费"},
+	"waste_level_yellow":   {EN: "MODERATE", ZH: "中度浪费"},
+	"waste_level_green":    {EN: "LOW", ZH: "低浪费"},
+	"waste_col_score":      {EN: "SCORE", ZH: "评分"},
+	"waste_col_level":      {EN: "LEVEL", ZH: "等级"},
+	"waste_col_action":     {EN: "TOP ACTION", ZH: "首要建议"},
+	"help_waste":           {EN: "w: waste · Tab: switch · q: quit", ZH: "w: 浪费 · Tab: 切换 · q: 退出"},
 }
 
 // T returns the translation for key in the current language.

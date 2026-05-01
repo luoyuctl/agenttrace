@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/luoyuctl/agentwaste/internal/engine"
 	"github.com/luoyuctl/agentwaste/internal/i18n"
+	"github.com/luoyuctl/agentwaste/internal/index"
 	"github.com/luoyuctl/agentwaste/internal/tui"
 )
 
@@ -108,6 +109,9 @@ func main() {
 	hasAction := path != "" || *latest || *compare || *overview || *wasteFlag
 
 	if !hasAction {
+		// Refresh index cache to eliminate startup latency
+		index.BuildOrUpdate(sessionsDir)
+
 		// Launch TUI
 		m := tui.New(sessionsDir)
 		p := tea.NewProgram(m, tea.WithAltScreen())

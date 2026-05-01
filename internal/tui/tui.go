@@ -5,6 +5,7 @@ package tui
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -59,6 +60,7 @@ const (
 	viewDetail
 	viewDiff // diff two sessions side-by-side
 	viewCompare
+	viewWaste // Waste analysis view
 )
 
 type Model struct {
@@ -101,6 +103,7 @@ type Model struct {
 	fixSuggestions []engine.FixSuggestion
 	toolWarnings   []engine.ToolWarning
 	costAlert      engine.CostAlert
+	wasteReport    engine.WasteReport
 	healthTrend    engine.HealthTrend
 
 	// Dimensions
@@ -293,6 +296,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case viewDiff:
 				m.view = viewCompare
 			case viewCompare:
+				m.view = viewWaste
+			case viewWaste:
 				m.view = viewOverview
 			}
 
@@ -422,6 +427,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case "w":
+			m.view = viewWaste
+
 		default:
 			// 筛选输入模式：捕获按键
 			if m.filterActive {
@@ -491,6 +499,7 @@ func (m *Model) openDetail() {
 		if err == nil {
 			m.loopResult = engine.AnalyzeLoops(events)
 			m.toolWarnings = engine.ValidateToolPatterns(events)
+			m.wasteReport = engine.ComputeWasteReport(s.Metrics, events, m.loopResult)
 		} else {
 			m.loopResult = engine.LoopResult{}
 			m.toolWarnings = nil
@@ -660,6 +669,12 @@ func (m Model) View() string {
 				detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, "", costAlertSection)
 			}
 
+			// 浪费分析 (waste analysis — inline, not modal)
+			wasteSection := m.renderWasteInDetail()
+			if wasteSection != "" {
+				detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, "", wasteSection)
+			}
+
 			content = baseStyle.Render(detailContent)
 		} else {
 			content = baseStyle.Render(dimStyle.Render(i18n.T("select_session_hint")))
@@ -672,6 +687,8 @@ func (m Model) View() string {
 		} else {
 			content = baseStyle.Render(m.compareTable.View())
 		}
+	case viewWaste:
+		content = m.renderWaste()
 	}
 
 	// Help bar
@@ -681,7 +698,7 @@ func (m Model) View() string {
 }
 
 func (m Model) renderTabs() string {
-	tabs := []string{i18n.T("tab_overview"), i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_diff"), i18n.T("tab_compare")}
+	tabs := []string{i18n.T("tab_overview"), i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_diff"), i18n.T("tab_compare"), i18n.T("tab_waste")}
 	var rendered []string
 	for i, t := range tabs {
 		active := int(m.view) == i
@@ -721,6 +738,8 @@ func (m Model) renderHelp() string {
 		keys = i18n.T("help_diff")
 	case viewCompare:
 		keys = i18n.T("help_compare")
+	case viewWaste:
+		keys = i18n.T("help_waste")
 	}
 	return helpStyle.Render(" " + keys + " ")
 }
@@ -820,6 +839,195 @@ func (m Model) renderCostAlert() string {
 		Render(msg)
 	lines = append(lines, card)
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// renderWasteInDetail renders the waste analysis as an inline section in the detail view.
+func (m Model) renderWasteInDetail() string {
+	if !m.detailReady {
+		return ""
+	}
+	wr := m.wasteReport
+
+	// Choose level style
+	var levelStyle lipgloss.Style
+	switch wr.WasteLevel {
+	case "red":
+		levelStyle = redStyle
+	case "orange":
+		levelStyle = orangeStyle
+	case "yellow":
+		levelStyle = yellowStyle
+	default:
+		levelStyle = greenStyle
+	}
+
+	sep := dimStyle.Render("━━━ " + i18n.T("waste_title") + " ━━━")
+	scoreLine := fmt.Sprintf("%s: %s/100 %s",
+		boldStyle.Render(i18n.T("waste_score_label")),
+		levelStyle.Render(fmt.Sprintf("%d", wr.WasteScore)),
+		levelStyle.Render(wasteLevelEmoji(wr.WasteLevel)+" "+wr.WasteLevel))
+	wastedLine := fmt.Sprintf("%s: $%.4f", boldStyle.Render(i18n.T("waste_wasted_label")), wr.TotalWasted)
+	summaryLine := dimStyle.Render(wr.Summary)
+
+	// Cache line
+	cacheLine := fmt.Sprintf("💾 %s: %s (%s%.0f%%%% hit%s)",
+		boldStyle.Render(i18n.T("waste_cache_label")),
+		wr.Cache.Rating,
+		cyanStyle.Render(""),
+		wr.Cache.HitRate,
+		dimStyle.Render(""))
+
+	// Tool Bloat line
+	bloatLine := fmt.Sprintf("🔧 %s: %s (%.1f tools/turn)",
+		boldStyle.Render(i18n.T("waste_bloat_label")),
+		wr.Bloat.BloatLevel,
+		wr.Bloat.ToolsPerTurn)
+
+	// Per-tool bloat items
+	var bloatItems []string
+	for _, tb := range wr.Bloat.TopBloat {
+		redundant := ""
+		if tb.IsRedundant {
+			redundant = " *redundant"
+		}
+		bloatItems = append(bloatItems, fmt.Sprintf("  %s %dx $%.3f%s",
+			tb.ToolName, tb.CallCount, tb.TotalCost, redundant))
+	}
+
+	// Stuck line
+	stuckLine := fmt.Sprintf("🐌 %s: %s",
+		boldStyle.Render(i18n.T("waste_stuck_label")),
+		i18n.T("waste_none"))
+	if len(wr.Stuck) > 0 {
+		var stuckParts []string
+		for _, s := range wr.Stuck {
+			stuckParts = append(stuckParts, fmt.Sprintf("[%s] %s", s.Severity, s.Description))
+		}
+		stuckLine = fmt.Sprintf("🐌 %s: %s",
+			boldStyle.Render(i18n.T("waste_stuck_label")),
+			redStyle.Render(strings.Join(stuckParts, "; ")))
+	}
+
+	// Actions
+	actionsHeader := fmt.Sprintf("💡 %s:", boldStyle.Render(i18n.T("waste_actions_label")))
+	var actionItems []string
+	for i, a := range wr.TopActions {
+		actionItems = append(actionItems, fmt.Sprintf("%d. %s", i+1, a))
+	}
+
+	lines := []string{sep, "", scoreLine, wastedLine, summaryLine, "", cacheLine, bloatLine}
+	lines = append(lines, bloatItems...)
+	lines = append(lines, stuckLine, "", actionsHeader)
+	lines = append(lines, actionItems...)
+
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// renderWaste renders the waste overview showing all sessions ranked by waste score.
+func (m Model) renderWaste() string {
+	if len(m.sessions) == 0 {
+		return baseStyle.Render(dimStyle.Render(i18n.T("empty_sessions_hint")))
+	}
+
+	type wasteEntry struct {
+		session   engine.Session
+		report    engine.WasteReport
+	}
+	var entries []wasteEntry
+
+	for _, s := range m.sessions {
+		events, err := engine.Parse(s.Path)
+		if err != nil {
+			continue
+		}
+		lr := engine.AnalyzeLoops(events)
+		wr := engine.ComputeWasteReport(s.Metrics, events, lr)
+		entries = append(entries, wasteEntry{session: s, report: wr})
+	}
+
+	// Sort by WasteScore descending
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].report.WasteScore > entries[j].report.WasteScore
+	})
+
+	// Build table header
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+	colW := m.width - 4
+	if colW < 80 {
+		colW = 80
+	}
+	sessW := colW * 30 / 100
+	srcW := colW * 15 / 100
+	scoreW := colW * 10 / 100
+	levelW := colW * 12 / 100
+	actionW := colW - sessW - srcW - scoreW - levelW - 4
+
+	header := headerStyle.Render(fmt.Sprintf("%-*s %-*s %*s %*s %-*s",
+		sessW, i18n.T("session"),
+		srcW, i18n.T("source_tool"),
+		scoreW, i18n.T("waste_col_score"),
+		levelW, i18n.T("waste_col_level"),
+		actionW, i18n.T("waste_col_action")))
+
+	sep := dimStyle.Render(strings.Repeat("─", colW))
+
+	var rows []string
+	rows = append(rows, header, sep)
+
+	for _, e := range entries {
+		wr := e.report
+		s := e.session
+
+		// Waste level background
+		var levelBg lipgloss.Style
+		levelLabel := ""
+		switch wr.WasteLevel {
+		case "red":
+			levelBg = lipgloss.NewStyle().Background(lipgloss.Color("160")).Foreground(lipgloss.Color("15"))
+			levelLabel = i18n.T("waste_level_red")
+		case "orange":
+			levelBg = lipgloss.NewStyle().Background(lipgloss.Color("208")).Foreground(lipgloss.Color("15"))
+			levelLabel = i18n.T("waste_level_orange")
+		case "yellow":
+			levelBg = lipgloss.NewStyle().Background(lipgloss.Color("178")).Foreground(lipgloss.Color("16"))
+			levelLabel = i18n.T("waste_level_yellow")
+		default:
+			levelBg = lipgloss.NewStyle().Background(lipgloss.Color("34")).Foreground(lipgloss.Color("15"))
+			levelLabel = i18n.T("waste_level_green")
+		}
+
+		sourceDisplay := s.Metrics.SourceTool
+		if display, ok := engine.ToolDisplayNames[s.Metrics.SourceTool]; ok {
+			sourceDisplay = display
+		}
+
+		topAction := ""
+		if len(wr.TopActions) > 0 {
+			topAction = wr.TopActions[0]
+		}
+
+		// Truncate
+		sessName := s.Name
+		if len(sessName) > sessW {
+			sessName = sessName[:sessW]
+		}
+		if len(sourceDisplay) > srcW {
+			sourceDisplay = sourceDisplay[:srcW]
+		}
+		if len(topAction) > actionW {
+			topAction = topAction[:actionW]
+		}
+
+		row := fmt.Sprintf("%-*s %-*s %*d %*s %-*s",
+			sessW, sessName,
+			srcW, sourceDisplay,
+			scoreW, wr.WasteScore,
+			levelW, levelBg.Render(fmt.Sprintf(" %-*s ", levelW-2, levelLabel)),
+			actionW, topAction)
+		rows = append(rows, row)
+	}
+
+	return baseStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 
 // renderDiff renders the side-by-side session diff view.
@@ -1229,4 +1437,19 @@ func (m *Model) rebuildTableWithSessions(filtered []engine.Session) {
 	}
 	m.table.SetRows(rows)
 	m.table.SetCursor(0)
+}
+
+// wasteLevelEmoji returns the emoji for a waste level.
+func wasteLevelEmoji(level string) string {
+	switch level {
+	case "green":
+		return "🟢"
+	case "yellow":
+		return "🟡"
+	case "orange":
+		return "🟠"
+	case "red":
+		return "🔴"
+	}
+	return ""
 }
