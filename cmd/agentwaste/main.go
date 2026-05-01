@@ -24,6 +24,7 @@ func main() {
 	model := flag.String("m", "default", "Model for pricing")
 	output := flag.String("o", "", "Save report to file")
 	latest := flag.Bool("latest", false, "Analyze latest session")
+	wasteFlag := flag.Bool("waste", false, "Show waste analysis for latest session")
 	listModels := flag.Bool("list-models", false, "List models with pricing")
 	updatePricing := flag.Bool("update-pricing", false, "Download latest model pricing from LiteLLM")
 	testMatch := flag.Bool("test-match", false, "Test model name fuzzy matching")
@@ -104,7 +105,7 @@ func main() {
 	}
 
 	path := flag.Arg(0)
-	hasAction := path != "" || *latest || *compare || *overview
+	hasAction := path != "" || *latest || *compare || *overview || *wasteFlag
 
 	if !hasAction {
 		// Launch TUI
@@ -171,6 +172,25 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Saved: %s\n", *output)
 		}
 		fmt.Print(out)
+		return
+	}
+
+	// Waste analysis for latest session
+	if *wasteFlag {
+		files := engine.FindSessionFiles(sessionsDir)
+		if len(files) == 0 {
+			fmt.Fprintf(os.Stderr, i18n.T("no_session_files")+"\n", sessionsDir)
+			os.Exit(1)
+		}
+		s, err := engine.LoadSession(files[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		events, _ := engine.Parse(s.Path)
+		loopResult := engine.AnalyzeLoops(events)
+		wr := engine.ComputeWasteReport(s.Metrics, events, loopResult)
+		fmt.Print(engine.WasteReportText(wr))
 		return
 	}
 

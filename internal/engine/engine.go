@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 // ── Pricing (USD per 1M tokens) ──
 
@@ -2674,38 +2674,78 @@ func AnalyzeCacheEfficiency(m Metrics) CacheEfficiency {
 	switch {
 	case ce.HitRate >= 80:
 		ce.Rating = "excellent"
+		ce.Suggestion = "cache utilization excellent - keep current prompt structure"
 	case ce.HitRate >= 40:
 		ce.Rating = "good"
+		ce.Suggestion = "moderate cache hit - place static system instructions at prompt prefix"
 	case m.TokensCacheW > 0:
 		ce.Rating = "poor"
+		ce.Suggestion = "low cache hit rate - enable prompt caching with static prefix content"
 	default:
 		ce.Rating = "none"
+		ce.Suggestion = "caching not enabled - enable Anthropic prompt caching to save up to 90% on input cost"
 	}
 	return ce
 }
 
-type ToolBloatAnalysis struct {
-	ToolsPerTurn  float64
-	TotalToolCost float64
-	BloatScore    int
-	BloatLevel    string
-	Suggestion    string
-}
 
+// ToolBloatItem tracks per-tool usage metrics.
+type ToolBloatItem struct {
+	ToolName    string
+	CallCount   int
+	TotalCost   float64
+	IsRedundant bool
+}
+type ToolBloatAnalysis struct {
+	ToolsPerTurn   float64
+	TotalToolCost  float64
+	RedundantCalls int
+	BloatScore     int
+	BloatLevel     string
+	Suggestion     string
+	TopBloat       []ToolBloatItem
+}
 func AnalyzeToolBloat(m Metrics) ToolBloatAnalysis {
 	tba := ToolBloatAnalysis{}
 	if m.AssistantTurns > 0 {
 		tba.ToolsPerTurn = float64(m.ToolCallsTotal) / float64(m.AssistantTurns)
 	}
+	avgCostPerTurn := 0.0
+	if m.AssistantTurns > 0 && m.CostEstimated > 0 {
+		avgCostPerTurn = m.CostEstimated / float64(m.AssistantTurns)
+	}
+	tba.TotalToolCost = avgCostPerTurn * float64(m.ToolCallsTotal)
+
 	switch {
 	case tba.ToolsPerTurn > 5:
 		tba.BloatScore = 90; tba.BloatLevel = "severe"
+		tba.Suggestion = "severe tool bloat: limit max tool calls per turn or split into smaller tasks"
 	case tba.ToolsPerTurn > 3:
 		tba.BloatScore = 65; tba.BloatLevel = "high"
+		tba.Suggestion = "too many tool calls: check if simple tasks use over-complex agent orchestration"
 	case tba.ToolsPerTurn > 1.5:
 		tba.BloatScore = 35; tba.BloatLevel = "medium"
+		tba.Suggestion = "moderate tool usage: watch for unnecessary tool call patterns"
 	default:
 		tba.BloatScore = 10; tba.BloatLevel = "low"
+		tba.Suggestion = "tool usage is lean"
+	}
+
+	type kv struct { k string; v int }
+	var sorted []kv
+	for k, v := range m.ToolUsage {
+		sorted = append(sorted, kv{k, v})
+	}
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].v > sorted[j].v })
+	for i, item := range sorted {
+		if i >= 5 { break }
+		isRedundant := item.v > m.AssistantTurns && m.AssistantTurns > 0
+		if isRedundant { tba.RedundantCalls += item.v - m.AssistantTurns }
+		tba.TopBloat = append(tba.TopBloat, ToolBloatItem{
+			ToolName: item.k, CallCount: item.v,
+			TotalCost: avgCostPerTurn * float64(item.v),
+			IsRedundant: isRedundant,
+		})
 	}
 	return tba
 }
@@ -2754,18 +2794,107 @@ func ComputeWasteReport(m Metrics, events []Event, loopResult LoopResult) WasteR
 	if m.CostEstimated > 0 {
 		wr.LoopPercent = wr.LoopCost / m.CostEstimated * 100
 	}
-	wr.TotalWasted = wr.LoopCost
-	score := float64(wr.Bloat.BloatScore)*0.3 + wr.LoopPercent*0.5
-	if len(wr.Stuck) > 0 {
-		score += 15
+	wr.TotalWasted = wr.Cache.WastedCost + wr.LoopCost
+	if wr.Bloat.BloatScore > 50 {
+		wr.TotalWasted += m.CostEstimated * 0.15
+	}
+
+	score := 0.0
+	switch wr.Cache.Rating {
+	case "none": score += 20
+	case "poor": score += 15
+	case "good": score += 5
+	}
+	score += float64(wr.Bloat.BloatScore) * 0.25
+	score += wr.LoopPercent * 0.6
+	if score > 30 { score = 30 }
+	stuckScore := float64(len(wr.Stuck)) * 7.0
+	for _, s := range wr.Stuck {
+		if s.Severity == "critical" { stuckScore += 5 }
+	}
+	if stuckScore > 20 { stuckScore = 20 }
+	score += stuckScore
+	if m.TokensCacheR > 0 && m.TokensInput > 0 {
+		if float64(m.TokensCacheR)/float64(m.TokensInput) < 0.3 { score += 6 }
 	}
 	wr.WasteScore = int(score)
 	if wr.WasteScore > 100 { wr.WasteScore = 100 }
+	if wr.WasteScore < 0 { wr.WasteScore = 0 }
+
 	switch {
 	case wr.WasteScore >= 70: wr.WasteLevel = "red"
 	case wr.WasteScore >= 40: wr.WasteLevel = "orange"
 	case wr.WasteScore >= 15: wr.WasteLevel = "yellow"
 	default: wr.WasteLevel = "green"
 	}
+
+	switch wr.WasteLevel {
+	case "green": wr.Summary = "efficient session - no significant waste"
+	case "yellow": wr.Summary = fmt.Sprintf("minor waste - cache %.0f%% hit, room for optimization", wr.Cache.HitRate)
+	case "orange": wr.Summary = fmt.Sprintf("wasting $%.2f: loops %.0f%%, tools %.1f/turn", wr.TotalWasted, wr.LoopPercent, wr.Bloat.ToolsPerTurn)
+	case "red": wr.Summary = fmt.Sprintf("severe waste $%.2f: loops %.0f%%, %d stuck, no cache", wr.TotalWasted, wr.LoopPercent, len(wr.Stuck))
+	}
+
+	if wr.Cache.Rating == "none" || wr.Cache.Rating == "poor" {
+		wr.TopActions = append(wr.TopActions, wr.Cache.Suggestion)
+	}
+	if wr.Bloat.BloatLevel == "severe" || wr.Bloat.BloatLevel == "high" {
+		if len(wr.Bloat.TopBloat) > 0 {
+			wr.TopActions = append(wr.TopActions,
+				fmt.Sprintf("top tool %q called %dx - reduce or batch", wr.Bloat.TopBloat[0].ToolName, wr.Bloat.TopBloat[0].CallCount))
+		} else { wr.TopActions = append(wr.TopActions, wr.Bloat.Suggestion) }
+	}
+	if wr.LoopPercent > 20 {
+		wr.TopActions = append(wr.TopActions,
+			fmt.Sprintf("loop waste $%.2f (%.0f%%) - add max retries limit", wr.LoopCost, wr.LoopPercent))
+	}
+	if len(wr.TopActions) > 3 { wr.TopActions = wr.TopActions[:3] }
+	if len(wr.TopActions) == 0 { wr.TopActions = []string{"session running optimally"} }
 	return wr
+}
+
+func WasteReportText(wr WasteReport) string {
+	var b strings.Builder
+	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
+	sep := strings.Repeat("━", 60)
+	w(sep)
+	w("  AGENTWASTE v%s - Waste Analysis", Version)
+	w(sep)
+	w("")
+	w("  Score: %d/100 (%s)", wr.WasteScore, levelEmoji(wr.WasteLevel)+" "+wr.WasteLevel)
+	w("  Wasted: $%.4f", wr.TotalWasted)
+	w("  %s", wr.Summary)
+	w("")
+	w("  -- Cache --")
+	w("  %s (%.0f%% hit, %d read / %d input)", wr.Cache.Rating, wr.Cache.HitRate, wr.Cache.CacheReadTokens, wr.Cache.TotalInputTokens)
+	if wr.Cache.WastedCost > 0 { w("  Cache waste: $%.4f", wr.Cache.WastedCost) }
+	w("  Suggestion: %s", wr.Cache.Suggestion)
+	w("")
+	w("  -- Tool Bloat --")
+	w("  %s (%.1f tools/turn)", wr.Bloat.BloatLevel, wr.Bloat.ToolsPerTurn)
+	for _, tb := range wr.Bloat.TopBloat {
+		m := ""; if tb.IsRedundant { m = " *redundant" }
+		w("    %-25s %3dx $%.3f%s", tb.ToolName, tb.CallCount, tb.TotalCost, m)
+	}
+	w("")
+	w("  -- Stuck --")
+	if len(wr.Stuck) == 0 { w("  none") } else {
+		for _, s := range wr.Stuck { w("  [%s] %s", s.Severity, s.Description) }
+	}
+	w("")
+	w("  -- Actions --")
+	for i, a := range wr.TopActions { w("  %d. %s", i+1, a) }
+	w("")
+	w(sep)
+	return b.String()
+}
+
+func levelEmoji(level string) string {
+	switch level {
+	case "green": return "🟢"
+	case "yellow": return "🟡"
+	case "orange": return "🟠"
+	case "red": return "🔴"
+	}
+	return ""
 }
