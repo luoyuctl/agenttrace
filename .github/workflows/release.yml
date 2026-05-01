@@ -97,12 +97,15 @@ jobs:
 
       - name: Generate Formula
         run: |
+          # Read current version from formula, replace with tag version
+          CURRENT_VER=$(grep 'version "' homebrew/Formula/agenttrace.rb | head -1 | sed 's/.*version "//' | sed 's/".*//')
+          TAG_VER=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           sed -e "s/PLACEHOLDER_DARWIN_ARM64_SHA256/${{ env.DARWIN_ARM64 }}/" \
               -e "s/PLACEHOLDER_DARWIN_AMD64_SHA256/${{ env.DARWIN_AMD64 }}/" \
               -e "s/PLACEHOLDER_LINUX_ARM64_SHA256/${{ env.LINUX_ARM64 }}/" \
               -e "s/PLACEHOLDER_LINUX_AMD64_SHA256/${{ env.LINUX_AMD64 }}/" \
-              -e "s/version \"4.0.0\"/version \"${{ github.ref_name }}\"/" \
-              -e "s|download/v4.0.0|download/${{ github.ref_name }}|g" \
+              -e "s/version \"${CURRENT_VER}\"/version \"${TAG_VER}\"/" \
+              -e "s|download/v${CURRENT_VER}|download/${{ github.ref_name }}|g" \
               homebrew/Formula/agenttrace.rb > /tmp/homebrew-tap/Formula/agenttrace.rb
 
       - name: Push to homebrew-tap
