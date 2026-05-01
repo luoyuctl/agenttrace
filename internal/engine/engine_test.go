@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
 func mustJSON(v interface{}) string {
@@ -215,7 +213,7 @@ func TestHealthScore_Perfect(t *testing.T) {
 }
 
 func TestHealthScore_WithAnomalies(t *testing.T) {
-	anoms := []Anomaly{{Severity: i18n.T("severity_high")}, {Severity: i18n.T("severity_medium")}}
+	anoms := []Anomaly{{Severity: SeverityHigh}, {Severity: SeverityMedium}}
 	s := HealthScore(Metrics{}, anoms)
 	if s != 58 {
 		t.Errorf("expected 58, got %d", s)
@@ -223,7 +221,7 @@ func TestHealthScore_WithAnomalies(t *testing.T) {
 }
 
 func TestHealthScore_Floor(t *testing.T) {
-	anoms := []Anomaly{{Severity: i18n.T("severity_high")}, {Severity: i18n.T("severity_high")}, {Severity: i18n.T("severity_high")}, {Severity: i18n.T("severity_high")}}
+	anoms := []Anomaly{{Severity: SeverityHigh}, {Severity: SeverityHigh}, {Severity: SeverityHigh}, {Severity: SeverityHigh}}
 	s := HealthScore(Metrics{}, anoms)
 	if s != 0 {
 		t.Errorf("expected 0, got %d", s)
@@ -244,7 +242,7 @@ func TestDiffSessions(t *testing.T) {
 
 func TestGenerateFixes_Hanging(t *testing.T) {
 	m := Metrics{GapsSec: []float64{350}}
-	anoms := []Anomaly{{Type: "hanging", Severity: "high"}}
+	anoms := []Anomaly{{Type: "hanging", Severity: SeverityHigh}}
 	fixes := GenerateFixes(m, anoms, "zh")
 	if len(fixes) == 0 {
 		t.Fatal("no fixes")
@@ -256,7 +254,7 @@ func TestGenerateFixes_Hanging(t *testing.T) {
 
 func TestGenerateFixes_English(t *testing.T) {
 	m := Metrics{GapsSec: []float64{350}}
-	anoms := []Anomaly{{Type: "hanging", Severity: "high"}}
+	anoms := []Anomaly{{Type: "hanging", Severity: SeverityHigh}}
 	fixes := GenerateFixes(m, anoms, "en")
 	if len(fixes) == 0 {
 		t.Fatal("no fixes")

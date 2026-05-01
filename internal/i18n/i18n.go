@@ -231,12 +231,12 @@ var translations = map[string]map[Lang]string{
 
 	// ── TUI help bars ──
 	"help_overview": {
-		EN: "0-5: jump · Tab: list · q: quit",
-		ZH: "0-5: 跳转 · Tab: 列表 · q: 退出",
+		EN: "0-4: jump · Tab: list · q: quit",
+		ZH: "0-4: 跳转 · Tab: 列表 · q: 退出",
 	},
 	"help_list": {
-		EN: "↑↓:sel Enter:detail 0-5:jump h/c/t:sort /:filter f:health s:source d:diff w:diag Tab:next q:quit",
-		ZH: "↑↓:选择 Enter:详情 0-5:跳转 h/c/t:排序 /:筛选 f:健康 s:来源 d:对比 w:诊断 Tab:下页 q:退出",
+		EN: "↑↓:sel Enter:detail 0-4:jump h/c/t:sort /:filt f:health s:source d:diff w:diag Tab:next q:quit",
+		ZH: "↑↓:选择 Enter:详情 0-4:跳转 h/c/t:排序 /:筛选 f:健康 s:来源 d:对比 w:诊断 Tab:下页 q:退出",
 	},
 	"help_detail": {
 		EN: "Esc: back · d: diff prev · w: diag · Tab: next · q: quit",
@@ -660,7 +660,7 @@ var translations = map[string]map[Lang]string{
 		EN: "No stuck patterns detected",
 		ZH: "未检测到卡顿模式",
 	},
-	"tab_waste": {EN: "3 Diagnostics", ZH: "3 诊断"},
+	"tab_diag": {EN: "3 Diag", ZH: "3 诊断"},
 }
 
 // T returns the translation for key in the current language.
