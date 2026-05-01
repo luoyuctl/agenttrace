@@ -1,0 +1,40 @@
+{
+  "name": "agenttrace",
+  "version": "4.0.0",
+  "description": "AI Agent Session Analyzer — find hanging, token waste, thinking redaction & quality regressions",
+  "main": "install.js",
+  "bin": {
+    "agenttrace": "./run.js"
+  },
+  "files": [
+    "install.js",
+    "run.js",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/luoyuctl/agenttrace.git"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "tui",
+    "analytics",
+    "token",
+    "cost",
+    "performance",
+    "claude",
+    "gemini",
+    "hermes"
+  ],
+  "license": "MIT",
+  "os": ["darwin", "linux", "win32"],
+  "cpu": ["x64", "arm64"],
+  "engines": {
+    "node": ">=16"
+  }
+}

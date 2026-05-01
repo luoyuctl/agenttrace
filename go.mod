@@ -1,6 +1,8 @@
 module github.com/luoyuctl/agenttrace
 
-go 1.26.2
+go 1.24.2
+
+// agenttrace v4.0.0 — Go single-binary, supports 5 agent formats
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
