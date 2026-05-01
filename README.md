@@ -6,6 +6,7 @@
   <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/dependencies-zero-orange.svg" alt="Zero Deps">
+  <img src="https://img.shields.io/badge/tests-89/89-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
 </p>
 
@@ -28,10 +29,10 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 | Feature | Description |
 |---|---|
 | 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Gemini CLI — all parsed seamlessly |
-| 💰 **Token Cost Estimation** | Real pricing for 7 models (Opus $75/M → Flash $0.60/M output) |
-| 🚨 **4 Anomaly Types** | Hanging, tool failures, shallow thinking, thinking redaction |
+| 💰 **Token Cost Estimation** | Real pricing for 13 models (Opus $75/M → Flash $0.60/M output) |
+| 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
-| 💯 **Health Score** | 0-100 composite with visual bar |
+| 💯 **Health Score** | 0-100 composite with visual bar and emoji |
 | 🏃 **Zero Dependencies** | Pure Python 3.9+ stdlib, no pip install needed |
 | 🤖 **Machine Readable** | JSON output for CI/CD and automation |
 
@@ -41,59 +42,98 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 git clone https://github.com/luoyuctl/agenttrace.git
 cd agenttrace
 
+# Analyze a session
+python3 agenttrace.py session.jsonl
+
+# Or use the module form
+python -m agenttrace session.jsonl
+
 # Analyze latest session
-python3 agenttrace.py --latest
+python3 agenttrace.py --latest -d ~/.hermes/sessions
 
 # Specify model for accurate pricing
 python3 agenttrace.py -m claude-sonnet-4 session.jsonl
 
 # Compare all sessions
-python3 agenttrace.py --compare
+python3 agenttrace.py --compare -d ~/.hermes/sessions
 
 # JSON output (for CI or dashboards)
 python3 agenttrace.py -f json session.jsonl
 
 # List available models
 python3 agenttrace.py --list-models
-
-# Analyze all sessions in a directory
-python3 agenttrace.py --dir ~/.hermes/sessions
 ```
 
 ## 📊 Sample Output
 
 ```
-============================================================
-  AGENTTRACE v2 — AI Agent Session Performance Report
-============================================================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  AGENTTRACE v3.0.0 — AI Agent Session Performance Report
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST
-  Input:              1,342 tokens
-  Output:             3,947 tokens
-  Total tokens:       5,289
-  Est. cost:          $0.0632
+────────────────────────────────────────
+  Input:             1,342  tokens
+  Output:            3,947  tokens
+  ────────────────────────────────────
+  Total tokens:      5,289
+  Est. cost:    $     0.0632  (model: claude-sonnet-4)
 
-📊 ACTIVITY:  2 msgs | 42 turns | 70 tool calls | 91% success
-⏱️  LATENCY: p50=457.9s | p95=457.9s | max=457.9s
-🔧 TOP TOOLS: browser_navigate=31, terminal=14, todo=9
-🧠 THINKING: 20 blocks | avg=392 chars | ⚠️ shallow detected
-🚨 ANOMALIES: 🟡 shallow thinking, 🔴 high tool failures
-💯 HEALTH: 🟢 90/100 [██████████████████░░]
+📊 ACTIVITY
+────────────────────────────────────────
+  Messages:    2 user  |  42 turns
+  Tool calls:  70
+  Success:     91% (64/70)
+
+⏱️  LATENCY
+────────────────────────────────────────
+  min:     12.3s
+  median:  457.9s
+  p95:     720.1s
+  max:     901.0s
+  avg:     358.4s
+  Duration: 15.4m
+
+🔧 TOP TOOLS
+────────────────────────────────────────
+  browser_navigate                      31
+  terminal                              14
+  todo                                   9
+  read_file                              8
+  write_file                             5
+
+🧠 THINKING / COT
+────────────────────────────────────────
+  Blocks: 20
+  Avg:    392 chars
+  Total:  7,840 chars
+  Quality: 🔴 shallow
+
+🚨 ANOMALIES
+────────────────────────────────────────
+  🔴 [HIGH] hanging: 1 gap(s) >60s, max=901s
+  🟡 [MEDIUM] shallow_thinking: avg reasoning = 392 chars
+
+💯 HEALTH SCORE
+────────────────────────────────────────
+  🟢  90/100  [██████████████████░░]
 ```
 
 ## 🎯 Anomaly Detection
 
 | Type | Trigger | Severity | Example |
 |---|---|---|---|
-| 🔴 **Hanging** | Event gaps > 60s | `high/medium` | Agent stuck waiting |
-| 🔴 **Tool Failures** | Failure rate > 20% | `high` | Broken tool chain |
-| 🟡 **Shallow Thinking** | Avg reasoning < 500 chars | `medium` | Low-quality reasoning |
-| 🟡 **Redaction** | Redacted thinking blocks | `medium` | Hidden reasoning gaps |
+| 🔴 **Hanging** | Event gap > 60s | `high/medium` | Agent stuck waiting for response |
+| 🔴 **Tool Failures** | Failure rate > 20% | `high` | Broken tool chain, API errors |
+| 🔴 **Latency Spikes** | p95 latency > 120s | `low/medium` | Sessions running unusually slow |
+| 🟡 **Shallow Thinking** | Avg reasoning < 500 chars | `high/medium` | Low-quality or truncated reasoning |
+| 🟡 **Redaction** | Redacted thinking blocks | `medium` | Hidden reasoning gaps (safety filters) |
+| 🟡 **No Tools** | 3+ turns with zero tool calls | `medium` | Agent stuck in chat-only loop |
 
 ## 📈 Multi-Session Comparison
 
 ```bash
-python3 agenttrace.py --compare
+python3 agenttrace.py --compare -d ~/.hermes/sessions
 ```
 
 ```
@@ -133,7 +173,8 @@ Issues and PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) (coming soon).
 git clone https://github.com/luoyuctl/agenttrace.git
 cd agenttrace
 # make changes...
-python3 agenttrace.py --latest  # test locally
+python3 run_tests.py           # run 89 test suite
+python3 agenttrace.py --latest -d ~/.hermes/sessions  # test locally
 # open PR 🚀
 ```
 
