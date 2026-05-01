@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
-const Version = "0.0.8"
+const Version = "0.1.0"
 
 // ── Pricing (USD per 1M tokens) ──
 
