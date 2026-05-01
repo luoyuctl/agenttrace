@@ -29,6 +29,7 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 | Feature | Description |
 |---|---|
 | 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Gemini CLI — all parsed seamlessly |
+| 🖥️ **Interactive TUI** | Zero-dep curses dashboard (btop style) — default on launch, no flags needed |
 | 💰 **Token Cost Estimation** | Real pricing for 13 models (Opus $75/M → Flash $0.60/M output) |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
@@ -36,17 +37,53 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 | 🏃 **Zero Dependencies** | Pure Python 3.9+ stdlib, no pip install needed |
 | 🤖 **Machine Readable** | JSON output for CI/CD and automation |
 
-## 🚀 Quick Start
+### agenttrace 给你的 AI Agent 做体检 — 实时终端仪表盘。
+
+## 启动 TUI（交互式仪表盘）
 
 ```bash
 git clone https://github.com/luoyuctl/agenttrace.git
 cd agenttrace
 
-# Analyze a session
-python3 agenttrace.py session.jsonl
+# 启动交互式终端仪表盘（类 btop 风格，默认行为）
+python -m agenttrace
 
-# Or use the module form
+# 指定 session 目录
+python -m agenttrace -d ~/.hermes/sessions
+
+# 命令行模式：分析指定文件
 python -m agenttrace session.jsonl
+```
+
+**TUI 界面：**
+- **Session 列表** — 所有 session 的表格，支持按健康分/成本/轮次排序
+- **Session 详情** — 选中 session 的完整分析报告，可滚动
+- **对比视图** — 所有 session 的横向对比
+
+**快捷键：**
+
+| 键 | 功能 |
+|---|---|
+| `↑↓` / `jk` | 导航 |
+| `←→` / `hl` | 切换排序列 |
+| `Enter` | 查看 session 详情 |
+| `Tab` | 切换视图（列表→详情→对比） |
+| `s` | 反转排序 |
+| `r` | 刷新数据 |
+| `?` | 帮助窗口 |
+| `q` / `Esc` | 退出 / 返回 |
+
+## 🚀 Quick Start（命令行）
+
+```bash
+git clone https://github.com/luoyuctl/agenttrace.git
+cd agenttrace
+
+# Launch TUI dashboard (default)
+python3 agenttrace.py
+
+# Or use module form
+python -m agenttrace
 
 # Analyze latest session
 python3 agenttrace.py --latest -d ~/.hermes/sessions

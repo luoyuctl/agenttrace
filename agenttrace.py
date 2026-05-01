@@ -766,6 +766,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  agenttrace                           launch interactive TUI dashboard (default)
   agenttrace --latest                  analyze latest session
   agenttrace session.jsonl             analyze a specific session
   agenttrace -f json session.jsonl     JSON output
@@ -806,6 +807,21 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    # ── Default: no explicit action → launch TUI ──
+    has_explicit_action = (
+        args.path is not None
+        or args.latest
+        or args.compare
+        or args.list_models
+    )
+    if not has_explicit_action:
+        sessions_dir = args.dir or os.path.expanduser("~/.hermes/sessions")
+        from agenttrace.tui import main as tui_main
+        import sys as _sys
+        _sys.argv = [_sys.argv[0], "-d", sessions_dir]
+        tui_main()
+        return
 
     # ── List models ──
     if args.list_models:
