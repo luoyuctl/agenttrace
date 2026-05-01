@@ -259,7 +259,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.aggStats = engine.ComputeAggregateStats(m.sessions)
 			m.costSummary = engine.ComputeCostSummary(m.sessions)
 			m.refreshTable()
-			m.refreshCompare()
 			m.rebuildFilteredIndices()
 
 		case "L", "l":
