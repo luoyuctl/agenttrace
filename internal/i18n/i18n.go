@@ -221,8 +221,8 @@ var translations = map[string]map[Lang]string{
 		ZH: "2 详情",
 	},
 	"tab_compare": {
-		EN: "3 Compare",
-		ZH: "3 对比",
+		EN: "5 Compare",
+		ZH: "5 对比",
 	},
 	"select_session_hint": {
 		EN: " Select a session and press Enter to see details ",
@@ -231,20 +231,20 @@ var translations = map[string]map[Lang]string{
 
 	// ── TUI help bars ──
 	"help_overview": {
-		EN: "Tab: sessions · /: filter · q: quit",
-		ZH: "Tab: 会话 · /: 筛选 · q: 退出",
+		EN: "0-5: jump · Tab: list · q: quit",
+		ZH: "0-5: 跳转 · Tab: 列表 · q: 退出",
 	},
 	"help_list": {
-		EN: "↑↓: select · Enter: detail · /: filter · Tab: overview · q: quit",
-		ZH: "↑↓: 选择 · Enter: 详情 · /: 筛选 · Tab: 概览 · q: 退出",
+		EN: "↑↓:sel Enter:detail 0-5:jump h/c/t:sort /:filter f:health s:source d:diff w:diag Tab:next q:quit",
+		ZH: "↑↓:选择 Enter:详情 0-5:跳转 h/c/t:排序 /:筛选 f:健康 s:来源 d:对比 w:诊断 Tab:下页 q:退出",
 	},
 	"help_detail": {
-		EN: "Esc: back · Tab: overview · q: quit",
-		ZH: "Esc: 返回 · Tab: 概览 · q: 退出",
+		EN: "Esc: back · d: diff prev · w: diag · Tab: next · q: quit",
+		ZH: "Esc: 返回 · d: 对比上一 · w: 诊断 · Tab: 下一个 · q: 退出",
 	},
 	"help_compare": {
-		EN: "h: sort health · Tab: overview · q: quit",
-		ZH: "h: 健康排序 · Tab: 概览 · q: 退出",
+		EN: "h: sort health · 0-5: jump · Tab: overview · q: quit",
+		ZH: "h: 健康排序 · 0-5: 跳转 · Tab: 概览 · q: 退出",
 	},
 
 	// ── CLI / main ──
@@ -578,9 +578,10 @@ var translations = map[string]map[Lang]string{
 	"prompt_impact_mixed": {EN: "Trend: mixed — need more data", ZH: "趋势: 波动 — 需要更多数据"},
 
 	// ── Tab ──
-	"tab_diff": {EN: "D Diff", ZH: "D 对比"},
+	"tab_diff": {EN: "4 Diff", ZH: "4 对比"},
 
 	// ── Help ──
+	"help_diag": {EN: "Esc: back · Tab: next · q: quit", ZH: "Esc: 返回 · Tab: 下一个 · q: 退出"},
 	"help_diff": {EN: "Esc: back · Tab: overview · q: quit", ZH: "Esc: 返回 · Tab: 概览 · q: 退出"},
 
 	// ── v0.2 Community Diagnostics ──
@@ -659,7 +660,7 @@ var translations = map[string]map[Lang]string{
 		EN: "No stuck patterns detected",
 		ZH: "未检测到卡顿模式",
 	},
-	"tab_waste": {EN: "4 Waste", ZH: "4 浪费"},
+	"tab_waste": {EN: "3 Diagnostics", ZH: "3 诊断"},
 }
 
 // T returns the translation for key in the current language.

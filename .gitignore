@@ -1,3 +1,5 @@
 __pycache__/
 go/agenttrace
 dist/
+agentwaste
+.claude/settings.local.json

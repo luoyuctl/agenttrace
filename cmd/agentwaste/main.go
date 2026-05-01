@@ -84,8 +84,7 @@ func main() {
 
 	sessionsDir := *dir
 	if sessionsDir == "" {
-		home, _ := os.UserHomeDir()
-		sessionsDir = filepath.Join(home, ".hermes", "sessions")
+		sessionsDir = resolveDefaultDir()
 	}
 
 	// List models
@@ -251,4 +250,32 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Saved: %s\n", *output)
 	}
 	fmt.Print(out)
+}
+
+// resolveDefaultDir scans common agent session directories.
+// Returns the first directory that exists and contains session files.
+func resolveDefaultDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".hermes", "sessions")
+	}
+	candidates := []string{
+		filepath.Join(home, ".hermes", "sessions"),
+		filepath.Join(home, ".claude", "sessions"),
+		filepath.Join(home, ".gemini", "sessions"),
+		filepath.Join(home, ".codex", "sessions"),
+	}
+	for _, dir := range candidates {
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					name := e.Name()
+					if strings.HasSuffix(name, ".jsonl") || strings.HasSuffix(name, ".json") {
+						return dir
+					}
+				}
+			}
+		}
+	}
+	return filepath.Join(home, ".hermes", "sessions")
 }

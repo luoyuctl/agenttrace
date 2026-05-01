@@ -58,7 +58,7 @@ const (
 	viewOverview view = iota
 	viewList
 	viewDetail
-	viewWaste // waste diagnostics dashboard
+	viewDiagnostics // diagnostics dashboard
 	viewDiff  // diff two sessions side-by-side
 	viewCompare
 )
@@ -76,6 +76,7 @@ type Model struct {
 	filterText  string
 	filterMode  string // "", "health", "source"
 	filterValue string // e.g. "good", "hermes_jsonl"
+	filteredIndices []int // maps table row → sessions index
 
 	// Sort state
 	sortBy    string // "health", "cost", "turns", "name", "source"
@@ -150,7 +151,7 @@ func New(dir string) Model {
 		}
 
 		// Health with color
-		healthRaw := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		healthRaw := fmt.Sprintf("%d/100 %s", s.Health, engine.HealthEmoji(s.Health))
 		var healthCol string
 		switch {
 		case s.Health >= 80:
@@ -240,11 +241,11 @@ func New(dir string) Model {
 		Background(lipgloss.Color("63"))
 	ct.SetStyles(cs)
 
-	return Model{
+	m := Model{
 		view:         viewOverview,
 		sessions:     sessions,
 		dir:          dir,
-		lang:         i18n.EN,
+		lang:         i18n.Current,
 		overview:     overview,
 		aggStats:     engine.ComputeAggregateStats(sessions),
 		table:        t,
@@ -253,6 +254,8 @@ func New(dir string) Model {
 		compareReady: true,
 		costSummary:  engine.ComputeCostSummary(sessions),
 	}
+	m.rebuildFilteredIndices()
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -298,8 +301,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.view = viewDetail
 				m.openDetail()
 			case viewDetail:
-				m.view = viewWaste
-			case viewWaste:
+				m.view = viewDiagnostics
+			case viewDiagnostics:
 				m.view = viewDiff
 			case viewDiff:
 				m.view = viewCompare
@@ -331,15 +334,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "1":
 			m.view = viewList
 		case "2":
-			m.view = viewDetail
-			m.openDetail()
+			if len(m.filteredIndices) > 0 {
+				m.view = viewDetail
+				m.openDetail()
+			}
 		case "3":
-			m.view = viewCompare
+			m.view = viewDiagnostics
 		case "4":
-			m.view = viewWaste
+			m.view = viewDiff
+		case "5":
+			m.view = viewCompare
 		case "w":
 			if m.view == viewDetail {
-				m.view = viewWaste
+				m.view = viewDiagnostics
 			}
 
 		case "/":
@@ -358,7 +365,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			// Enter in list view → open detail view
-			if m.view == viewList && m.tableReady && len(m.sessions) > 0 {
+			if m.view == viewList && m.tableReady && len(m.filteredIndices) > 0 {
 				m.view = viewDetail
 				m.openDetail()
 				return m, cmd
@@ -374,7 +381,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 退出筛选模式
 				m.filterActive = false
 				m.filterInput = ""
-			} else if m.view == viewDetail || m.view == viewCompare || m.view == viewDiff || m.view == viewWaste {
+			} else if m.view == viewDetail || m.view == viewCompare || m.view == viewDiff || m.view == viewDiagnostics {
 				m.view = viewList
 			}
 		case "backspace":
@@ -428,8 +435,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "d":
 			if m.view == viewList {
 				cursor := m.table.Cursor()
-				if cursor+1 < len(m.sessions) {
-					m.diffResult = engine.DiffSessions(m.sessions[cursor], m.sessions[cursor+1])
+				if cursor >= 0 && len(m.filteredIndices) > cursor+1 {
+					idxA := m.filteredIndices[cursor]
+					idxB := m.filteredIndices[cursor+1]
+					m.diffResult = engine.DiffSessions(m.sessions[idxA], m.sessions[idxB])
 					m.view = viewDiff
 				}
 			} else if m.view == viewDetail {
@@ -465,6 +474,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			// 筛选输入模式：捕获按键
 			if m.filterActive {
+				// Allow quit keys during filter mode
+				if msg.String() == "q" || msg.String() == "ctrl+c" {
+					return m, tea.Quit
+				}
 				// 可打印字符追加到 filterInput
 				if len(msg.Runes) > 0 {
 					m.filterInput += string(msg.Runes)
@@ -475,7 +488,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch m.view {
 			case viewList:
 				m.table, cmd = m.table.Update(msg)
-				if msg.String() == "enter" && m.tableReady {
+				if msg.String() == "enter" && m.tableReady && len(m.filteredIndices) > 0 {
 					m.view = viewDetail
 					m.openDetail()
 				}
@@ -503,7 +516,7 @@ func (m *Model) openDetail() {
 	if !m.tableReady || len(m.sessions) == 0 {
 		return
 	}
-	idx := m.table.Cursor()
+	idx := m.findSessionIndex()
 	if idx >= 0 && idx < len(m.sessions) {
 		s := m.sessions[idx]
 		text := engine.ReportText(s.Metrics, s.Anomalies, s.Health)
@@ -549,7 +562,7 @@ func (m *Model) refreshTable() {
 		}
 
 		// Health with color
-		healthRaw := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		healthRaw := fmt.Sprintf("%d/100 %s", s.Health, engine.HealthEmoji(s.Health))
 		var healthCol string
 		switch {
 		case s.Health >= 80:
@@ -591,7 +604,7 @@ func (m *Model) refreshCompare() {
 		}
 
 		// Health with color
-		healthRaw := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		healthRaw := fmt.Sprintf("%d/100 %s", s.Health, engine.HealthEmoji(s.Health))
 		var healthCol string
 		switch {
 		case s.Health >= 80:
@@ -668,7 +681,10 @@ func (m Model) View() string {
 	case viewDetail:
 		if m.detailReady {
 			scrollInfo := dimStyle.Render(fmt.Sprintf(" Scroll: %.0f%% ", m.viewport.ScrollPercent()*100))
-			detailContent := lipgloss.JoinVertical(lipgloss.Left, scrollInfo, m.viewport.View())
+
+			// Quick Summary Bar
+			summaryBar := m.renderQuickSummary()
+			detailContent := lipgloss.JoinVertical(lipgloss.Left, summaryBar, "", scrollInfo, m.viewport.View())
 
 			// 循环成本展示
 			loopSection := m.renderLoopAnalysis()
@@ -698,7 +714,7 @@ func (m Model) View() string {
 		} else {
 			content = baseStyle.Render(dimStyle.Render(i18n.T("select_session_hint")))
 		}
-	case viewWaste:
+	case viewDiagnostics:
 		content = m.renderWaste()
 	case viewDiff:
 		content = m.renderDiff()
@@ -753,7 +769,7 @@ func (m Model) renderHelp() string {
 		}
 	case viewDetail:
 		keys = i18n.T("help_detail")
-	case viewWaste:
+	case viewDiagnostics:
 		keys = "Esc: back · Tab: next · q: quit"
 	case viewDiff:
 		keys = i18n.T("help_diff")
@@ -761,6 +777,46 @@ func (m Model) renderHelp() string {
 		keys = i18n.T("help_compare")
 	}
 	return helpStyle.Render(" " + keys + " ")
+}
+
+// renderQuickSummary shows key metrics at a glance above the detail viewport.
+func (m Model) renderQuickSummary() string {
+	idx := m.findSessionIndex()
+	if idx < 0 || idx >= len(m.sessions) { return "" }
+	s := m.sessions[idx]
+	met := s.Metrics
+
+	// Build 5 metric badges
+	badge := func(label, value string, color lipgloss.Color) string {
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(color).
+			Padding(0, 1).
+			Render(lipgloss.NewStyle().Foreground(color).Render(label) + " " + boldStyle.Render(value))
+	}
+
+	healthBadge := badge("Health", fmt.Sprintf("%d/100", s.Health), lipgloss.Color("42"))
+	if s.Health < 80 { healthBadge = badge("Health", fmt.Sprintf("%d/100", s.Health), lipgloss.Color("220")) }
+	if s.Health < 50 { healthBadge = badge("Health", fmt.Sprintf("%d/100", s.Health), lipgloss.Color("196")) }
+
+	costBadge := badge("Cost", fmt.Sprintf("$%.4f", met.CostEstimated), lipgloss.Color("39"))
+
+	totalTools := met.ToolCallsOK + met.ToolCallsFail
+	srStr := "N/A"
+	if totalTools > 0 { srStr = fmt.Sprintf("%.0f%%", float64(met.ToolCallsOK)/float64(totalTools)*100) }
+	toolColor := lipgloss.Color("42")
+	if totalTools > 0 && float64(met.ToolCallsOK)/float64(totalTools) < 0.85 { toolColor = lipgloss.Color("220") }
+	if totalTools > 0 && float64(met.ToolCallsOK)/float64(totalTools) < 0.70 { toolColor = lipgloss.Color("196") }
+	toolBadge := badge("Tools", fmt.Sprintf("%d/%d %s", met.ToolCallsOK, totalTools, srStr), toolColor)
+
+	anomBadge := badge("Anomalies", fmt.Sprintf("%d", len(s.Anomalies)), lipgloss.Color("42"))
+	if len(s.Anomalies) > 0 { anomBadge = badge("Anomalies", fmt.Sprintf("%d", len(s.Anomalies)), lipgloss.Color("196")) }
+
+	modelBadge := badge("Model", met.ModelUsed, lipgloss.Color("99"))
+
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		healthBadge, " ", costBadge, " ", toolBadge, " ", anomBadge, " ", modelBadge,
+	)
 }
 
 // renderLoopAnalysis 渲染循环成本分析 section
@@ -885,6 +941,12 @@ func (m Model) renderWaste() string {
 	var sections []string
 	sections = append(sections, sessionLabel, "")
 
+	// Waste Score Summary
+	scoreCard := m.renderWasteScoreCard(s)
+	if scoreCard != "" {
+		sections = append(sections, scoreCard, "")
+	}
+
 	// 1. Fingerprint Loop Detection
 	loopFP := m.renderFingerprintLoops(s)
 	sections = append(sections, pCard("196", i18n.T("diag_loop_fingerprint"), loopFP), "")
@@ -924,6 +986,88 @@ func (m Model) renderFingerprintLoops(s engine.Session) string {
 		lines = append(lines, style.Render(fmt.Sprintf("• %s", fp.Detail)))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func (m Model) renderWasteScoreCard(s engine.Session) string {
+	met := s.Metrics
+	// Compute a composite diagnostic score
+	score := 100
+	hasIssues := false
+
+	var worstLabel string
+	switch {
+	case len(s.LoopFingerprints) > 0:
+		score -= 30 * len(s.LoopFingerprints)
+		worstLabel = fmt.Sprintf("%d fingerprint loops detected", len(s.LoopFingerprints))
+		hasIssues = true
+	case s.LoopCost.TotalLoopCost > 0:
+		score -= 15
+		worstLabel = "simple loop detected"
+		hasIssues = true
+	}
+
+	slowTools := 0
+	for _, tl := range s.ToolLatencies {
+		if tl.IsSlow { slowTools++ }
+	}
+	if slowTools > 0 {
+		score -= 10 * slowTools
+		if worstLabel == "" { worstLabel = fmt.Sprintf("%d slow tools", slowTools) }
+		hasIssues = true
+	}
+
+	if s.ContextUtil.RiskLevel == "critical" {
+		score -= 25
+		if worstLabel == "" { worstLabel = "context window critical" }
+		hasIssues = true
+	} else if s.ContextUtil.RiskLevel == "warning" {
+		score -= 10
+		if worstLabel == "" { worstLabel = "context window warning" }
+		hasIssues = true
+	}
+
+	if len(s.LargeParams) > 0 {
+		score -= 10 * len(s.LargeParams)
+		if worstLabel == "" { worstLabel = fmt.Sprintf("%d large param calls", len(s.LargeParams)) }
+		hasIssues = true
+	}
+
+	if len(s.UnusedTools) > 0 {
+		score -= 5 * len(s.UnusedTools)
+		if worstLabel == "" { worstLabel = fmt.Sprintf("%d unused tools", len(s.UnusedTools)) }
+		hasIssues = true
+	}
+
+	if score < 0 { score = 0 }
+	if score > 100 { score = 100 }
+
+	var scoreStyle lipgloss.Style
+	switch {
+	case score >= 80:
+		scoreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
+	case score >= 50:
+		scoreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true)
+	default:
+		scoreStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+	}
+
+	status := "All Clear"
+	if hasIssues {
+		status = "Issues Found"
+	}
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63")).
+		Padding(1, 2).
+		Render(fmt.Sprintf("%s  %s  ·  %s  ·  %s  ·  %s  ·  %s",
+			scoreStyle.Render(fmt.Sprintf("Score %d/100", score)),
+			lipgloss.NewStyle().Bold(true).Render(status),
+			dimStyle.Render(fmt.Sprintf("Turns %d", met.AssistantTurns)),
+			dimStyle.Render(fmt.Sprintf("Tools %d", met.ToolCallsTotal)),
+			dimStyle.Render(fmt.Sprintf("Cost $%.4f", met.CostEstimated)),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Render(met.ModelUsed),
+		))
 }
 
 func (m Model) renderToolLatency(s engine.Session) string {
@@ -1323,6 +1467,9 @@ func (m Model) renderOverview() string {
 			break
 		}
 		display := mdl.k
+		if display == "unknown" {
+			continue
+		}
 		maxLen := colW3 - 15
 		if maxLen > 18 {
 			maxLen = 18
@@ -1456,15 +1603,50 @@ func (m *Model) getFilteredSessions() []engine.Session {
 	return filtered
 }
 
+func (m *Model) rebuildFilteredIndices() {
+	m.filteredIndices = nil
+	for i, s := range m.sessions {
+		include := true
+		if m.filterMode == "health" {
+			switch m.filterValue {
+			case "good":
+				include = s.Health >= 80
+			case "warn":
+				include = s.Health >= 50 && s.Health < 80
+			case "crit":
+				include = s.Health < 50
+			}
+		} else if m.filterMode == "source" {
+			include = s.Metrics.SourceTool == m.filterValue
+		}
+		if m.filterText != "" {
+			q := strings.ToLower(m.filterText)
+			if !strings.Contains(strings.ToLower(s.Name), q) &&
+				!strings.Contains(strings.ToLower(s.Metrics.SourceTool), q) {
+				include = false
+			}
+		}
+		if include {
+			m.filteredIndices = append(m.filteredIndices, i)
+		}
+	}
+	if len(m.filteredIndices) == 0 {
+		// Ensure at least empty slice (not nil) for safety
+		m.filteredIndices = []int{}
+	}
+}
+
 func (m *Model) applyFilter() {
 	filtered := m.getFilteredSessions()
 	m.rebuildTableWithSessions(filtered)
+	m.rebuildFilteredIndices()
 }
 
 // applyTextFilter 应用文本模糊筛选
 func (m *Model) applyTextFilter() {
 	filtered := engine.FilterSessions(m.sessions, m.filterText)
 	m.rebuildTableWithSessions(filtered)
+	m.rebuildFilteredIndices()
 }
 
 func (m *Model) rebuildTableWithSessions(filtered []engine.Session) {
@@ -1480,7 +1662,7 @@ func (m *Model) rebuildTableWithSessions(filtered []engine.Session) {
 		if display, ok := engine.ToolDisplayNames[met.SourceTool]; ok {
 			sourceDisplay = display
 		}
-		healthRaw := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		healthRaw := fmt.Sprintf("%d/100 %s", s.Health, engine.HealthEmoji(s.Health))
 		var healthCol string
 		switch {
 		case s.Health >= 80:
