@@ -5,6 +5,7 @@ package tui
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -57,7 +58,8 @@ const (
 	viewOverview view = iota
 	viewList
 	viewDetail
-	viewDiff // diff two sessions side-by-side
+	viewWaste // waste diagnostics dashboard
+	viewDiff  // diff two sessions side-by-side
 	viewCompare
 )
 
@@ -102,6 +104,8 @@ type Model struct {
 	toolWarnings   []engine.ToolWarning
 	costAlert      engine.CostAlert
 	healthTrend    engine.HealthTrend
+	costSummary    engine.CostSummary
+	stuckPatterns  []engine.StuckPattern
 
 	// Dimensions
 	width  int
@@ -243,6 +247,7 @@ func New(dir string) Model {
 		tableReady:   true,
 		compareTable: ct,
 		compareReady: true,
+		costSummary:  engine.ComputeCostSummary(sessions),
 	}
 }
 
@@ -289,6 +294,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.view = viewDetail
 				m.openDetail()
 			case viewDetail:
+				m.view = viewWaste
+			case viewWaste:
 				m.view = viewDiff
 			case viewDiff:
 				m.view = viewCompare
@@ -301,6 +308,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sessions = engine.LoadAll(m.dir)
 			m.overview = engine.ComputeOverview(m.sessions)
 			m.aggStats = engine.ComputeAggregateStats(m.sessions)
+			m.costSummary = engine.ComputeCostSummary(m.sessions)
 			m.refreshTable()
 			m.refreshCompare()
 
@@ -323,6 +331,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openDetail()
 		case "3":
 			m.view = viewCompare
+		case "4":
+			m.view = viewWaste
+		case "w":
+			if m.view == viewDetail {
+				m.view = viewWaste
+			}
 
 		case "/":
 			if m.view == viewList {
@@ -356,7 +370,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 退出筛选模式
 				m.filterActive = false
 				m.filterInput = ""
-			} else if m.view == viewDetail || m.view == viewCompare || m.view == viewDiff {
+			} else if m.view == viewDetail || m.view == viewCompare || m.view == viewDiff || m.view == viewWaste {
 				m.view = viewList
 			}
 		case "backspace":
@@ -664,6 +678,8 @@ func (m Model) View() string {
 		} else {
 			content = baseStyle.Render(dimStyle.Render(i18n.T("select_session_hint")))
 		}
+	case viewWaste:
+		content = m.renderWaste()
 	case viewDiff:
 		content = m.renderDiff()
 	case viewCompare:
@@ -681,7 +697,7 @@ func (m Model) View() string {
 }
 
 func (m Model) renderTabs() string {
-	tabs := []string{i18n.T("tab_overview"), i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_diff"), i18n.T("tab_compare")}
+	tabs := []string{i18n.T("tab_overview"), i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_waste"), i18n.T("tab_diff"), i18n.T("tab_compare")}
 	var rendered []string
 	for i, t := range tabs {
 		active := int(m.view) == i
@@ -717,6 +733,8 @@ func (m Model) renderHelp() string {
 		}
 	case viewDetail:
 		keys = i18n.T("help_detail")
+	case viewWaste:
+		keys = "Esc: back · Tab: next · q: quit"
 	case viewDiff:
 		keys = i18n.T("help_diff")
 	case viewCompare:
@@ -820,6 +838,183 @@ func (m Model) renderCostAlert() string {
 		Render(msg)
 	lines = append(lines, card)
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WASTE DIAGNOSTICS VIEW
+// ═══════════════════════════════════════════════════════════════
+
+func (m Model) renderWaste() string {
+	idx := m.findSessionIndex()
+	if idx < 0 || idx >= len(m.sessions) {
+		return baseStyle.Render(dimStyle.Render(i18n.T("select_session_hint")))
+	}
+	s := m.sessions[idx]
+
+	pCard := func(color, title string, content string) string {
+		borderColor := lipgloss.Color(color)
+		header := lipgloss.NewStyle().Bold(true).Foreground(borderColor).Render(title)
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderColor).
+			Padding(0, 1).
+			Render(lipgloss.JoinVertical(lipgloss.Left, header, "", content))
+	}
+
+	sessionLabel := cyanStyle.Render(fmt.Sprintf("Diagnostics for: %s", s.Name))
+	var sections []string
+	sections = append(sections, sessionLabel, "")
+
+	// 1. Fingerprint Loop Detection
+	loopFP := m.renderFingerprintLoops(s)
+	sections = append(sections, pCard("196", i18n.T("diag_loop_fingerprint"), loopFP), "")
+
+	// 2. Per-Tool Latency
+	latency := m.renderToolLatency(s)
+	sections = append(sections, pCard("39", i18n.T("diag_tool_latency"), latency), "")
+
+	// 3. Context Window Utilization
+	ctxUtil := m.renderContextUtil(s)
+	sections = append(sections, pCard("220", i18n.T("diag_context_util"), ctxUtil), "")
+
+	// 4. Large Parameter Calls
+	largeParams := m.renderLargeParams(s)
+	sections = append(sections, pCard("208", i18n.T("diag_large_params"), largeParams), "")
+
+	// 5. Unused / Rare Tools
+	unused := m.renderUnusedTools(s)
+	sections = append(sections, pCard("42", i18n.T("diag_unused_tools"), unused), "")
+
+	return baseStyle.Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
+}
+
+func (m Model) renderFingerprintLoops(s engine.Session) string {
+	if len(s.LoopFingerprints) == 0 {
+		if s.LoopCost.TotalLoopCost > 0 {
+			return yellowStyle.Render(fmt.Sprintf("⚠ Simple loop detected (cost $%.4f) — see Detail view", s.LoopCost.TotalLoopCost))
+		}
+		return greenStyle.Render(i18n.T("diag_no_loop_fp"))
+	}
+	var lines []string
+	for _, fp := range s.LoopFingerprints {
+		style := redStyle
+		if fp.Severity == "critical" {
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+		}
+		lines = append(lines, style.Render(fmt.Sprintf("• %s", fp.Detail)))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func (m Model) renderToolLatency(s engine.Session) string {
+	if len(s.ToolLatencies) == 0 {
+		return dimStyle.Render("No latency data available")
+	}
+	// Build a compact table
+	header := lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(
+		fmt.Sprintf("  %-18s %5s %6s %6s %6s %4s",
+			i18n.T("diag_tool_lat_col_name"),
+			i18n.T("diag_tool_lat_col_count"),
+			i18n.T("diag_tool_lat_col_avg"),
+			i18n.T("diag_tool_lat_col_p95"),
+			i18n.T("diag_tool_lat_col_max"),
+			i18n.T("diag_tool_lat_col_timeout")))
+	var rows []string
+	rows = append(rows, header)
+	for i, tl := range s.ToolLatencies {
+		if i >= 8 { break }
+		slowBadge := ""
+		if tl.IsSlow {
+			slowBadge = redStyle.Render(" " + i18n.T("diag_tool_slow_badge"))
+		}
+		timeoutStr := ""
+		if tl.Timeouts > 0 {
+			timeoutStr = redStyle.Render(fmt.Sprintf("%d", tl.Timeouts))
+		} else {
+			timeoutStr = "0"
+		}
+		style := lipgloss.NewStyle()
+		if tl.IsSlow { style = style.Foreground(lipgloss.Color("196")) }
+		rows = append(rows, style.Render(fmt.Sprintf("  %-18s %5d %5.1fs %5.1fs %5.1fs %4s%s",
+			tl.ToolName, tl.Count, tl.AvgSec, tl.P95Sec, tl.MaxSec, timeoutStr, slowBadge)))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+func (m Model) renderContextUtil(s engine.Session) string {
+	cu := s.ContextUtil
+	var style lipgloss.Style
+	switch cu.RiskLevel {
+	case "critical":
+		style = redStyle
+	case "warning":
+		style = yellowStyle
+	default:
+		style = greenStyle
+	}
+	barWidth := 30
+	filled := int(cu.UtilizationPct / 100 * float64(barWidth))
+	if filled > barWidth { filled = barWidth }
+	bar := "[" + lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(strings.Repeat("█", filled)) +
+		lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(strings.Repeat("░", barWidth-filled)) + "]"
+
+	content := fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_total"), cyanStyle.Render(fmt.Sprintf("%d tokens", cu.EstimatedTotal)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_tool_defs"), dimStyle.Render(fmt.Sprintf("%d tokens", cu.ToolDefinitions)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_history"), dimStyle.Render(fmt.Sprintf("%d tokens", cu.ConversationHist)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_sysprompt"), dimStyle.Render(fmt.Sprintf("%d tokens", cu.SystemPrompt)))
+	content += fmt.Sprintf("  ─────────────────────────────\n")
+	content += fmt.Sprintf("  %-22s %s %s\n", i18n.T("diag_ctx_available"),
+		style.Render(fmt.Sprintf("%d tokens", cu.AvailableForTask)), bar)
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_suggestion"), style.Render(cu.Suggestion))
+	return content
+}
+
+func (m Model) renderLargeParams(s engine.Session) string {
+	if len(s.LargeParams) == 0 {
+		return greenStyle.Render(i18n.T("diag_large_params_none"))
+	}
+	var lines []string
+	for _, lp := range s.LargeParams {
+		style := yellowStyle
+		if lp.Risk == "high" { style = redStyle }
+		kb := float64(lp.ParamSize) / 1024.0
+		lines = append(lines, style.Render(fmt.Sprintf("• [%s] %s: %.1f KB — %s", lp.Risk, lp.ToolName, kb, lp.Detail)))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func (m Model) renderUnusedTools(s engine.Session) string {
+	if len(s.UnusedTools) == 0 {
+		return greenStyle.Render(i18n.T("diag_unused_none"))
+	}
+	var lines []string
+	for _, ut := range s.UnusedTools {
+		style := yellowStyle
+		if ut.Level == "unused" { style = redStyle }
+		lines = append(lines, style.Render(fmt.Sprintf("• %s", ut.Detail)))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+// ── Cumulative Cost Panel (for Overview) ──
+
+func (m Model) renderCostSummaryCard() string {
+	cs := m.costSummary
+	if cs.TotalSessions == 0 {
+		return ""
+	}
+	content := fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_total_sessions"), cyanStyle.Render(fmt.Sprintf("%d", cs.TotalSessions)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_total_burned"), redStyle.Render(fmt.Sprintf("$%.2f", cs.TotalCost)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_avg_turn"), yellowStyle.Render(fmt.Sprintf("$%.4f", cs.AvgCostPerTurn)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_costliest"), orangeStyle.Render(fmt.Sprintf("%s $%.2f", cs.CostliestModel, cs.CostliestCost)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_tokens_total"), fmt.Sprintf("%d / %d", cs.TotalTokensIn, cs.TotalTokensOut))
+	content += fmt.Sprintf("  %-22s %s", i18n.T("diag_cache_total"), fmt.Sprintf("%d / %d", cs.TotalCacheRead, cs.TotalCacheWrite))
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("208")).
+		Padding(1, 2).
+		Render(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("208")).Render(i18n.T("diag_cost_summary")) + "\n" + content)
 }
 
 // renderDiff renders the side-by-side session diff view.
@@ -1122,6 +1317,9 @@ func (m Model) renderOverview() string {
 	}
 	trendCard := card("63", boldStyle.Render(i18n.T("trend_title"))+"\n"+trendLine, trendCardW)
 
+	// ── Cost Summary Card ──
+	costSumCard := m.renderCostSummaryCard()
+
 	// ── Responsive Layout ──
 	var result string
 	switch layoutMode {
@@ -1129,13 +1327,16 @@ func (m Model) renderOverview() string {
 		topRow := lipgloss.JoinHorizontal(lipgloss.Top, statsCard, "  ", agentCard, "  ", modelCard)
 		bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, anomalyCard, "  ", trendCard)
 		result = lipgloss.JoinVertical(lipgloss.Left, topRow, "", bottomRow)
+		if costSumCard != "" { result = lipgloss.JoinVertical(lipgloss.Left, result, "", costSumCard) }
 	case "2col":
 		row1 := lipgloss.JoinHorizontal(lipgloss.Top, statsCard, "  ", agentCard)
 		row2 := lipgloss.JoinHorizontal(lipgloss.Top, modelCard, "  ", anomalyCard)
 		result = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2, "", trendCard)
+		if costSumCard != "" { result = lipgloss.JoinVertical(lipgloss.Left, result, "", costSumCard) }
 	default:
 		result = lipgloss.JoinVertical(lipgloss.Left,
 			statsCard, "", agentCard, "", modelCard, "", anomalyCard, "", trendCard)
+		if costSumCard != "" { result = lipgloss.JoinVertical(lipgloss.Left, result, "", costSumCard) }
 	}
 
 	return baseStyle.Render(result)

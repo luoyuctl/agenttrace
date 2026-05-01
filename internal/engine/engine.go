@@ -108,6 +108,14 @@ type Session struct {
 	Anomalies []Anomaly
 	Health    int
 	LoopCost  LoopCost
+
+	// v0.2: community-driven diagnostics (pre-computed in LoadSession)
+	LoopFingerprints   []LoopFingerprint
+	ToolLatencies      []ToolLatencyItem
+	ContextUtil        ContextUtilization
+	LargeParams        []LargeParamCall
+	UnusedTools        []UnusedToolInfo
+	StuckPatternsExtra []StuckPattern
 }
 
 // ── Loop Cost Analysis ──
@@ -1378,6 +1386,7 @@ func Analyze(events []Event, model string) Metrics {
 	}
 
 	pricing := LookupPrice(model)
+	hasMetaUsage := false
 
 	for _, ev := range events {
 		// Track source tool from first non-meta event
@@ -1397,12 +1406,13 @@ func Analyze(events []Event, model string) Metrics {
 				m.TokensOutput += ev.Usage["output_tokens"]
 				m.TokensCacheW += ev.Usage["cache_creation_input_tokens"]
 				m.TokensCacheR += ev.Usage["cache_read_input_tokens"]
+				hasMetaUsage = true
 			}
 			continue
 
 		case "user":
 			m.UserMessages++
-			if ev.Content != "" {
+			if ev.Content != "" && !hasMetaUsage {
 				m.TokensInput += max(1, len(ev.Content)/4)
 			}
 
@@ -1418,11 +1428,13 @@ func Analyze(events []Event, model string) Metrics {
 				if ev.Redacted {
 					m.ReasoningRedact++
 				}
-				m.TokensOutput += max(1, rc/4)
+				if !hasMetaUsage {
+					m.TokensOutput += max(1, rc/4)
+				}
 			}
 
 			// Text content
-			if ev.Content != "" {
+			if ev.Content != "" && !hasMetaUsage {
 				m.TokensOutput += max(1, len(ev.Content)/4)
 			}
 
@@ -1630,7 +1642,29 @@ func LoadSession(path string) (*Session, error) {
 	m := Analyze(events, model)
 	a := DetectAnomalies(m)
 	h := HealthScore(m, a)
-	return &Session{Name: name, Path: path, Metrics: m, Anomalies: a, Health: h}, nil
+	loopResult := AnalyzeLoops(events)
+
+	// v0.2: community-driven diagnostics
+	loops := DetectFingerprintLoops(events)
+	latencies := AnalyzeToolLatency(events)
+	ctxUtil := AnalyzeContextUtilization(events, 0) // MCP tool count from user config
+	largeParams := DetectLargeParams(events)
+	unusedTools := DetectUnusedTools(events)
+	stuckExtra := DetectStuckPatternsEnhanced(events)
+
+	return &Session{
+		Name: name, Path: path,
+		Metrics:           m,
+		Anomalies:         a,
+		Health:            h,
+		LoopCost:          LoopCost{TotalLoopCost: loopResult.LoopCost},
+		LoopFingerprints:  loops,
+		ToolLatencies:     latencies,
+		ContextUtil:       ctxUtil,
+		LargeParams:       largeParams,
+		UnusedTools:       unusedTools,
+		StuckPatternsExtra: stuckExtra,
+	}, nil
 }
 
 func LoadAll(dir string) []Session {
@@ -2897,4 +2931,416 @@ func levelEmoji(level string) string {
 	case "red": return "🔴"
 	}
 	return ""
+}
+
+// ═══════════════════════════════════════════════════════════════
+// v0.2 COMMUNITY-DRIVEN DIAGNOSTICS
+// ═══════════════════════════════════════════════════════════════
+
+// ── 1. Fingerprint Loop Detection ──
+
+type LoopFingerprint struct {
+	ToolName   string
+	ResultHash string
+	Count      int
+	FirstIndex int
+	LastIndex  int
+	Severity   string
+	Detail     string
+}
+
+func DetectFingerprintLoops(events []Event) []LoopFingerprint {
+	type fpKey struct {
+		tool string
+		hash string
+	}
+	var fingerprints []LoopFingerprint
+
+	// Collect consecutive tool-result pairs
+	type pair struct {
+		tool   string
+		rhash  string
+		idx    int
+	}
+	var pairs []pair
+	for i, ev := range events {
+		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 {
+			for _, tc := range ev.ToolCalls {
+				// Find matching tool result
+				resultHash := ""
+				for j := i + 1; j < len(events) && j < i+5; j++ {
+					if events[j].Role == "tool" && events[j].ToolCallID == tc.ID {
+						content := events[j].Content
+						if len(content) > 200 {
+							content = content[:200]
+						}
+						resultHash = fmt.Sprintf("%x", hashString(content))
+						break
+					}
+				}
+				pairs = append(pairs, pair{tc.Name, resultHash, i})
+			}
+		}
+	}
+
+	// Detect consecutive identical fingerprints
+	if len(pairs) < 3 {
+		return nil
+	}
+
+	currentFP := fpKey{pairs[0].tool, pairs[0].rhash}
+	startIdx := pairs[0].idx
+	count := 1
+
+	for i := 1; i < len(pairs); i++ {
+		thisFP := fpKey{pairs[i].tool, pairs[i].rhash}
+		if thisFP == currentFP && currentFP.hash != "" {
+			count++
+		} else {
+			if count >= 3 {
+				sev := "high"
+				if count >= 5 { sev = "critical" }
+				fingerprints = append(fingerprints, LoopFingerprint{
+					ToolName: currentFP.tool, ResultHash: currentFP.hash,
+					Count: count, FirstIndex: startIdx, LastIndex: pairs[i-1].idx,
+					Severity: sev,
+					Detail:   fmt.Sprintf("tool '%s' returned same result %dx consecutively — no progress", currentFP.tool, count),
+				})
+			}
+			currentFP = thisFP
+			startIdx = pairs[i].idx
+			count = 1
+		}
+	}
+	if count >= 3 && currentFP.hash != "" {
+		sev := "high"
+		if count >= 5 { sev = "critical" }
+		fingerprints = append(fingerprints, LoopFingerprint{
+			ToolName: currentFP.tool, ResultHash: currentFP.hash,
+			Count: count, FirstIndex: startIdx, LastIndex: pairs[len(pairs)-1].idx,
+			Severity: sev,
+			Detail:   fmt.Sprintf("tool '%s' returned same result %dx consecutively — no progress", currentFP.tool, count),
+		})
+	}
+
+	return fingerprints
+}
+
+// hashString is a simple djb2 hash for fingerprinting.
+func hashString(s string) uint32 {
+	var h uint32 = 5381
+	for _, c := range []byte(s) {
+		h = ((h << 5) + h) + uint32(c)
+	}
+	return h
+}
+
+// ── 2. Per-Tool Latency Ranking ──
+
+type ToolLatencyItem struct {
+	ToolName string
+	Count    int
+	AvgSec   float64
+	P95Sec   float64
+	MaxSec   float64
+	MinSec   float64
+	Timeouts int
+	IsSlow   bool // p95 > 30s
+}
+
+func AnalyzeToolLatency(events []Event) []ToolLatencyItem {
+	type latRec struct {
+		durations []float64
+		timeouts  int
+	}
+	toolLats := make(map[string]*latRec)
+
+	// Collect latencies: time from tool_use event to its tool_result
+	for i, ev := range events {
+		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 && ev.Timestamp != "" {
+			tsStart := parseTS(ev.Timestamp)
+			if tsStart.IsZero() { continue }
+			for _, tc := range ev.ToolCalls {
+				// Find matching tool result
+				for j := i + 1; j < len(events); j++ {
+					if events[j].Role == "tool" && events[j].ToolCallID == tc.ID {
+						tsEnd := parseTS(events[j].Timestamp)
+						if !tsEnd.IsZero() {
+							dur := tsEnd.Sub(tsStart).Seconds()
+							if dur >= 0 && dur < 3600 { // filter outliers >1h
+								rec := toolLats[tc.Name]
+								if rec == nil {
+									rec = &latRec{}
+									toolLats[tc.Name] = rec
+								}
+								rec.durations = append(rec.durations, dur)
+							}
+						}
+						break
+					}
+				}
+				// If no matching tool result found, count as timeout
+				found := false
+				for j := i + 1; j < len(events); j++ {
+					if events[j].Role == "tool" && events[j].ToolCallID == tc.ID {
+						found = true; break
+					}
+				}
+				if !found {
+					rec := toolLats[tc.Name]
+					if rec == nil { rec = &latRec{}; toolLats[tc.Name] = rec }
+					rec.timeouts++
+				}
+			}
+		}
+	}
+
+	var items []ToolLatencyItem
+	for name, rec := range toolLats {
+		if len(rec.durations) == 0 && rec.timeouts == 0 { continue }
+		sort.Float64s(rec.durations)
+		item := ToolLatencyItem{
+			ToolName: name,
+			Count:    len(rec.durations) + rec.timeouts,
+			Timeouts: rec.timeouts,
+		}
+		if len(rec.durations) > 0 {
+			sum := 0.0
+			for _, d := range rec.durations { sum += d }
+			item.AvgSec = sum / float64(len(rec.durations))
+			item.MaxSec = rec.durations[len(rec.durations)-1]
+			item.MinSec = rec.durations[0]
+			item.P95Sec = percentile(rec.durations, 0.95)
+		}
+		item.IsSlow = item.P95Sec > 30 || item.MaxSec > 60 || item.Timeouts > 0
+		items = append(items, item)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		// Sort slowest first
+		return items[i].MaxSec > items[j].MaxSec
+	})
+	return items
+}
+
+// ── 3. Context Window Utilization ──
+
+type ContextUtilization struct {
+	EstimatedTotal    int
+	ToolDefinitions   int
+	ConversationHist  int
+	SystemPrompt      int
+	AvailableForTask  int
+	UtilizationPct    float64
+	RiskLevel         string // "critical"/"warning"/"good"
+	Suggestion        string
+}
+
+func AnalyzeContextUtilization(events []Event, mcpToolCount int) ContextUtilization {
+	cu := ContextUtilization{
+		EstimatedTotal: 200000, // default for Claude
+		SystemPrompt:   12000,  // typical system prompt
+	}
+	if mcpToolCount == 0 {
+		mcpToolCount = 8 // typical default
+	}
+	// Estimate tool definitions: ~300 tokens per tool on average
+	cu.ToolDefinitions = mcpToolCount * 300
+
+	// Estimate conversation history from actual events
+	totalContent := 0
+	for _, ev := range events {
+		totalContent += len(ev.Content)
+		totalContent += len(ev.Reasoning)
+	}
+	cu.ConversationHist = totalContent / 2 // rough char→token
+
+	cu.AvailableForTask = cu.EstimatedTotal - cu.ToolDefinitions - cu.ConversationHist - cu.SystemPrompt
+	if cu.AvailableForTask < 0 { cu.AvailableForTask = 0 }
+
+	if cu.EstimatedTotal > 0 {
+		cu.UtilizationPct = float64(cu.ToolDefinitions+cu.ConversationHist+cu.SystemPrompt) / float64(cu.EstimatedTotal) * 100
+	}
+
+	switch {
+	case cu.AvailableForTask < 20000:
+		cu.RiskLevel = "critical"
+		cu.Suggestion = "context nearly full — reduce MCP tools or compact conversation immediately"
+	case cu.AvailableForTask < 50000:
+		cu.RiskLevel = "warning"
+		cu.Suggestion = "context filling up — consider compacting or removing unused tools"
+	default:
+		cu.RiskLevel = "good"
+		cu.Suggestion = "plenty of context headroom"
+	}
+	return cu
+}
+
+// ── 4. Large Parameter Detection ──
+
+type LargeParamCall struct {
+	ToolName  string
+	ParamSize int
+	Timestamp string
+	Risk      string // "high" (>50KB), "medium" (>10KB)
+	Detail    string
+}
+
+func DetectLargeParams(events []Event) []LargeParamCall {
+	var large []LargeParamCall
+	for _, ev := range events {
+		if ev.Role == "assistant" && len(ev.Content) > 0 {
+			size := len(ev.Content)
+			var risk string
+			if size > 50000 {
+				risk = "high"
+			} else if size > 10000 {
+				risk = "medium"
+			} else {
+				continue
+			}
+			toolNames := ""
+			for i, tc := range ev.ToolCalls {
+				if i > 0 { toolNames += "," }
+				toolNames += tc.Name
+			}
+			if toolNames == "" { toolNames = "text_response" }
+			large = append(large, LargeParamCall{
+				ToolName: toolNames, ParamSize: size, Timestamp: ev.Timestamp,
+				Risk: risk,
+				Detail: fmt.Sprintf("%s call with %d chars — may cause timeout or hang", toolNames, size),
+			})
+		}
+	}
+	return large
+}
+
+// ── 5. Unused / Rare Tool Detection ──
+
+type UnusedToolInfo struct {
+	ToolName  string
+	CallCount int
+	Level     string // "unused"/"rare"/"normal"
+	Detail    string
+}
+
+func DetectUnusedTools(events []Event) []UnusedToolInfo {
+	usage := make(map[string]int)
+	for _, ev := range events {
+		for _, tc := range ev.ToolCalls {
+			if tc.Name != "" { usage[tc.Name]++ }
+		}
+	}
+	var info []UnusedToolInfo
+	for name, count := range usage {
+		level := "normal"
+		detail := ""
+		if count == 0 {
+			level = "unused"
+			detail = fmt.Sprintf("tool '%s' registered but never called — wasting context window", name)
+		} else if count <= 2 {
+			level = "rare"
+			detail = fmt.Sprintf("tool '%s' called only %dx — consider removing to free context", name, count)
+		}
+		if level != "normal" {
+			info = append(info, UnusedToolInfo{ToolName: name, CallCount: count, Level: level, Detail: detail})
+		}
+	}
+	sort.Slice(info, func(i, j int) bool { return info[i].CallCount < info[j].CallCount })
+	return info
+}
+
+// ── 6. Enhanced Stuck Detection (community patterns) ──
+
+func DetectStuckPatternsEnhanced(events []Event) []StuckPattern {
+	patterns := DetectStuckPatterns(events)
+
+	// Pattern: repeated identical assistant responses (Ralph Wiggum drift)
+	type contentKey struct {
+		role    string
+		content string
+	}
+	contentStreak := make(map[contentKey]int)
+	for _, ev := range events {
+		if ev.Content != "" && len(ev.Content) > 50 {
+			ck := contentKey{ev.Role, ev.Content[:50]}
+			contentStreak[ck]++
+		}
+	}
+	for ck, cnt := range contentStreak {
+		if cnt >= 4 && ck.role == "assistant" {
+			patterns = append(patterns, StuckPattern{
+				Pattern:     "repeated_response",
+				Description: fmt.Sprintf("assistant repeated same response %dx (drift pattern)", cnt),
+				Severity:    "warning",
+			})
+		}
+	}
+
+	// Pattern: tool call without corresponding result (zombie tool calls)
+	hasResult := make(map[string]bool)
+	for _, ev := range events {
+		if ev.Role == "tool" && ev.ToolCallID != "" { hasResult[ev.ToolCallID] = true }
+	}
+	zombieCount := 0
+	for _, ev := range events {
+		if ev.Role == "assistant" {
+			for _, tc := range ev.ToolCalls {
+				if tc.ID != "" && !hasResult[tc.ID] { zombieCount++ }
+			}
+		}
+	}
+	if zombieCount > 0 {
+		patterns = append(patterns, StuckPattern{
+			Pattern:     "zombie_tool_calls",
+			Description: fmt.Sprintf("%d tool call(s) with no response — may indicate hang/timeout", zombieCount),
+			Severity:    "warning",
+		})
+	}
+
+	return patterns
+}
+
+// ── 7. Cumulative Cost Summary (cross-session) ──
+
+type CostSummary struct {
+	TotalSessions   int
+	TotalCost       float64
+	TotalTokensIn   int
+	TotalTokensOut  int
+	TotalCacheRead  int
+	TotalCacheWrite int
+	AvgCostPerTurn  float64
+	CostliestModel  string
+	CostliestCost   float64
+}
+
+func ComputeCostSummary(sessions []Session) CostSummary {
+	var cs CostSummary
+	cs.TotalSessions = len(sessions)
+	modelCosts := make(map[string]float64)
+	totalTurns := 0
+
+	for _, s := range sessions {
+		m := s.Metrics
+		cs.TotalCost += m.CostEstimated
+		cs.TotalTokensIn += m.TokensInput
+		cs.TotalTokensOut += m.TokensOutput
+		cs.TotalCacheRead += m.TokensCacheR
+		cs.TotalCacheWrite += m.TokensCacheW
+		totalTurns += m.AssistantTurns
+
+		modelCosts[m.ModelUsed] += m.CostEstimated
+	}
+
+	if totalTurns > 0 {
+		cs.AvgCostPerTurn = cs.TotalCost / float64(totalTurns)
+	}
+	for model, cost := range modelCosts {
+		if cost > cs.CostliestCost {
+			cs.CostliestCost = cost
+			cs.CostliestModel = model
+		}
+	}
+	return cs
 }
