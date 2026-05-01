@@ -3,10 +3,10 @@
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/go-1.21+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/dependencies-zero-orange.svg" alt="Zero Deps">
-  <img src="https://img.shields.io/badge/tests-89/89-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/binary-3.5MB-00ADD8.svg" alt="Binary Size">
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
 </p>
 
@@ -20,92 +20,88 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 
 **agenttrace** gives you the analytics dashboard your AI agent deserves.
 
-<p align="center">
-  <img src="assets/terminal-demo.png" alt="agenttrace CLI output" width="600">
-</p>
-
 ## ✨ Features
 
 | Feature | Description |
 |---|---|
+| 🚀 **Single Binary** | 3.5 MB — `curl -sL ... \| sh` install, no runtime deps |
+| 🖥️ **Bubble Tea TUI** | Modern terminal UI: Session List → Detail → Compare (3 views) |
 | 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Gemini CLI — all parsed seamlessly |
-| 🖥️ **Interactive TUI** | Zero-dep curses dashboard (btop style) — default on launch, no flags needed |
 | 💰 **Token Cost Estimation** | Real pricing for 13 models (Opus $75/M → Flash $0.60/M output) |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
 | 💯 **Health Score** | 0-100 composite with visual bar and emoji |
-| 🏃 **Zero Dependencies** | Pure Python 3.9+ stdlib, no pip install needed |
 | 🤖 **Machine Readable** | JSON output for CI/CD and automation |
+| 🐍 **Python v3 Compat** | Original Python code preserved — zero-dep stdlib |
 
-### agenttrace 给你的 AI Agent 做体检 — 实时终端仪表盘。
+---
 
-## 启动 TUI（交互式仪表盘）
+## 🚀 v4 (Go) — Quick Start
+
+### One-liner install
 
 ```bash
-git clone https://github.com/luoyuctl/agenttrace.git
-cd agenttrace
-
-# 启动交互式终端仪表盘（类 btop 风格，默认行为）
-python -m agenttrace
-
-# 指定 session 目录
-python -m agenttrace -d ~/.hermes/sessions
-
-# 命令行模式：分析指定文件
-python -m agenttrace session.jsonl
+curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
 ```
 
-**TUI 界面：**
-- **Session 列表** — 所有 session 的表格，支持按健康分/成本/轮次排序
-- **Session 详情** — 选中 session 的完整分析报告，可滚动
-- **对比视图** — 所有 session 的横向对比
-
-**快捷键：**
-
-| 键 | 功能 |
-|---|---|
-| `↑↓` / `jk` | 导航 |
-| `←→` / `hl` | 切换排序列 |
-| `Enter` | 查看 session 详情 |
-| `Tab` | 切换视图（列表→详情→对比） |
-| `s` | 反转排序 |
-| `r` | 刷新数据 |
-| `?` | 帮助窗口 |
-| `q` / `Esc` | 退出 / 返回 |
-
-## 🚀 Quick Start（命令行）
+### Manual build
 
 ```bash
 git clone https://github.com/luoyuctl/agenttrace.git
-cd agenttrace
+cd agenttrace/go
+go build -ldflags="-s -w" -o agenttrace ./cmd/agenttrace/
+sudo mv agenttrace /usr/local/bin/
+```
 
-# Launch TUI dashboard (default)
-python3 agenttrace.py
+### Usage
 
-# Or use module form
-python -m agenttrace
+```bash
+# Launch TUI dashboard (default, no flags)
+agenttrace
 
 # Analyze latest session
-python3 agenttrace.py --latest -d ~/.hermes/sessions
-
-# Specify model for accurate pricing
-python3 agenttrace.py -m claude-sonnet-4 session.jsonl
+agenttrace --latest
 
 # Compare all sessions
+agenttrace --compare -d ~/.hermes/sessions
+
+# JSON output (CI/CD)
+agenttrace --latest -f json
+
+# List all 13 model pricings
+agenttrace --list-models
+```
+
+### TUI Navigation
+
+| Key | Action |
+|---|---|
+| `↑↓` / `jk` | Navigate sessions |
+| `Enter` | View session detail |
+| `Tab` | Switch view: List → Detail → Compare |
+| `q` / `Esc` | Quit / Back |
+
+---
+
+## 🐍 Python v3 (legacy)
+
+Zero dependencies. Still fully functional.
+
+```bash
+git clone https://github.com/luoyuctl/agenttrace.git
+cd agenttrace
+python3 agenttrace.py --latest -d ~/.hermes/sessions
 python3 agenttrace.py --compare -d ~/.hermes/sessions
-
-# JSON output (for CI or dashboards)
-python3 agenttrace.py -f json session.jsonl
-
-# List available models
 python3 agenttrace.py --list-models
 ```
+
+---
 
 ## 📊 Sample Output
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v3.0.0 — AI Agent Session Performance Report
+  AGENTTRACE v4.0.0 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST
@@ -131,14 +127,6 @@ python3 agenttrace.py --list-models
   avg:     358.4s
   Duration: 15.4m
 
-🔧 TOP TOOLS
-────────────────────────────────────────
-  browser_navigate                      31
-  terminal                              14
-  todo                                   9
-  read_file                              8
-  write_file                             5
-
 🧠 THINKING / COT
 ────────────────────────────────────────
   Blocks: 20
@@ -156,26 +144,26 @@ python3 agenttrace.py --list-models
   🟢  90/100  [██████████████████░░]
 ```
 
+---
+
 ## 🎯 Anomaly Detection
 
-| Type | Trigger | Severity | Example |
-|---|---|---|---|
-| 🔴 **Hanging** | Event gap > 60s | `high/medium` | Agent stuck waiting for response |
-| 🔴 **Tool Failures** | Failure rate > 20% | `high` | Broken tool chain, API errors |
-| 🔴 **Latency Spikes** | p95 latency > 120s | `low/medium` | Sessions running unusually slow |
-| 🟡 **Shallow Thinking** | Avg reasoning < 500 chars | `high/medium` | Low-quality or truncated reasoning |
-| 🟡 **Redaction** | Redacted thinking blocks | `medium` | Hidden reasoning gaps (safety filters) |
-| 🟡 **No Tools** | 3+ turns with zero tool calls | `medium` | Agent stuck in chat-only loop |
+| Type | Trigger | Severity |
+|---|---|---|
+| 🔴 **Hanging** | Event gap > 60s | high/medium |
+| 🔴 **Tool Failures** | Failure rate > 20% | high |
+| 🔴 **Latency Spikes** | p95 latency > 120s | low/medium |
+| 🟡 **Shallow Thinking** | Avg reasoning < 500 chars | high/medium |
+| 🟡 **Redaction** | Redacted thinking blocks | medium |
+| 🟡 **No Tools** | 3+ turns with zero tool calls | medium |
+
+---
 
 ## 📈 Multi-Session Comparison
 
-```bash
-python3 agenttrace.py --compare -d ~/.hermes/sessions
-```
-
 ```
 ===============================================================
-  AGENTTRACE — Multi-Session Comparison
+  AGENTTRACE — Multi-Session Comparison (12 sessions)
 ===============================================================
 Session                   Turns  Tools   Succ     Cost  Health
 ---------------------------------------------------------------
@@ -185,6 +173,8 @@ Session                   Turns  Tools   Succ     Cost  Health
 ===============================================================
 ```
 
+---
+
 ## 💡 Use Cases
 
 - **CI/CD Gate** — fail builds when agent sessions degrade below health threshold
@@ -193,27 +183,46 @@ Session                   Turns  Tools   Succ     Cost  Health
 - **Quality Monitoring** — detect when your agent starts hallucinating or hanging
 - **Team Insights** — track agent performance across developers
 
+---
+
 ## 🗺️ Roadmap
 
-- [ ] Web dashboard (React + Charts)
+- [ ] `curl -sL ... | sh` install script
+- [ ] Multi-platform prebuilt binaries (linux/amd64, darwin/arm64, darwin/amd64)
 - [ ] GitHub Action for CI integration
 - [ ] Historical trend tracking
-- [ ] Cost forecasting with projections
+- [ ] Web dashboard (React + Charts)
 - [ ] VS Code extension
 - [ ] OpenCode / Aider / Cursor format support
 
-## 🤝 Contributing
+---
 
-Issues and PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) (coming soon).
+## 🏗️ Architecture (v4)
+
+```
+go/
+├── cmd/agenttrace/main.go      # CLI entry: flags, TUI/CLI dispatch
+└── internal/
+    ├── engine/
+    │   ├── engine.go           # Core: pricing, parsers, anomaly detection, health score
+    │   └── report.go           # Reporters: text, JSON, multi-session compare
+    └── tui/
+        └── tui.go              # Bubble Tea TUI: table-based 3-view dashboard
+```
+
+---
+
+## 🤝 Contributing
 
 ```bash
 git clone https://github.com/luoyuctl/agenttrace.git
-cd agenttrace
-# make changes...
-python3 run_tests.py           # run 89 test suite
-python3 agenttrace.py --latest -d ~/.hermes/sessions  # test locally
-# open PR 🚀
+cd agenttrace/go
+go build ./internal/...    # verify compilation
+go build -o agenttrace ./cmd/agenttrace/
+./agenttrace --latest      # smoke test
 ```
+
+---
 
 ## 📄 License
 
