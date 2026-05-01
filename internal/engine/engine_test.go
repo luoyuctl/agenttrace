@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
 func mustJSON(v interface{}) string {
@@ -213,7 +215,7 @@ func TestHealthScore_Perfect(t *testing.T) {
 }
 
 func TestHealthScore_WithAnomalies(t *testing.T) {
-	anoms := []Anomaly{{Severity: "high"}, {Severity: "medium"}}
+	anoms := []Anomaly{{Severity: i18n.T("severity_high")}, {Severity: i18n.T("severity_medium")}}
 	s := HealthScore(Metrics{}, anoms)
 	if s != 58 {
 		t.Errorf("expected 58, got %d", s)
@@ -221,7 +223,7 @@ func TestHealthScore_WithAnomalies(t *testing.T) {
 }
 
 func TestHealthScore_Floor(t *testing.T) {
-	anoms := []Anomaly{{Severity: "high"}, {Severity: "high"}, {Severity: "high"}, {Severity: "high"}}
+	anoms := []Anomaly{{Severity: i18n.T("severity_high")}, {Severity: i18n.T("severity_high")}, {Severity: i18n.T("severity_high")}, {Severity: i18n.T("severity_high")}}
 	s := HealthScore(Metrics{}, anoms)
 	if s != 0 {
 		t.Errorf("expected 0, got %d", s)

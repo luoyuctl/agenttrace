@@ -147,6 +147,7 @@ func main() {
 			os.Exit(1)
 		}
 		if len(files) > 15 {
+			fmt.Fprintf(os.Stderr, i18n.T("compare_truncated")+"\n", len(files))
 			files = files[:15]
 		}
 

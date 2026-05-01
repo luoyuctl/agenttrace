@@ -77,6 +77,10 @@ type Model struct {
 	filterMode  string // "", "health", "source"
 	filterValue string // e.g. "good", "hermes_jsonl"
 
+	// Sort state
+	sortBy    string // "health", "cost", "turns", "name", "source"
+	sortDesc  bool   // descending if true
+
 	// 文本筛选输入
 	filterInput  string // 用户输入的筛选文本
 	filterActive bool   // 是否处于文本筛选模式
@@ -163,7 +167,7 @@ func New(dir string) Model {
 			fmt.Sprintf("%d", m.AssistantTurns),
 			fmt.Sprintf("%d", m.ToolCallsTotal),
 			sr,
-			fmt.Sprintf("$%.4f", m.CostEstimated),
+			costColor(m.CostEstimated),
 			healthCol,
 		})
 
@@ -176,7 +180,7 @@ func New(dir string) Model {
 			fmt.Sprintf("%d", m.ToolCallsTotal),
 			sr,
 			failStr,
-			fmt.Sprintf("$%.4f", m.CostEstimated),
+			costColor(m.CostEstimated),
 			tokensStr,
 			healthCol,
 		})
@@ -184,7 +188,7 @@ func New(dir string) Model {
 			s.Name, sourceDisplay,
 			fmt.Sprintf("%d", m.AssistantTurns),
 			fmt.Sprintf("%d", m.ToolCallsTotal), sr, failStr,
-			fmt.Sprintf("$%.4f", m.CostEstimated), tokensStr, healthCol,
+			costColor(m.CostEstimated), tokensStr, healthCol,
 		})
 	}
 
@@ -436,6 +440,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+	// Sort keys (list view)
+	case "h":
+		if m.view == viewList && !m.filterActive {
+			if m.sortBy == "health" { m.sortDesc = !m.sortDesc } else { m.sortBy = "health"; m.sortDesc = true }
+			m.sortAndRefresh()
+		}
+	case "c":
+		if m.view == viewList && !m.filterActive {
+			if m.sortBy == "cost" { m.sortDesc = !m.sortDesc } else { m.sortBy = "cost"; m.sortDesc = true }
+			m.sortAndRefresh()
+		}
+	case "t":
+		if m.view == viewList && !m.filterActive {
+			if m.sortBy == "turns" { m.sortDesc = !m.sortDesc } else { m.sortBy = "turns"; m.sortDesc = true }
+			m.sortAndRefresh()
+		}
+	case "n":
+		if m.view == viewList && !m.filterActive {
+			if m.sortBy == "name" { m.sortDesc = !m.sortDesc } else { m.sortBy = "name"; m.sortDesc = false }
+			m.sortAndRefresh()
+		}
+
 		default:
 			// 筛选输入模式：捕获按键
 			if m.filterActive {
@@ -500,15 +526,9 @@ func (m *Model) openDetail() {
 		m.fixSuggestions = engine.GenerateFixes(s.Metrics, s.Anomalies, string(m.lang))
 		m.costAlert = engine.PredictCostAnomaly(m.sessions, s)
 
-		// 循环检测：解析会话事件并分析循环
-		events, err := engine.Parse(s.Path)
-		if err == nil {
-			m.loopResult = engine.AnalyzeLoops(events)
-			m.toolWarnings = engine.ValidateToolPatterns(events)
-		} else {
-			m.loopResult = engine.LoopResult{}
-			m.toolWarnings = nil
-		}
+		// Use pre-computed diagnostics from Session (no re-parse needed)
+		m.loopResult = s.LoopResultData
+		m.toolWarnings = s.ToolWarnings
 	}
 }
 
@@ -546,7 +566,7 @@ func (m *Model) refreshTable() {
 			fmt.Sprintf("%d", m.AssistantTurns),
 			fmt.Sprintf("%d", m.ToolCallsTotal),
 			sr,
-			fmt.Sprintf("$%.4f", m.CostEstimated),
+			costColor(m.CostEstimated),
 			healthCol,
 		})
 	}
@@ -589,7 +609,7 @@ func (m *Model) refreshCompare() {
 			fmt.Sprintf("%d", m.ToolCallsTotal),
 			sr,
 			fmt.Sprintf("%d", m.ToolCallsFail),
-			fmt.Sprintf("$%.4f", m.CostEstimated),
+			costColor(m.CostEstimated),
 			fmt.Sprintf("%d", m.TokensInput+m.TokensOutput),
 			healthCol,
 		})
@@ -626,7 +646,7 @@ func (m Model) View() string {
 		content = m.renderOverview()
 	case viewList:
 		if len(m.sessions) == 0 {
-			content = baseStyle.Render(lipgloss.NewStyle().Padding(1).Render(i18n.T("empty_sessions_hint")))
+			content = baseStyle.Render(lipgloss.NewStyle().Padding(1).Render(fmt.Sprintf(i18n.T("empty_sessions_hint"), m.dir, m.dir, m.dir)))
 		} else {
 			var filterBar string
 			// 文本筛选输入栏
@@ -684,7 +704,7 @@ func (m Model) View() string {
 		content = m.renderDiff()
 	case viewCompare:
 		if len(m.sessions) == 0 {
-			content = baseStyle.Render(lipgloss.NewStyle().Padding(1).Render(i18n.T("empty_sessions_hint")))
+			content = baseStyle.Render(lipgloss.NewStyle().Padding(1).Render(fmt.Sprintf(i18n.T("empty_sessions_hint"), m.dir, m.dir, m.dir)))
 		} else {
 			content = baseStyle.Render(m.compareTable.View())
 		}
@@ -1063,16 +1083,67 @@ func (m *Model) findSessionIndex() int {
 	return m.table.Cursor()
 }
 
+func (m *Model) sortAndRefresh() {
+	switch m.sortBy {
+	case "health":
+		sort.SliceStable(m.sessions, func(i, j int) bool {
+			if m.sortDesc { return m.sessions[i].Health > m.sessions[j].Health }
+			return m.sessions[i].Health < m.sessions[j].Health
+		})
+	case "cost":
+		sort.SliceStable(m.sessions, func(i, j int) bool {
+			if m.sortDesc { return m.sessions[i].Metrics.CostEstimated > m.sessions[j].Metrics.CostEstimated }
+			return m.sessions[i].Metrics.CostEstimated < m.sessions[j].Metrics.CostEstimated
+		})
+	case "turns":
+		sort.SliceStable(m.sessions, func(i, j int) bool {
+			if m.sortDesc { return m.sessions[i].Metrics.AssistantTurns > m.sessions[j].Metrics.AssistantTurns }
+			return m.sessions[i].Metrics.AssistantTurns < m.sessions[j].Metrics.AssistantTurns
+		})
+	case "name":
+		sort.SliceStable(m.sessions, func(i, j int) bool {
+			if m.sortDesc { return m.sessions[i].Name > m.sessions[j].Name }
+			return m.sessions[i].Name < m.sessions[j].Name
+		})
+	}
+	m.refreshTable()
+}
+
+func (m *Model) sortColTitle(base, field string) string {
+	if m.sortBy == "" || m.sortBy != field {
+		return base
+	}
+	if m.sortDesc {
+		return base + " ▼"
+	}
+	return base + " ▲"
+}
+
+// costColor returns a styled cost string based on amount thresholds.
+func costColor(amount float64) string {
+	s := fmt.Sprintf("$%.4f", amount)
+	switch {
+	case amount >= 0.50:
+		return redStyle.Render(s)
+	case amount >= 0.10:
+		return orangeStyle.Render(s)
+	case amount >= 0.03:
+		return yellowStyle.Render(s)
+	default:
+		return greenStyle.Render(s)
+	}
+}
+
 // refreshColumns rebuilds column titles for both tables after a language switch.
 func (m *Model) refreshColumns() {
 	listCols := []table.Column{
-		{Title: i18n.T("session"), Width: 22},
-		{Title: i18n.T("source_tool"), Width: 14},
-		{Title: i18n.T("turns_header"), Width: 6},
-		{Title: i18n.T("tools"), Width: 6},
-		{Title: i18n.T("succ_pct"), Width: 6},
-		{Title: i18n.T("cost"), Width: 9},
-		{Title: i18n.T("health"), Width: 9},
+		{Title: m.sortColTitle(i18n.T("session"), "name"), Width: 22},
+		{Title: m.sortColTitle(i18n.T("source_tool"), ""), Width: 14},
+		{Title: m.sortColTitle(i18n.T("turns_header"), "turns"), Width: 6},
+		{Title: m.sortColTitle(i18n.T("tools"), ""), Width: 6},
+		{Title: m.sortColTitle(i18n.T("succ_pct"), ""), Width: 6},
+		{Title: m.sortColTitle(i18n.T("cost"), "cost"), Width: 9},
+		{Title: m.sortColTitle(i18n.T("health"), "health"), Width: 9},
 	}
 	m.table.SetColumns(listCols)
 

@@ -116,6 +116,8 @@ type Session struct {
 	LargeParams        []LargeParamCall
 	UnusedTools        []UnusedToolInfo
 	StuckPatternsExtra []StuckPattern
+	LoopResultData     LoopResult
+	ToolWarnings       []ToolWarning
 }
 
 // ── Loop Cost Analysis ──
@@ -357,6 +359,9 @@ func DetectFormat(path string) FormatInfo {
 	if err != nil {
 		return fi
 	}
+	if len(data) > 64*1024 {
+		data = data[:64*1024]
+	}
 	content := strings.TrimSpace(string(data))
 	if content == "" {
 		return fi
@@ -463,6 +468,10 @@ func detectSingleJSON(doc map[string]interface{}) string {
 		}
 		if _, hasSession := doc["session"]; hasSession {
 			return "opencode"
+		}
+		// Hermes JSON without platform field (backward compat)
+		if hasSessID {
+			return "hermes_json"
 		}
 		// Default to Codex CLI for OpenAI-style messages
 		return "codex_cli"
@@ -1653,6 +1662,8 @@ func LoadSession(path string) (*Session, error) {
 	unusedTools := DetectUnusedTools(events)
 	stuckExtra := DetectStuckPatternsEnhanced(events)
 
+	toolWarnings := ValidateToolPatterns(events)
+
 	return &Session{
 		Name: name, Path: path,
 		Metrics:           m,
@@ -1665,6 +1676,8 @@ func LoadSession(path string) (*Session, error) {
 		LargeParams:       largeParams,
 		UnusedTools:       unusedTools,
 		StuckPatternsExtra: stuckExtra,
+		LoopResultData:    loopResult,
+		ToolWarnings:      toolWarnings,
 	}, nil
 }
 
@@ -1694,7 +1707,7 @@ func LoadAll(dir string) []Session {
 		sessions = append(sessions, *s)
 	}
 	sort.Slice(sessions, func(i, j int) bool {
-		return sessions[i].Name > sessions[j].Name
+		return sessions[i].Metrics.SessionStart > sessions[j].Metrics.SessionStart
 	})
 	return sessions
 }
@@ -1704,7 +1717,11 @@ func FindSessionFiles(dir string) []string {
 	if err != nil {
 		return nil
 	}
-	var files []string
+	type entryInfo struct {
+		path string
+		t    time.Time
+	}
+	var items []entryInfo
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -1716,9 +1733,20 @@ func FindSessionFiles(dir string) []string {
 		if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
 			continue
 		}
-		files = append(files, filepath.Join(dir, name))
+		info, err := e.Info()
+		mt := time.Time{}
+		if err == nil {
+			mt = info.ModTime()
+		}
+		items = append(items, entryInfo{path: filepath.Join(dir, name), t: mt})
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(files)))
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].t.After(items[j].t)
+	})
+	files := make([]string, len(items))
+	for i, it := range items {
+		files[i] = it.path
+	}
 	return files
 }
 
@@ -2582,9 +2610,9 @@ func AnalyzePromptImpact(sessions []Session) PromptImpact {
 		if len(group) < 2 {
 			continue
 		}
-		// 按名称排序（假设名称反映时间顺序）
+		// 按 SessionStart 排序以保证时间顺序
 		sort.Slice(group, func(i, j int) bool {
-			return group[i].Name < group[j].Name
+			return group[i].Metrics.SessionStart < group[j].Metrics.SessionStart
 		})
 
 		for i := 1; i < len(group); i++ {

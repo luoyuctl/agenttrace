@@ -325,10 +325,15 @@ var translations = map[string]map[Lang]string{
 		ZH: "在 %s 中未找到会话文件",
 	},
 
+	"compare_truncated": {
+		EN: "Found %d session files, showing the most recent 15. Use -d <dir> or remove old sessions to compare all.",
+		ZH: "发现 %d 个会话文件，仅展示最近 15 个。使用 -d <dir> 或清理旧会话以对比全部。",
+	},
+
 	// ── Empty state ──
 	"empty_sessions_hint": {
-		EN: " No AI agent sessions found.\n\n Try: agentwaste --latest -d ~/.hermes/sessions\n      agentwaste --compare -d ~/.hermes/sessions\n\n Place session JSON/JSONL files in ~/.hermes/sessions/ ",
-		ZH: " 未找到 AI 代理会话。\n\n 尝试: agentwaste --latest -d ~/.hermes/sessions\n       agentwaste --compare -d ~/.hermes/sessions\n\n 将会话 JSON/JSONL 文件放在 ~/.hermes/sessions/ ",
+		EN: " No AI agent sessions found.\n\n Try: agentwaste --latest -d %s\n      agentwaste --compare -d %s\n\n Place session JSON/JSONL files in %s ",
+		ZH: " 未找到 AI 代理会话。\n\n 尝试: agentwaste --latest -d %s\n       agentwaste --compare -d %s\n\n 将会话 JSON/JSONL 文件放在 %s ",
 	},
 	"lang_label": {
 		EN: "EN",
