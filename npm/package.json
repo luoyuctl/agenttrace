@@ -1,6 +1,6 @@
 {
   "name": "agenttrace",
-  "version": "4.0.0",
+  "version": "0.0.4",
   "description": "AI Agent Session Analyzer — find hanging, token waste, thinking redaction & quality regressions",
   "main": "install.js",
   "bin": {

@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/luoyuctl/agenttrace/internal/engine"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 // ── Styles ──
@@ -80,12 +81,12 @@ func New(dir string) Model {
 
 	// Build table
 	columns := []table.Column{
-		{Title: "SESSION", Width: 28},
-		{Title: "TURNS", Width: 7},
-		{Title: "TOOLS", Width: 7},
-		{Title: "SUCC%", Width: 7},
-		{Title: "COST", Width: 10},
-		{Title: "HEALTH", Width: 8},
+		{Title: i18n.T("session"), Width: 28},
+		{Title: i18n.T("turns_header"), Width: 7},
+		{Title: i18n.T("tools"), Width: 7},
+		{Title: i18n.T("succ_pct"), Width: 7},
+		{Title: i18n.T("cost"), Width: 10},
+		{Title: i18n.T("health"), Width: 8},
 	}
 
 	var rows []table.Row
@@ -151,14 +152,14 @@ func New(dir string) Model {
 
 	// Compare table
 	compCols := []table.Column{
-		{Title: "SESSION", Width: 28},
-		{Title: "TURNS", Width: 7},
-		{Title: "TOOLS", Width: 7},
-		{Title: "SUCC%", Width: 7},
-		{Title: "FAIL", Width: 6},
-		{Title: "COST", Width: 10},
-		{Title: "TOKENS", Width: 8},
-		{Title: "HEALTH", Width: 10},
+		{Title: i18n.T("session"), Width: 28},
+		{Title: i18n.T("turns_header"), Width: 7},
+		{Title: i18n.T("tools"), Width: 7},
+		{Title: i18n.T("succ_pct"), Width: 7},
+		{Title: i18n.T("fail"), Width: 6},
+		{Title: i18n.T("cost"), Width: 10},
+		{Title: i18n.T("tokens"), Width: 8},
+		{Title: i18n.T("health"), Width: 10},
 	}
 	ct := table.New(
 		table.WithColumns(compCols),
@@ -198,6 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -334,12 +336,12 @@ func (m *Model) refreshCompare() {
 
 func (m Model) View() string {
 	// Title bar
-	title := titleStyle.Render(fmt.Sprintf("🔍 AGENTTRACE v%s", engine.Version))
+	title := titleStyle.Render(fmt.Sprintf(i18n.T("agenttrace_title"), engine.Version))
 	countBadge := lipgloss.NewStyle().
 		Background(lipgloss.Color("240")).
 		Foreground(lipgloss.Color("229")).
 		Padding(0, 1).
-		Render(fmt.Sprintf(" %d sessions ", len(m.sessions)))
+		Render(fmt.Sprintf(i18n.T("sessions_count"), len(m.sessions)))
 
 	header := lipgloss.JoinHorizontal(lipgloss.Top, title, "  ", countBadge)
 	header = lipgloss.NewStyle().Padding(0, 0, 1, 0).Render(header)
@@ -356,7 +358,7 @@ func (m Model) View() string {
 		if m.detailReady {
 			content = baseStyle.Render(m.viewport.View())
 		} else {
-			content = baseStyle.Render(dimStyle.Render(" Select a session and press Enter to see details "))
+			content = baseStyle.Render(dimStyle.Render(i18n.T("select_session_hint")))
 		}
 	case viewCompare:
 		content = baseStyle.Render(m.compareTable.View())
@@ -369,7 +371,7 @@ func (m Model) View() string {
 }
 
 func (m Model) renderTabs() string {
-	tabs := []string{"1 Session List", "2 Detail", "3 Compare"}
+	tabs := []string{i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_compare")}
 	var rendered []string
 	for i, t := range tabs {
 		active := int(m.view) == i
@@ -396,11 +398,11 @@ func (m Model) renderHelp() string {
 	var keys string
 	switch m.view {
 	case viewList:
-		keys = "↑↓/kj navigate | Enter detail | ←→ sort | s reverse | r refresh | Tab next | 1/2/3 views | q quit"
+		keys = i18n.T("help_list")
 	case viewDetail:
-		keys = "↑↓/kj/PgUp/PgDn scroll | Esc back | Tab next | q quit"
+		keys = i18n.T("help_detail")
 	case viewCompare:
-		keys = "↑↓/kj scroll | Esc back | Tab next | r refresh | q quit"
+		keys = i18n.T("help_compare")
 	}
 	return helpStyle.Render(" " + keys + " ")
 }

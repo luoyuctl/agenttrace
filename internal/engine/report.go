@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 // ReportText generates the formatted text report.
@@ -21,36 +23,36 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	copy(gaps, m.GapsSec)
 	sort.Float64s(gaps)
 
-	sep := strings.Repeat("━", 60)
-	sub := strings.Repeat("─", 40)
+	sep := strings.Repeat(i18n.T("separator_double"), 60)
+	sub := strings.Repeat(i18n.T("separator_single"), 40)
 
 	var b strings.Builder
 	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 
 	w(sep)
-	w("  AGENTTRACE v%s — AI Agent Session Performance Report", Version)
+	w("  "+i18n.T("title"), Version)
 	w(sep)
 	w("")
 
 	// Token Cost
-	w("💰 TOKEN COST")
+	w(i18n.T("token_cost"))
 	w(sub)
-	w("  Input:        %10d  tokens", m.TokensInput)
-	w("  Output:       %10d  tokens", m.TokensOutput)
+	w("  "+i18n.T("input"), m.TokensInput)
+	w("  "+i18n.T("output"), m.TokensOutput)
 	if m.TokensCacheW > 0 || m.TokensCacheR > 0 {
-		w("  Cache write:  %10d  tokens", m.TokensCacheW)
-		w("  Cache read:   %10d  tokens", m.TokensCacheR)
+		w("  "+i18n.T("cache_write"), m.TokensCacheW)
+		w("  "+i18n.T("cache_read"), m.TokensCacheR)
 	}
 	w("  ────────────────────────────────────")
-	w("  Total tokens: %10d", totalTokens)
-	w("  Est. cost:    $%11.4f  (model: %s)", m.CostEstimated, m.ModelUsed)
+	w("  "+i18n.T("total_tokens"), totalTokens)
+	w("  "+i18n.T("est_cost"), m.CostEstimated, m.ModelUsed)
 	w("")
 
 	// Activity
-	w("📊 ACTIVITY")
+	w(i18n.T("activity"))
 	w(sub)
-	w("  Messages:    %d user  |  %d turns", m.UserMessages, m.AssistantTurns)
-	w("  Tool calls:  %d", m.ToolCallsTotal)
+	w("  "+i18n.T("messages_label"), m.UserMessages, m.AssistantTurns)
+	w("  "+i18n.T("tool_calls_label"), m.ToolCallsTotal)
 	if totalTools > 0 {
 		srEmoji := "🟢"
 		rate := float64(m.ToolCallsOK) / float64(totalTools)
@@ -59,32 +61,32 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 		} else if rate < 0.85 {
 			srEmoji = "🟡"
 		}
-		w("  Success:     %s (%d/%d) %s", successRate, m.ToolCallsOK, totalTools, srEmoji)
+		w("  "+i18n.T("success_label"), successRate, m.ToolCallsOK, totalTools, srEmoji)
 	}
 	w("")
 
 	// Latency
-	w("⏱️  LATENCY")
+	w(i18n.T("latency"))
 	w(sub)
 	if len(gaps) > 0 {
-		w("  min:     %.1fs", gaps[0])
-		w("  median:  %.1fs", percentile(gaps, 0.50))
-		w("  p95:     %.1fs", percentile(gaps, 0.95))
-		w("  max:     %.1fs", gaps[len(gaps)-1])
+		w("  "+i18n.T("min_lat"), gaps[0])
+		w("  "+i18n.T("median"), percentile(gaps, 0.50))
+		w("  "+i18n.T("p95"), percentile(gaps, 0.95))
+		w("  "+i18n.T("max_lat"), gaps[len(gaps)-1])
 		sum := 0.0
 		for _, g := range gaps {
 			sum += g
 		}
-		w("  avg:     %.1fs", sum/float64(len(gaps)))
+		w("  "+i18n.T("avg_lat"), sum/float64(len(gaps)))
 	} else {
-		w("  (no gap data)")
+		w("  " + i18n.T("no_gap_data"))
 	}
-	w("  Duration: %s", fmtDuration(m.DurationSec))
+	w("  "+i18n.T("duration"), fmtDuration(m.DurationSec))
 	w("")
 
 	// Top Tools
 	if len(m.ToolUsage) > 0 {
-		w("🔧 TOP TOOLS")
+		w(i18n.T("top_tools"))
 		w(sub)
 		type kv struct {
 			k string
@@ -105,44 +107,44 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	}
 
 	// Thinking/COT
-	w("🧠 THINKING / COT")
+	w(i18n.T("thinking_cot"))
 	w(sub)
 	if m.ReasoningBlocks > 0 {
-		qualityLbl := "deep"
+		qualityLbl := i18n.T("quality_deep")
 		qEmoji := "🟢"
 		if avgReason < 400 {
-			qualityLbl = "shallow"
+			qualityLbl = i18n.T("quality_shallow")
 			qEmoji = "🔴"
 		} else if avgReason < 800 {
-			qualityLbl = "moderate"
+			qualityLbl = i18n.T("quality_moderate")
 			qEmoji = "🟡"
 		}
-		w("  Blocks: %d", m.ReasoningBlocks)
-		w("  Avg:    %.0f chars", avgReason)
-		w("  Total:  %d chars", m.ReasoningChars)
-		w("  Quality: %s %s", qEmoji, qualityLbl)
+		w("  "+i18n.T("blocks"), m.ReasoningBlocks)
+		w("  "+i18n.T("avg_chars"), avgReason)
+		w("  "+i18n.T("total_chars"), m.ReasoningChars)
+		w("  "+i18n.T("quality_label"), qEmoji, qualityLbl)
 		if m.ReasoningRedact > 0 {
-			w("  ⚠️  %d blocks REDACTED", m.ReasoningRedact)
+			w("  "+i18n.T("redacted_blocks"), m.ReasoningRedact)
 		}
 	} else {
-		w("  (no thinking blocks)")
+		w("  " + i18n.T("no_thinking_blocks"))
 	}
 	w("")
 
 	// Anomalies
-	w("🚨 ANOMALIES")
+	w(i18n.T("anomalies"))
 	w(sub)
 	if len(anoms) > 0 {
 		for _, a := range anoms {
 			w("  %s [%s] %s: %s", a.Emoji, strings.ToUpper(a.Severity), a.Type, a.Detail)
 		}
 	} else {
-		w("  ✅ No anomalies detected")
+		w("  " + i18n.T("no_anomalies"))
 	}
 	w("")
 
 	// Health Score
-	w("💯 HEALTH SCORE")
+	w(i18n.T("health_score"))
 	w(sub)
 	hBar := HealthBar(h)
 	hEmoji := HealthEmoji(h)
@@ -247,17 +249,17 @@ func ReportJSON(m Metrics, anoms []Anomaly, h int) string {
 
 // ReportCompare generates multi-session comparison text.
 func ReportCompare(sessions []Session, model string) string {
-	sep := strings.Repeat("━", 76)
+	sep := strings.Repeat(i18n.T("separator_double"), 76)
 	var b strings.Builder
 	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 
 	w(sep)
-	w("  AGENTTRACE — Multi-Session Comparison  (model: %s)", model)
+	w("  "+i18n.T("compare_title")+"  (model: %s)", model)
 	w(sep)
 	w("")
-	header := fmt.Sprintf("  %-28s %4s %5s %5s %5s %9s %7s", "Session", "Msgs", "Turns", "Tools", "Succ", "Cost", "Health")
+	header := fmt.Sprintf("  %-28s %4s %5s %5s %5s %9s %7s", i18n.T("session"), i18n.T("turns_header"), i18n.T("tools"), i18n.T("succ_pct"), i18n.T("succ_pct"), i18n.T("cost"), i18n.T("health"))
 	w(header)
-	w("  " + strings.Repeat("─", 70))
+	w("  " + strings.Repeat(i18n.T("separator_single"), 70))
 
 	for _, s := range sessions {
 		m := s.Metrics

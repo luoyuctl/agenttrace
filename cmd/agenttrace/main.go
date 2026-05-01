@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/luoyuctl/agenttrace/internal/engine"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 	"github.com/luoyuctl/agenttrace/internal/tui"
 )
 
@@ -24,7 +25,16 @@ func main() {
 	latest := flag.Bool("latest", false, "Analyze latest session")
 	listModels := flag.Bool("list-models", false, "List models with pricing")
 	version := flag.Bool("version", false, "Show version")
+	lang := flag.String("lang", "en", "Language for report output: en, zh")
 	flag.Parse()
+
+	// Set language
+	switch strings.ToLower(*lang) {
+	case "zh", "zh-cn", "zh_cn", "chinese":
+		i18n.Current = i18n.ZH
+	default:
+		i18n.Current = i18n.EN
+	}
 
 	// Version
 	if *version {
@@ -40,9 +50,9 @@ func main() {
 
 	// List models
 	if *listModels {
-		fmt.Printf("agenttrace v%s — Supported Models\n", engine.Version)
+		fmt.Printf(i18n.T("supported_models")+"\n", engine.Version)
 		fmt.Println(strings.Repeat("=", 58))
-		fmt.Printf("  %-22s %10s %10s\n", "Model", "Input $/M", "Output $/M")
+		fmt.Printf("  %-22s %10s %10s\n", i18n.T("model_header"), i18n.T("input_per_m"), i18n.T("output_per_m"))
 		fmt.Println("  " + strings.Repeat("-", 44))
 		for k, v := range engine.Pricing {
 			if k == "default" {

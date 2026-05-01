@@ -7,7 +7,7 @@ const https = require('https');
 const { execSync } = require('child_process');
 
 const REPO = 'luoyuctl/agenttrace';
-const VERSION = '4.0.0';
+const VERSION = '0.0.4';
 
 function getPlatform() {
     const os = process.platform;

@@ -26,7 +26,7 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 |---|---|
 | 🚀 **Single Binary** | 3.5 MB — `curl -sL ... \| sh` install, no runtime deps |
 | 🖥️ **Bubble Tea TUI** | Modern terminal UI: Session List → Detail → Compare (3 views) |
-| 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Gemini CLI — all parsed seamlessly |
+| 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Gemini CLI / OpenClaw — all parsed seamlessly |
 | 💰 **Token Cost Estimation** | Real pricing for 13 models (Opus $75/M → Flash $0.60/M output) |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
@@ -36,12 +36,30 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 
 ---
 
-## 🚀 v4 (Go) — Quick Start
+## 🚀 Quick Start
 
 ### One-liner install
 
 ```bash
+# Linux / macOS
 curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
+```
+
+### npm (cross-platform)
+
+```bash
+npm install -g agenttrace
+```
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew install luoyuctl/tap/agenttrace
 ```
 
 ### Manual build
@@ -70,6 +88,9 @@ agenttrace --latest -f json
 
 # List all 13 model pricings
 agenttrace --list-models
+
+# Specify session language for cost estimation
+agenttrace --latest --lang zh    # Chinese (supports zh, ja, ko, en)
 ```
 
 ### TUI Navigation
@@ -101,7 +122,7 @@ python3 agenttrace.py --list-models
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v4.0.0 — AI Agent Session Performance Report
+  AGENTTRACE v0.0.4 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST
@@ -187,8 +208,9 @@ Session                   Turns  Tools   Succ     Cost  Health
 
 ## 🗺️ Roadmap
 
-- [ ] `curl -sL ... | sh` install script
-- [ ] Multi-platform prebuilt binaries (linux/amd64, darwin/arm64, darwin/amd64)
+- [x] `curl -sL ... | sh` install script
+- [x] Multi-platform prebuilt binaries (linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, windows/arm64)
+- [x] npm / Homebrew distribution
 - [ ] GitHub Action for CI integration
 - [ ] Historical trend tracking
 - [ ] Web dashboard (React + Charts)
@@ -197,7 +219,7 @@ Session                   Turns  Tools   Succ     Cost  Health
 
 ---
 
-## 🏗️ Architecture (v4)
+## 🏗️ Architecture
 
 ```
 go/

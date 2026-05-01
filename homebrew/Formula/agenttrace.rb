@@ -5,25 +5,25 @@
 class Agenttrace < Formula
   desc "AI Agent Session Analyzer — find hanging, token waste & quality regressions"
   homepage "https://github.com/luoyuctl/agenttrace"
-  version "4.0.0"
+  version "0.0.4"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/luoyuctl/agenttrace/releases/download/v4.0.0/agenttrace-darwin-arm64"
+      url "https://github.com/luoyuctl/agenttrace/releases/download/v0.0.4/agenttrace-darwin-arm64"
       sha256 "PLACEHOLDER_DARWIN_ARM64_SHA256"
     else
-      url "https://github.com/luoyuctl/agenttrace/releases/download/v4.0.0/agenttrace-darwin-amd64"
+      url "https://github.com/luoyuctl/agenttrace/releases/download/v0.0.4/agenttrace-darwin-amd64"
       sha256 "PLACEHOLDER_DARWIN_AMD64_SHA256"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/luoyuctl/agenttrace/releases/download/v4.0.0/agenttrace-linux-arm64"
+      url "https://github.com/luoyuctl/agenttrace/releases/download/v0.0.4/agenttrace-linux-arm64"
       sha256 "PLACEHOLDER_LINUX_ARM64_SHA256"
     else
-      url "https://github.com/luoyuctl/agenttrace/releases/download/v4.0.0/agenttrace-linux-amd64"
+      url "https://github.com/luoyuctl/agenttrace/releases/download/v0.0.4/agenttrace-linux-amd64"
       sha256 "PLACEHOLDER_LINUX_AMD64_SHA256"
     end
   end
@@ -33,6 +33,6 @@ class Agenttrace < Formula
   end
 
   test do
-    assert_match "agenttrace v4", shell_output("#{bin}/agenttrace --list-models 2>&1")
+    assert_match "agenttrace v0.0", shell_output("#{bin}/agenttrace --list-models 2>&1")
   end
 end

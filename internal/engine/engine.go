@@ -1,5 +1,5 @@
-// Package engine provides the core analysis engine for agenttrace v4.
-// Pure Go. Supports 5 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode.
+// Package engine provides the core analysis engine for agenttrace.
+// Pure Go. Supports 6 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw.
 package engine
 
 import (
@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const Version = "4.0.0"
+const Version = "0.0.4"
 
 // ── Pricing (USD per 1M tokens) ──
 
@@ -48,6 +48,7 @@ var ToolDisplayNames = map[string]string{
 	"codex_cli":    "Codex CLI",
 	"gemini_cli":   "Gemini CLI",
 	"opencode":     "OpenCode",
+	"openclaw":     "OpenClaw",
 	"generic":      "Generic JSON/JSONL",
 }
 
@@ -199,6 +200,11 @@ func DetectFormat(path string) FormatInfo {
 }
 
 func detectSingleJSON(doc map[string]interface{}) string {
+	// OpenClaw: provider="openclaw" distinguishes from other formats
+	if provider, _ := doc["provider"].(string); provider == "openclaw" {
+		return "openclaw"
+	}
+
 	// Hermes .json: session_id + messages + model + platform, NO "usage" at top level
 	_, hasSessID := doc["session_id"]
 	_, hasMsgs := doc["messages"]
@@ -296,6 +302,8 @@ func Parse(path string) ([]Event, error) {
 		return parseGeminiCLI(fi.Doc, string(fi.Raw))
 	case "opencode":
 		return parseOpenCode(fi.Doc)
+	case "openclaw":
+		return parseOpenClaw(fi.Doc)
 	default:
 		return parseGeneric(string(fi.Raw))
 	}
@@ -832,6 +840,139 @@ func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
 			IsError:    isErr,
 			SourceTool: "opencode",
 		})
+	}
+
+	return events, nil
+}
+
+// ── OpenClaw ──
+
+func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
+	// OpenClaw format: session_id + messages + model + platform, provider="openclaw"
+	var events []Event
+	var messages []interface{}
+	model := "unknown"
+
+	if msgs, ok := doc["messages"].([]interface{}); ok {
+		messages = msgs
+	}
+	if m, ok := doc["model"].(string); ok {
+		model = m
+	}
+
+	// Parse messages
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+
+		// Content can be string or array of blocks (Anthropic-style)
+		content := msg["content"]
+		switch c := content.(type) {
+		case string:
+			events = append(events, Event{
+				Role:       role,
+				Content:    c,
+				SourceTool: "openclaw",
+			})
+		case []interface{}:
+			for _, block := range c {
+				b, ok := block.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				t, _ := b["type"].(string)
+				switch t {
+				case "text":
+					text, _ := b["text"].(string)
+					events = append(events, Event{
+						Role:       role,
+						Content:    text,
+						SourceTool: "openclaw",
+					})
+				case "thinking":
+					think, _ := b["thinking"].(string)
+					redacted, _ := b["redacted"].(bool)
+					events = append(events, Event{
+						Role:       "assistant",
+						Reasoning:  think,
+						Redacted:   redacted,
+						SourceTool: "openclaw",
+					})
+				case "tool_use":
+					id, _ := b["id"].(string)
+					name, _ := b["name"].(string)
+					events = append(events, Event{
+						Role: "assistant",
+						ToolCalls: []ToolCall{{ID: id, Name: name}},
+						SourceTool: "openclaw",
+					})
+				case "tool_result":
+					tid, _ := b["tool_use_id"].(string)
+					isErr, _ := b["is_error"].(bool)
+					ct, _ := b["content"].(string)
+					events = append(events, Event{
+						Role:       "tool",
+						ToolCallID: tid,
+						Content:    ct,
+						IsError:    isErr,
+						SourceTool: "openclaw",
+					})
+				}
+			}
+		default:
+			// OpenAI-style tool_calls
+			if tcs, ok := msg["tool_calls"].([]interface{}); ok {
+				var tcList []ToolCall
+				for _, tc := range tcs {
+					if tcm, ok := tc.(map[string]interface{}); ok {
+						tcItem := ToolCall{ID: str(tcm, "id")}
+						if fn, ok := tcm["function"].(map[string]interface{}); ok {
+							tcItem.Name = str(fn, "name")
+						}
+						tcList = append(tcList, tcItem)
+					}
+				}
+				events = append(events, Event{
+					Role:       role,
+					ToolCalls:  tcList,
+					SourceTool: "openclaw",
+				})
+			}
+		}
+	}
+
+	// Handle tool role messages (OpenAI-style flat format)
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+		if role != "tool" {
+			continue
+		}
+		content, _ := msg["content"].(string)
+		isErr, _ := msg["is_error"].(bool)
+
+		events = append(events, Event{
+			Role:       "tool",
+			Content:    content,
+			ToolCallID: str(msg, "tool_call_id"),
+			IsError:    isErr,
+			SourceTool: "openclaw",
+		})
+	}
+
+	// Add model info as meta event
+	if model != "unknown" {
+		events = append([]Event{{
+			Role:       "meta",
+			ModelUsed:  model,
+			SourceTool: "openclaw",
+		}}, events...)
 	}
 
 	return events, nil
