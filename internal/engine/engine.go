@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 const Version = "0.0.4"
@@ -1161,18 +1163,18 @@ func DetectAnomalies(m Metrics) []Anomaly {
 
 		if hasSuperLong {
 			a = append(a, Anomaly{
-				Type: "hanging", Severity: "high", Emoji: "🔴",
-				Detail: fmt.Sprintf("%d gap(s) >60s, max=%.0fs", longGaps, maxGap),
+				Type: "hanging", Severity: i18n.T("severity_high"), Emoji: "🔴",
+				Detail: fmt.Sprintf(i18n.T("anomaly_hanging_detail"), longGaps, maxGap),
 			})
 		} else if longGaps > 0 {
 			a = append(a, Anomaly{
-				Type: "hanging", Severity: "medium", Emoji: "🟡",
-				Detail: fmt.Sprintf("%d gap(s) >60s, max=%.0fs", longGaps, maxGap),
+				Type: "hanging", Severity: i18n.T("severity_medium"), Emoji: "🟡",
+				Detail: fmt.Sprintf(i18n.T("anomaly_hanging_detail"), longGaps, maxGap),
 			})
 		} else if percentile(sl, 0.95) > 30 {
 			a = append(a, Anomaly{
-				Type: "latency", Severity: "low", Emoji: "🟢",
-				Detail: fmt.Sprintf("p95 latency = %.1fs", percentile(sl, 0.95)),
+				Type: "latency", Severity: i18n.T("severity_low"), Emoji: "🟢",
+				Detail: fmt.Sprintf(i18n.T("anomaly_latency_detail"), percentile(sl, 0.95)),
 			})
 		}
 	}
@@ -1182,13 +1184,13 @@ func DetectAnomalies(m Metrics) []Anomaly {
 		failRate := float64(m.ToolCallsFail) / float64(totalTools)
 		if failRate > 0.30 {
 			a = append(a, Anomaly{
-				Type: "tool_failures", Severity: "high", Emoji: "🔴",
-				Detail: fmt.Sprintf("%d/%d failed (%.0f%%)", m.ToolCallsFail, totalTools, failRate*100),
+				Type: "tool_failures", Severity: i18n.T("severity_high"), Emoji: "🔴",
+				Detail: fmt.Sprintf(i18n.T("anomaly_tool_fail_detail"), m.ToolCallsFail, totalTools, failRate*100),
 			})
 		} else if failRate > 0.15 {
 			a = append(a, Anomaly{
-				Type: "tool_failures", Severity: "medium", Emoji: "🟡",
-				Detail: fmt.Sprintf("%d/%d failed (%.0f%%)", m.ToolCallsFail, totalTools, failRate*100),
+				Type: "tool_failures", Severity: i18n.T("severity_medium"), Emoji: "🟡",
+				Detail: fmt.Sprintf(i18n.T("anomaly_tool_fail_detail"), m.ToolCallsFail, totalTools, failRate*100),
 			})
 		}
 	}
@@ -1197,28 +1199,28 @@ func DetectAnomalies(m Metrics) []Anomaly {
 		avgReason := float64(m.ReasoningChars) / float64(m.ReasoningBlocks)
 		if avgReason < 200 {
 			a = append(a, Anomaly{
-				Type: "shallow_thinking", Severity: "high", Emoji: "🔴",
-				Detail: fmt.Sprintf("avg reasoning = %.0f chars (very shallow)", avgReason),
+				Type: "shallow_thinking", Severity: i18n.T("severity_high"), Emoji: "🔴",
+				Detail: fmt.Sprintf(i18n.T("anomaly_shallow_detail"), avgReason),
 			})
 		} else if avgReason < 500 {
 			a = append(a, Anomaly{
-				Type: "shallow_thinking", Severity: "medium", Emoji: "🟡",
-				Detail: fmt.Sprintf("avg reasoning = %.0f chars", avgReason),
+				Type: "shallow_thinking", Severity: i18n.T("severity_medium"), Emoji: "🟡",
+				Detail: fmt.Sprintf(i18n.T("anomaly_shallow_medium_detail"), avgReason),
 			})
 		}
 	}
 
 	if m.ReasoningRedact > 0 {
 		a = append(a, Anomaly{
-			Type: "redaction", Severity: "medium", Emoji: "🟡",
-			Detail: fmt.Sprintf("%d block(s) redacted", m.ReasoningRedact),
+			Type: "redaction", Severity: i18n.T("severity_medium"), Emoji: "🟡",
+			Detail: fmt.Sprintf(i18n.T("anomaly_redaction_detail"), m.ReasoningRedact),
 		})
 	}
 
 	if m.ToolCallsTotal == 0 && m.AssistantTurns > 2 {
 		a = append(a, Anomaly{
-			Type: "no_tools", Severity: "low", Emoji: "🟢",
-			Detail: "no tool calls — chat-only session",
+			Type: "no_tools", Severity: i18n.T("severity_low"), Emoji: "🟢",
+			Detail: i18n.T("anomaly_no_tools_detail"),
 		})
 	}
 

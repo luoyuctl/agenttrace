@@ -61,7 +61,7 @@ func main() {
 			fmt.Printf("  %-22s $%8.2f  $%8.2f\n", k, v.Input, v.Output)
 		}
 		fmt.Println()
-		fmt.Printf("  default = claude-sonnet-4 ($%.2f/$%.2f)\n",
+		fmt.Printf(i18n.T("default_model_label")+"\n",
 			engine.Pricing["default"].Input, engine.Pricing["default"].Output)
 		return
 	}
@@ -84,7 +84,7 @@ func main() {
 	if *compare {
 		files := engine.FindSessionFiles(sessionsDir)
 		if len(files) == 0 {
-			fmt.Fprintf(os.Stderr, "No session files found in %s\n", sessionsDir)
+			fmt.Fprintf(os.Stderr, i18n.T("no_session_files")+"\n", sessionsDir)
 			os.Exit(1)
 		}
 		if len(files) > 15 {
@@ -101,6 +101,11 @@ func main() {
 		}
 
 		out := engine.ReportCompare(sessions, *model)
+		if *format == "json" {
+			out = engine.ReportCompareJSON(sessions, *model)
+		} else {
+			out = engine.ReportCompare(sessions, *model)
+		}
 
 		if *output != "" {
 			os.MkdirAll(filepath.Dir(*output), 0755)
@@ -116,7 +121,7 @@ func main() {
 	if *latest {
 		files := engine.FindSessionFiles(sessionsDir)
 		if len(files) == 0 {
-			fmt.Fprintf(os.Stderr, "No session files found in %s\n", sessionsDir)
+			fmt.Fprintf(os.Stderr, i18n.T("no_session_files")+"\n", sessionsDir)
 			os.Exit(1)
 		}
 		// Find latest by mtime

@@ -4,6 +4,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -38,9 +39,14 @@ var (
 	boldStyle   = lipgloss.NewStyle().Bold(true)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			Background(lipgloss.Color("235")).
-			Padding(0, 1)
+		Foreground(lipgloss.Color("241")).
+		Background(lipgloss.Color("235")).
+		Padding(0, 1)
+
+	// Health score background colors
+	healthGoodStyle = lipgloss.NewStyle().Background(lipgloss.Color("34")).Foreground(lipgloss.Color("15"))
+	healthWarnStyle = lipgloss.NewStyle().Background(lipgloss.Color("178")).Foreground(lipgloss.Color("16"))
+	healthBadStyle  = lipgloss.NewStyle().Background(lipgloss.Color("160")).Foreground(lipgloss.Color("15"))
 )
 
 // ── Model ──
@@ -54,9 +60,10 @@ const (
 )
 
 type Model struct {
-	view    view
+	view     view
 	sessions []engine.Session
-	dir     string
+	dir      string
+	lang     i18n.Lang
 
 	// List view
 	table       table.Model
@@ -81,12 +88,13 @@ func New(dir string) Model {
 
 	// Build table
 	columns := []table.Column{
-		{Title: i18n.T("session"), Width: 28},
-		{Title: i18n.T("turns_header"), Width: 7},
-		{Title: i18n.T("tools"), Width: 7},
-		{Title: i18n.T("succ_pct"), Width: 7},
-		{Title: i18n.T("cost"), Width: 10},
-		{Title: i18n.T("health"), Width: 8},
+		{Title: i18n.T("session"), Width: 22},
+		{Title: i18n.T("source_tool"), Width: 14},
+		{Title: i18n.T("turns_header"), Width: 6},
+		{Title: i18n.T("tools"), Width: 6},
+		{Title: i18n.T("succ_pct"), Width: 6},
+		{Title: i18n.T("cost"), Width: 9},
+		{Title: i18n.T("health"), Width: 9},
 	}
 
 	var rows []table.Row
@@ -101,10 +109,27 @@ func New(dir string) Model {
 			sr = fmt.Sprintf("%.0f", float64(m.ToolCallsOK)/float64(totalTools)*100)
 		}
 
-		healthCol := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		// Source tool display
+		sourceDisplay := m.SourceTool
+		if display, ok := engine.ToolDisplayNames[m.SourceTool]; ok {
+			sourceDisplay = display
+		}
+
+		// Health with color
+		healthRaw := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		var healthCol string
+		switch {
+		case s.Health >= 80:
+			healthCol = healthGoodStyle.Render(healthRaw)
+		case s.Health >= 50:
+			healthCol = healthWarnStyle.Render(healthRaw)
+		default:
+			healthCol = healthBadStyle.Render(healthRaw)
+		}
 
 		rows = append(rows, table.Row{
 			s.Name,
+			sourceDisplay,
 			fmt.Sprintf("%d", m.AssistantTurns),
 			fmt.Sprintf("%d", m.ToolCallsTotal),
 			sr,
@@ -116,6 +141,7 @@ func New(dir string) Model {
 		tokensStr := fmt.Sprintf("%d", m.TokensInput+m.TokensOutput)
 		compareRows = append(compareRows, table.Row{
 			s.Name,
+			sourceDisplay,
 			fmt.Sprintf("%d", m.AssistantTurns),
 			fmt.Sprintf("%d", m.ToolCallsTotal),
 			sr,
@@ -125,7 +151,8 @@ func New(dir string) Model {
 			healthCol,
 		})
 		compareData = append(compareData, []string{
-			s.Name, fmt.Sprintf("%d", m.AssistantTurns),
+			s.Name, sourceDisplay,
+			fmt.Sprintf("%d", m.AssistantTurns),
 			fmt.Sprintf("%d", m.ToolCallsTotal), sr, failStr,
 			fmt.Sprintf("$%.4f", m.CostEstimated), tokensStr, healthCol,
 		})
@@ -152,13 +179,14 @@ func New(dir string) Model {
 
 	// Compare table
 	compCols := []table.Column{
-		{Title: i18n.T("session"), Width: 28},
-		{Title: i18n.T("turns_header"), Width: 7},
-		{Title: i18n.T("tools"), Width: 7},
-		{Title: i18n.T("succ_pct"), Width: 7},
-		{Title: i18n.T("fail"), Width: 6},
-		{Title: i18n.T("cost"), Width: 10},
-		{Title: i18n.T("tokens"), Width: 8},
+		{Title: i18n.T("session"), Width: 22},
+		{Title: i18n.T("source_tool"), Width: 14},
+		{Title: i18n.T("turns_header"), Width: 6},
+		{Title: i18n.T("tools"), Width: 6},
+		{Title: i18n.T("succ_pct"), Width: 6},
+		{Title: i18n.T("fail"), Width: 5},
+		{Title: i18n.T("cost"), Width: 9},
+		{Title: i18n.T("tokens"), Width: 7},
 		{Title: i18n.T("health"), Width: 10},
 	}
 	ct := table.New(
@@ -182,6 +210,7 @@ func New(dir string) Model {
 		view:         viewList,
 		sessions:     sessions,
 		dir:          dir,
+		lang:         i18n.EN,
 		table:        t,
 		tableReady:   true,
 		compareTable: ct,
@@ -209,6 +238,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.table.SetHeight(msg.Height - 8)
 		m.compareTable.SetWidth(msg.Width - 4)
 		m.compareTable.SetHeight(msg.Height - 8)
+
+		// Adjust column widths responsively
+		m.adjustColumnWidths(msg.Width)
 
 		if m.detailReady {
 			m.viewport.Width = msg.Width - 4
@@ -243,6 +275,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshTable()
 			m.refreshCompare()
 
+		case "L", "l":
+			// Toggle language
+			if m.lang == i18n.EN {
+				m.lang = i18n.ZH
+			} else {
+				m.lang = i18n.EN
+			}
+			i18n.SetLang(m.lang)
+			m.refreshColumns()
+
 		case "1":
 			m.view = viewList
 		case "2":
@@ -264,6 +306,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewport, cmd = m.viewport.Update(msg)
 			case viewCompare:
 				m.compareTable, cmd = m.compareTable.Update(msg)
+				if msg.String() == "h" && m.compareReady {
+					// Sort sessions by health descending
+					sort.SliceStable(m.sessions, func(i, j int) bool {
+						return m.sessions[i].Health > m.sessions[j].Health
+					})
+					m.refreshCompare()
+				}
 			}
 		}
 	}
@@ -294,9 +343,28 @@ func (m *Model) refreshTable() {
 		if totalTools > 0 {
 			sr = fmt.Sprintf("%.0f", float64(m.ToolCallsOK)/float64(totalTools)*100)
 		}
-		healthCol := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+
+		// Source tool display
+		sourceDisplay := m.SourceTool
+		if display, ok := engine.ToolDisplayNames[m.SourceTool]; ok {
+			sourceDisplay = display
+		}
+
+		// Health with color
+		healthRaw := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		var healthCol string
+		switch {
+		case s.Health >= 80:
+			healthCol = healthGoodStyle.Render(healthRaw)
+		case s.Health >= 50:
+			healthCol = healthWarnStyle.Render(healthRaw)
+		default:
+			healthCol = healthBadStyle.Render(healthRaw)
+		}
+
 		rows = append(rows, table.Row{
 			s.Name,
+			sourceDisplay,
 			fmt.Sprintf("%d", m.AssistantTurns),
 			fmt.Sprintf("%d", m.ToolCallsTotal),
 			sr,
@@ -317,9 +385,28 @@ func (m *Model) refreshCompare() {
 		if totalTools > 0 {
 			sr = fmt.Sprintf("%.0f", float64(m.ToolCallsOK)/float64(totalTools)*100)
 		}
-		healthCol := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+
+		// Source tool display
+		sourceDisplay := m.SourceTool
+		if display, ok := engine.ToolDisplayNames[m.SourceTool]; ok {
+			sourceDisplay = display
+		}
+
+		// Health with color
+		healthRaw := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		var healthCol string
+		switch {
+		case s.Health >= 80:
+			healthCol = healthGoodStyle.Render(healthRaw)
+		case s.Health >= 50:
+			healthCol = healthWarnStyle.Render(healthRaw)
+		default:
+			healthCol = healthBadStyle.Render(healthRaw)
+		}
+
 		rows = append(rows, table.Row{
 			s.Name,
+			sourceDisplay,
 			fmt.Sprintf("%d", m.AssistantTurns),
 			fmt.Sprintf("%d", m.ToolCallsTotal),
 			sr,
@@ -342,8 +429,13 @@ func (m Model) View() string {
 		Foreground(lipgloss.Color("229")).
 		Padding(0, 1).
 		Render(fmt.Sprintf(i18n.T("sessions_count"), len(m.sessions)))
+	langBadge := lipgloss.NewStyle().
+		Background(lipgloss.Color("99")).
+		Foreground(lipgloss.Color("229")).
+		Padding(0, 1).
+		Render(i18n.LangLabel())
 
-	header := lipgloss.JoinHorizontal(lipgloss.Top, title, "  ", countBadge)
+	header := lipgloss.JoinHorizontal(lipgloss.Top, title, "  ", countBadge, " ", langBadge)
 	header = lipgloss.NewStyle().Padding(0, 0, 1, 0).Render(header)
 
 	// View tabs
@@ -353,15 +445,24 @@ func (m Model) View() string {
 	var content string
 	switch m.view {
 	case viewList:
-		content = baseStyle.Render(m.table.View())
+		if len(m.sessions) == 0 {
+			content = baseStyle.Render(lipgloss.NewStyle().Padding(1).Render(i18n.T("empty_sessions_hint")))
+		} else {
+			content = baseStyle.Render(m.table.View())
+		}
 	case viewDetail:
 		if m.detailReady {
-			content = baseStyle.Render(m.viewport.View())
+			scrollInfo := dimStyle.Render(fmt.Sprintf(" Scroll: %.0f%% ", m.viewport.ScrollPercent()*100))
+			content = baseStyle.Render(lipgloss.JoinVertical(lipgloss.Left, scrollInfo, m.viewport.View()))
 		} else {
 			content = baseStyle.Render(dimStyle.Render(i18n.T("select_session_hint")))
 		}
 	case viewCompare:
-		content = baseStyle.Render(m.compareTable.View())
+		if len(m.sessions) == 0 {
+			content = baseStyle.Render(lipgloss.NewStyle().Padding(1).Render(i18n.T("empty_sessions_hint")))
+		} else {
+			content = baseStyle.Render(m.compareTable.View())
+		}
 	}
 
 	// Help bar
@@ -398,11 +499,86 @@ func (m Model) renderHelp() string {
 	var keys string
 	switch m.view {
 	case viewList:
-		keys = i18n.T("help_list")
+		keys = i18n.T("help_list") + " | L " + i18n.LangLabel()
 	case viewDetail:
-		keys = i18n.T("help_detail")
+		keys = i18n.T("help_detail") + " | L " + i18n.LangLabel()
 	case viewCompare:
-		keys = i18n.T("help_compare")
+		keys = i18n.T("help_compare") + " | h sort-health | L " + i18n.LangLabel()
 	}
 	return helpStyle.Render(" " + keys + " ")
+}
+
+// refreshColumns rebuilds column titles for both tables after a language switch.
+func (m *Model) refreshColumns() {
+	listCols := []table.Column{
+		{Title: i18n.T("session"), Width: 22},
+		{Title: i18n.T("source_tool"), Width: 14},
+		{Title: i18n.T("turns_header"), Width: 6},
+		{Title: i18n.T("tools"), Width: 6},
+		{Title: i18n.T("succ_pct"), Width: 6},
+		{Title: i18n.T("cost"), Width: 9},
+		{Title: i18n.T("health"), Width: 9},
+	}
+	m.table.SetColumns(listCols)
+
+	compCols := []table.Column{
+		{Title: i18n.T("session"), Width: 22},
+		{Title: i18n.T("source_tool"), Width: 14},
+		{Title: i18n.T("turns_header"), Width: 6},
+		{Title: i18n.T("tools"), Width: 6},
+		{Title: i18n.T("succ_pct"), Width: 6},
+		{Title: i18n.T("fail"), Width: 5},
+		{Title: i18n.T("cost"), Width: 9},
+		{Title: i18n.T("tokens"), Width: 7},
+		{Title: i18n.T("health"), Width: 10},
+	}
+	m.compareTable.SetColumns(compCols)
+
+	// Re-apply responsive sizing if we know the width
+	if m.width > 0 {
+		m.adjustColumnWidths(m.width)
+	}
+}
+
+// adjustColumnWidths dynamically resizes columns based on terminal width.
+func (m *Model) adjustColumnWidths(width int) {
+	var (
+		sessW, srcW, turnsW, toolsW, succW, costW, healthW int
+		failW, tokensW                                      int
+	)
+
+	if width > 120 {
+		sessW, srcW, turnsW, toolsW, succW, costW, healthW = 22, 14, 6, 6, 6, 9, 9
+		failW, tokensW = 5, 7
+	} else if width >= 80 {
+		sessW, srcW, turnsW, toolsW, succW, costW, healthW = 18, 12, 5, 5, 5, 8, 8
+		failW, tokensW = 5, 6
+	} else {
+		sessW, srcW, turnsW, toolsW, succW, costW, healthW = 16, 10, 5, 5, 5, 8, 8
+		failW, tokensW = 4, 5
+	}
+
+	listCols := []table.Column{
+		{Title: i18n.T("session"), Width: sessW},
+		{Title: i18n.T("source_tool"), Width: srcW},
+		{Title: i18n.T("turns_header"), Width: turnsW},
+		{Title: i18n.T("tools"), Width: toolsW},
+		{Title: i18n.T("succ_pct"), Width: succW},
+		{Title: i18n.T("cost"), Width: costW},
+		{Title: i18n.T("health"), Width: healthW},
+	}
+	m.table.SetColumns(listCols)
+
+	compCols := []table.Column{
+		{Title: i18n.T("session"), Width: sessW},
+		{Title: i18n.T("source_tool"), Width: srcW},
+		{Title: i18n.T("turns_header"), Width: turnsW},
+		{Title: i18n.T("tools"), Width: toolsW},
+		{Title: i18n.T("succ_pct"), Width: succW},
+		{Title: i18n.T("fail"), Width: failW},
+		{Title: i18n.T("cost"), Width: costW},
+		{Title: i18n.T("tokens"), Width: tokensW},
+		{Title: i18n.T("health"), Width: healthW},
+	}
+	m.compareTable.SetColumns(compCols)
 }

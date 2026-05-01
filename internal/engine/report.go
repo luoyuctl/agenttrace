@@ -198,8 +198,9 @@ func ReportJSON(m Metrics, anoms []Anomaly, h int) string {
 	}
 
 	payload := map[string]interface{}{
-		"version":    Version,
-		"model_used": m.ModelUsed,
+		"version":     Version,
+		"model_used":  m.ModelUsed,
+		"source_tool": m.SourceTool,
 		"session": map[string]interface{}{
 			"start":             m.SessionStart,
 			"end":               m.SessionEnd,
@@ -254,12 +255,15 @@ func ReportCompare(sessions []Session, model string) string {
 	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 
 	w(sep)
-	w("  "+i18n.T("compare_title")+"  (model: %s)", model)
-	w(sep)
-	w("")
-	header := fmt.Sprintf("  %-28s %4s %5s %5s %5s %9s %7s", i18n.T("session"), i18n.T("turns_header"), i18n.T("tools"), i18n.T("succ_pct"), i18n.T("succ_pct"), i18n.T("cost"), i18n.T("health"))
-	w(header)
-	w("  " + strings.Repeat(i18n.T("separator_single"), 70))
+	ww := func(s string) { b.WriteString(s + "\n") }
+	ww(fmt.Sprintf("  "+i18n.T("compare_title")+"  ("+i18n.T("model_label")+")", model))
+	ww(sep)
+	ww("")
+	header := fmt.Sprintf("  %-28s %4s %5s %5s %5s %9s %7s",
+		i18n.T("session"), i18n.T("turns_header"), i18n.T("tools"),
+		i18n.T("succ_pct"), i18n.T("fail"), i18n.T("cost"), i18n.T("health"))
+	ww(header)
+	ww("  " + strings.Repeat(i18n.T("separator_single"), 70))
 
 	for _, s := range sessions {
 		m := s.Metrics
@@ -268,15 +272,52 @@ func ReportCompare(sessions []Session, model string) string {
 		if totalTools > 0 {
 			sr = fmt.Sprintf("%.0f%%", float64(m.ToolCallsOK)/float64(totalTools)*100)
 		}
+		failStr := fmt.Sprintf("%d", m.ToolCallsFail)
 		hEmoji := HealthEmoji(s.Health)
+		healthStr := fmt.Sprintf("%s %d/100", hEmoji, s.Health)
 		name := s.Name
 		if len(name) > 27 {
 			name = name[:27]
 		}
-		w("  %-28s %4d %5d %5d %5s $%8.4f %s %4d/100",
-			name, m.UserMessages, m.AssistantTurns, m.ToolCallsTotal,
-			sr, m.CostEstimated, hEmoji, s.Health)
+		ww(fmt.Sprintf("  %-28s %4d %5d %5s %5s $%8.4f %s",
+			name, m.AssistantTurns, m.ToolCallsTotal,
+			sr, failStr, m.CostEstimated, healthStr))
 	}
 	w(sep)
 	return b.String()
+}
+
+// ReportCompareJSON generates multi-session comparison JSON.
+func ReportCompareJSON(sessions []Session, model string) string {
+	type item struct {
+		Name    string `json:"name"`
+		Metrics struct {
+			Turns       int     `json:"turns"`
+			Tools       int     `json:"tools"`
+			SuccessRate string  `json:"success_rate"`
+			Fail        int     `json:"fail"`
+			Cost        float64 `json:"cost"`
+		} `json:"metrics"`
+		Health int `json:"health"`
+	}
+
+	var items []item
+	for _, s := range sessions {
+		m := s.Metrics
+		totalTools := m.ToolCallsOK + m.ToolCallsFail
+		sr := "N/A"
+		if totalTools > 0 {
+			sr = fmt.Sprintf("%.0f%%", float64(m.ToolCallsOK)/float64(totalTools)*100)
+		}
+		it := item{Name: s.Name, Health: s.Health}
+		it.Metrics.Turns = m.AssistantTurns
+		it.Metrics.Tools = m.ToolCallsTotal
+		it.Metrics.SuccessRate = sr
+		it.Metrics.Fail = m.ToolCallsFail
+		it.Metrics.Cost = m.CostEstimated
+		items = append(items, it)
+	}
+
+	out, _ := json.MarshalIndent(items, "", "  ")
+	return string(out)
 }

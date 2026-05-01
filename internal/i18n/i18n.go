@@ -261,6 +261,76 @@ var translations = map[string]map[Lang]string{
 		ZH: "输出$/M",
 	},
 
+	// ── Anomaly details ──
+	"severity_high": {
+		EN: "HIGH",
+		ZH: "严重",
+	},
+	"severity_medium": {
+		EN: "MEDIUM",
+		ZH: "中等",
+	},
+	"severity_low": {
+		EN: "LOW",
+		ZH: "轻微",
+	},
+	"anomaly_hanging_detail": {
+		EN: "%d gap(s) >60s, max=%.0fs",
+		ZH: "%d个间隔 >60秒, 最长=%.0f秒",
+	},
+	"anomaly_latency_detail": {
+		EN: "p95 latency = %.1fs",
+		ZH: "P95延迟 = %.1f秒",
+	},
+	"anomaly_tool_fail_detail": {
+		EN: "%d/%d failed (%.0f%%)",
+		ZH: "%d/%d 失败 (%.0f%%)",
+	},
+	"anomaly_shallow_detail": {
+		EN: "avg reasoning = %.0f chars (very shallow)",
+		ZH: "平均推理 = %.0f 字符 (极浅)",
+	},
+	"anomaly_shallow_medium_detail": {
+		EN: "avg reasoning = %.0f chars",
+		ZH: "平均推理 = %.0f 字符",
+	},
+	"anomaly_redaction_detail": {
+		EN: "%d block(s) redacted",
+		ZH: "%d 思维块已脱敏",
+	},
+	"anomaly_no_tools_detail": {
+		EN: "no tool calls — chat-only session",
+		ZH: "无工具调用 — 纯对话会话",
+	},
+
+	// ── CLI / main extras ──
+	"default_model_label": {
+		EN: "  default = claude-sonnet-4 ($%.2f/$%.2f)",
+		ZH: "  默认 = claude-sonnet-4 ($%.2f/$%.2f)",
+	},
+
+	// ── Source tool ──
+	"source_tool": {
+		EN: "SOURCE",
+		ZH: "来源",
+	},
+
+	// ── Compare JSON ──
+	"no_session_files": {
+		EN: "No session files found in %s",
+		ZH: "在 %s 中未找到会话文件",
+	},
+
+	// ── Empty state ──
+	"empty_sessions_hint": {
+		EN: " No AI agent sessions found.\n\n Try: agenttrace --latest -d ~/.hermes/sessions\n      agenttrace --compare -d ~/.hermes/sessions\n\n Place session JSON/JSONL files in ~/.hermes/sessions/ ",
+		ZH: " 未找到 AI 代理会话。\n\n 尝试: agenttrace --latest -d ~/.hermes/sessions\n       agenttrace --compare -d ~/.hermes/sessions\n\n 将会话 JSON/JSONL 文件放在 ~/.hermes/sessions/ ",
+	},
+	"lang_label": {
+		EN: "EN",
+		ZH: "中文",
+	},
+
 	// ── Generic / misc ──
 	"model_label": {
 		EN: "model: %s",
@@ -292,4 +362,14 @@ func TL(key string, lang Lang) string {
 		return m[EN]
 	}
 	return key
+}
+
+// SetLang sets the current language for translation lookups.
+func SetLang(l Lang) {
+	Current = l
+}
+
+// LangLabel returns the display label for the current language.
+func LangLabel() string {
+	return TL("lang_label", Current)
 }
