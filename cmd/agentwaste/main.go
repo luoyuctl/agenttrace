@@ -159,7 +159,7 @@ func main() {
 			sessions = append(sessions, *s)
 		}
 
-		out := engine.ReportCompare(sessions, *model)
+		var out string
 		if *format == "json" {
 			out = engine.ReportCompareJSON(sessions, *model)
 		} else {
