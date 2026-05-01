@@ -25,6 +25,8 @@ func main() {
 	output := flag.String("o", "", "Save report to file")
 	latest := flag.Bool("latest", false, "Analyze latest session")
 	listModels := flag.Bool("list-models", false, "List models with pricing")
+	updatePricing := flag.Bool("update-pricing", false, "Download latest model pricing from LiteLLM")
+	testMatch := flag.Bool("test-match", false, "Test model name fuzzy matching")
 	version := flag.Bool("version", false, "Show version")
 	lang := flag.String("lang", "en", "Language for report output: en, zh")
 	flag.Parse()
@@ -43,6 +45,42 @@ func main() {
 		return
 	}
 
+	// Update pricing (before --list-models so it reflects new data)
+	if *updatePricing {
+		fmt.Printf("Downloading latest model pricing from LiteLLM...\n")
+		n, err := engine.UpdatePricing()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Loaded %d model pricings.\n", n)
+		fmt.Printf("Cache saved to %s\n", engine.CachePath())
+		// Fall through to allow --list-models after update
+	}
+
+	// Test fuzzy matching (dev helper)
+	if *testMatch {
+		tests := []string{
+			"claude-sonnet-4-5-20250929",
+			"anthropic/claude-sonnet-4-6",
+			"vertex_ai/claude-opus-4-5@20251101",
+			"us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+			"openai/gpt-4.1",
+			"gpt-4.1-mini-2025-04-14",
+			"deepseek-chat",
+			"deepseek/deepseek-v3.2",
+			"gemini-2.5-pro",
+			"unknown-model-xyz",
+		}
+		fmt.Printf("Pricing: %s\n\n", engine.PricingSource())
+		for _, m := range tests {
+			p := engine.LookupPrice(m)
+			fmt.Printf("  %-50s → in=$%7.2f/M  out=$%7.2f/M  cw=$%6.2f/M  cr=$%6.2f/M\n",
+				m, p.Input, p.Output, p.CW, p.CR)
+		}
+		return
+	}
+
 	sessionsDir := *dir
 	if sessionsDir == "" {
 		home, _ := os.UserHomeDir()
@@ -55,15 +93,13 @@ func main() {
 		fmt.Println(strings.Repeat("=", 58))
 		fmt.Printf("  %-22s %10s %10s\n", i18n.T("model_header"), i18n.T("input_per_m"), i18n.T("output_per_m"))
 		fmt.Println("  " + strings.Repeat("-", 44))
-		for k, v := range engine.Pricing {
-			if k == "default" {
-				continue
-			}
+		for k, v := range engine.ListPricing() {
 			fmt.Printf("  %-22s $%8.2f  $%8.2f\n", k, v.Input, v.Output)
 		}
 		fmt.Println()
 		fmt.Printf(i18n.T("default_model_label")+"\n",
-			engine.Pricing["default"].Input, engine.Pricing["default"].Output)
+			engine.LookupPrice("default").Input, engine.LookupPrice("default").Output)
+		fmt.Println("  " + engine.PricingSource())
 		return
 	}
 

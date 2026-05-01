@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.0.6"
+const Version = "0.0.7"
 
 // ── Pricing (USD per 1M tokens) ──
 
@@ -24,23 +24,6 @@ type Price struct {
 	Output float64
 	CW     float64
 	CR     float64
-}
-
-var Pricing = map[string]Price{
-	"claude-opus-4":     {15.00, 75.00, 18.75, 1.50},
-	"claude-opus-4.5":   {15.00, 75.00, 18.75, 1.50},
-	"claude-sonnet-4":   {3.00, 15.00, 3.75, 0.30},
-	"claude-sonnet-4.5": {3.00, 15.00, 3.75, 0.30},
-	"claude-haiku-3.5":  {0.80, 4.00, 1.00, 0.08},
-	"claude-haiku-4":    {0.80, 4.00, 1.00, 0.08},
-	"gemini-2.5-pro":    {1.25, 10.00, 0, 0},
-	"gemini-2.5-flash":  {0.15, 0.60, 0, 0},
-	"gpt-4.1":           {2.00, 8.00, 0, 0},
-	"gpt-4.1-mini":      {0.40, 1.60, 0, 0},
-	"gpt-4.1-nano":      {0.10, 0.40, 0, 0},
-	"deepseek-v3":       {0.27, 1.10, 0.07, 0.014},
-	"deepseek-r1":       {0.55, 2.19, 0.14, 0.028},
-	"default":           {3.00, 15.00, 0, 0},
 }
 
 var ToolDisplayNames = map[string]string{
@@ -1251,10 +1234,7 @@ func Analyze(events []Event, model string) Metrics {
 		ToolUsage: make(map[string]int),
 	}
 
-	pricing := Pricing[model]
-	if _, ok := Pricing[model]; !ok {
-		pricing = Pricing["default"]
-	}
+	pricing := LookupPrice(model)
 
 	for _, ev := range events {
 		// Track source tool from first non-meta event

@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/binary-3.5MB-00ADD8.svg" alt="Binary Size">
+  <img src="https://img.shields.io/badge/binary-7.5MB-00ADD8.svg" alt="Binary Size">
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
 </p>
 
@@ -24,10 +24,10 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI, Hermes Agent) produce sess
 
 | Feature | Description |
 |---|---|
-| 🚀 **Single Binary** | 3.5 MB — `curl -sL ... \| sh` install, no runtime deps |
+| 🚀 **Single Binary** | 7.5 MB — `curl -sL ... \| sh` install, no runtime deps |
 | 🖥️ **Bubble Tea TUI** | Modern terminal UI: Session List → Detail → Compare (3 views) |
 | 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Gemini CLI / OpenClaw — all parsed seamlessly |
-| 💰 **Token Cost Estimation** | Real pricing for 13 models (Opus $75/M → Flash $0.60/M output) |
+| 💰 **Token Cost Estimation** | Dynamic pricing from LiteLLM (900+ models) — `--update-pricing` for latest |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
 | 💯 **Health Score** | 0-100 composite with visual bar and emoji |
@@ -86,8 +86,14 @@ agenttrace --compare -d ~/.hermes/sessions
 # JSON output (CI/CD)
 agenttrace --latest -f json
 
-# List all 13 model pricings
+# List all model pricings (900+ from LiteLLM when cached)
 agenttrace --list-models
+
+# Update pricing from LiteLLM community database
+agenttrace --update-pricing
+
+# Update + list in one go
+agenttrace --update-pricing --list-models
 
 # Specify session language for cost estimation
 agenttrace --latest --lang zh    # Chinese (supports zh, ja, ko, en)
