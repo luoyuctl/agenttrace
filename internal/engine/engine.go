@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
-const Version = "0.0.7"
+const Version = "0.0.8"
 
 // ── Pricing (USD per 1M tokens) ──
 
@@ -2645,3 +2645,127 @@ func extractPrefix(name string) string {
 	return name
 }
 
+
+
+// ═══════════════════════════════════════════════════
+// WASTE ANALYSIS (April 2026)
+// ═══════════════════════════════════════════════════
+
+type CacheEfficiency struct {
+	CacheWriteTokens int
+	CacheReadTokens  int
+	TotalInputTokens int
+	HitRate          float64
+	WastedTokens     int
+	WastedCost       float64
+	Rating           string
+	Suggestion       string
+}
+
+func AnalyzeCacheEfficiency(m Metrics) CacheEfficiency {
+	ce := CacheEfficiency{
+		CacheWriteTokens: m.TokensCacheW,
+		CacheReadTokens:  m.TokensCacheR,
+		TotalInputTokens: m.TokensInput,
+	}
+	if m.TokensInput > 0 {
+		ce.HitRate = float64(m.TokensCacheR) / float64(m.TokensInput) * 100
+	}
+	switch {
+	case ce.HitRate >= 80:
+		ce.Rating = "excellent"
+	case ce.HitRate >= 40:
+		ce.Rating = "good"
+	case m.TokensCacheW > 0:
+		ce.Rating = "poor"
+	default:
+		ce.Rating = "none"
+	}
+	return ce
+}
+
+type ToolBloatAnalysis struct {
+	ToolsPerTurn  float64
+	TotalToolCost float64
+	BloatScore    int
+	BloatLevel    string
+	Suggestion    string
+}
+
+func AnalyzeToolBloat(m Metrics) ToolBloatAnalysis {
+	tba := ToolBloatAnalysis{}
+	if m.AssistantTurns > 0 {
+		tba.ToolsPerTurn = float64(m.ToolCallsTotal) / float64(m.AssistantTurns)
+	}
+	switch {
+	case tba.ToolsPerTurn > 5:
+		tba.BloatScore = 90; tba.BloatLevel = "severe"
+	case tba.ToolsPerTurn > 3:
+		tba.BloatScore = 65; tba.BloatLevel = "high"
+	case tba.ToolsPerTurn > 1.5:
+		tba.BloatScore = 35; tba.BloatLevel = "medium"
+	default:
+		tba.BloatScore = 10; tba.BloatLevel = "low"
+	}
+	return tba
+}
+
+type StuckPattern struct {
+	Pattern     string
+	Description string
+	Severity    string
+}
+
+func DetectStuckPatterns(events []Event) []StuckPattern {
+	var p []StuckPattern
+	emptyStreak := 0
+	for _, ev := range events {
+		if ev.Role == "assistant" && ev.Content == "" && len(ev.ToolCalls) == 0 {
+			emptyStreak++
+		} else {
+			emptyStreak = 0
+		}
+	}
+	if emptyStreak >= 3 {
+		p = append(p, StuckPattern{Pattern: "empty_response", Severity: "critical"})
+	}
+	return p
+}
+
+type WasteReport struct {
+	Cache       CacheEfficiency
+	Bloat       ToolBloatAnalysis
+	Stuck       []StuckPattern
+	LoopCost    float64
+	LoopPercent float64
+	WasteScore  int
+	WasteLevel  string
+	TotalWasted float64
+	Summary     string
+	TopActions  []string
+}
+
+func ComputeWasteReport(m Metrics, events []Event, loopResult LoopResult) WasteReport {
+	wr := WasteReport{}
+	wr.Cache = AnalyzeCacheEfficiency(m)
+	wr.Bloat = AnalyzeToolBloat(m)
+	wr.Stuck = DetectStuckPatterns(events)
+	wr.LoopCost = loopResult.LoopCost
+	if m.CostEstimated > 0 {
+		wr.LoopPercent = wr.LoopCost / m.CostEstimated * 100
+	}
+	wr.TotalWasted = wr.LoopCost
+	score := float64(wr.Bloat.BloatScore)*0.3 + wr.LoopPercent*0.5
+	if len(wr.Stuck) > 0 {
+		score += 15
+	}
+	wr.WasteScore = int(score)
+	if wr.WasteScore > 100 { wr.WasteScore = 100 }
+	switch {
+	case wr.WasteScore >= 70: wr.WasteLevel = "red"
+	case wr.WasteScore >= 40: wr.WasteLevel = "orange"
+	case wr.WasteScore >= 15: wr.WasteLevel = "yellow"
+	default: wr.WasteLevel = "green"
+	}
+	return wr
+}

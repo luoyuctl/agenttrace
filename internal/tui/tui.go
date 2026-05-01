@@ -337,7 +337,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.filterText = m.filterInput
 				m.filterActive = false
 				m.applyTextFilter()
+				return m, cmd
 			}
+			// Enter in list view → open detail view
+			if m.view == viewList && m.tableReady && len(m.sessions) > 0 {
+				m.view = viewDetail
+				m.openDetail()
+				return m, cmd
+			}
+			// Pass enter to compare table
+			if m.view == viewCompare {
+				m.compareTable, cmd = m.compareTable.Update(msg)
+				return m, cmd
+			}
+			return m, cmd
 		case "esc":
 			if m.filterActive {
 				// 退出筛选模式
@@ -454,7 +467,18 @@ func (m *Model) openDetail() {
 	if idx >= 0 && idx < len(m.sessions) {
 		s := m.sessions[idx]
 		text := engine.ReportText(s.Metrics, s.Anomalies, s.Health)
-		m.viewport = viewport.New(m.width-4, m.height-6)
+
+		// Use sensible defaults before first WindowSizeMsg
+		vw := m.width - 4
+		vh := m.height - 6
+		if vw < 40 {
+			vw = 80
+		}
+		if vh < 10 {
+			vh = 20
+		}
+
+		m.viewport = viewport.New(vw, vh)
 		m.viewport.SetContent(text)
 		m.detailReady = true
 
@@ -936,13 +960,42 @@ func (m Model) renderOverview() string {
 		critPct = ov.Critical * 100 / ov.TotalSessions
 	}
 
-	// Card: Stats
-	statsCard := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("63")).
-		Padding(1, 2).
-		Width(40)
+	// ── Responsive card sizing ──
+	usableW := m.width - 4 // after baseStyle borders
+	if usableW < 50 {
+		usableW = 50 // absolute minimum
+	}
 
+	card := func(color, content string, width int) string {
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(color)).
+			Padding(1, 2).
+			Width(width).
+			Render(content)
+	}
+
+	// Compute column widths per breakpoint
+	var colW, colW2, colW3 int
+	var layoutMode string // "3col", "2col", "stack"
+	if usableW > 110 {
+		colW = (usableW - 8) / 3
+		colW2 = colW
+		colW3 = colW
+		layoutMode = "3col"
+	} else if usableW >= 80 {
+		colW = (usableW - 4) / 2
+		colW2 = colW
+		colW3 = colW
+		layoutMode = "2col"
+	} else {
+		colW = usableW
+		colW2 = usableW
+		colW3 = usableW
+		layoutMode = "stack"
+	}
+
+	// ── Stats Card ──
 	statsContent := fmt.Sprintf("%s  %d\n", boldStyle.Render(i18n.T("overview_total")), ov.TotalSessions)
 	statsContent += fmt.Sprintf("%s     %s %d (%d%%)\n",
 		greenStyle.Render("🟢"), i18n.T("overview_healthy"), ov.Healthy, healthyPct)
@@ -952,16 +1005,9 @@ func (m Model) renderOverview() string {
 		redStyle.Render("🔴"), i18n.T("overview_critical"), ov.Critical, critPct)
 	statsContent += fmt.Sprintf("%s     %d\n", orangeStyle.Render("⚠️"), len(ov.AnomaliesTop))
 	statsContent += fmt.Sprintf("%s  $%.2f", cyanStyle.Render("💰"), ov.TotalCost)
+	statsCard := card("63", statsContent, colW)
 
-	leftPanel := statsCard.Render(statsContent)
-
-	// Card: By Agent
-	agentCard := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("39")).
-		Padding(1, 2).
-		Width(35)
-
+	// ── Agents Card ──
 	agentContent := boldStyle.Render(i18n.T("overview_agents")) + "\n"
 	type akv struct {
 		k string
@@ -977,21 +1023,21 @@ func (m Model) renderOverview() string {
 		if d, ok := engine.ToolDisplayNames[a.k]; ok {
 			display = d
 		}
-		if len(display) > 20 {
-			display = display[:20]
+		maxLen := colW2 - 15
+		if maxLen > 20 {
+			maxLen = 20
 		}
-		agentContent += fmt.Sprintf("  %-20s %3d  $%7.2f\n", display, a.v.Sessions, a.v.Cost)
+		if maxLen < 8 {
+			maxLen = 8
+		}
+		if len(display) > maxLen {
+			display = display[:maxLen]
+		}
+		agentContent += fmt.Sprintf("  %-*s %3d  $%7.2f\n", maxLen, display, a.v.Sessions, a.v.Cost)
 	}
+	agentCard := card("39", agentContent, colW2)
 
-	midPanel := agentCard.Render(agentContent)
-
-	// Card: By Model
-	modelCard := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("220")).
-		Padding(1, 2).
-		Width(35)
-
+	// ── Models Card ──
 	modelContent := boldStyle.Render(i18n.T("overview_models")) + "\n"
 	type mkv struct {
 		k string
@@ -1002,45 +1048,63 @@ func (m Model) renderOverview() string {
 		models = append(models, mkv{k, v})
 	}
 	sort.Slice(models, func(i, j int) bool { return models[i].v.Cost > models[j].v.Cost })
+	maxModels := 6
+	if layoutMode == "stack" {
+		maxModels = 4
+	}
 	for i, mdl := range models {
-		if i >= 6 {
+		if i >= maxModels {
 			break
 		}
 		display := mdl.k
-		if len(display) > 18 {
-			display = display[:18]
+		maxLen := colW3 - 15
+		if maxLen > 18 {
+			maxLen = 18
 		}
-		modelContent += fmt.Sprintf("  %-18s %3d  $%7.2f\n", display, mdl.v.Sessions, mdl.v.Cost)
+		if maxLen < 8 {
+			maxLen = 8
+		}
+		if len(display) > maxLen {
+			display = display[:maxLen]
+		}
+		modelContent += fmt.Sprintf("  %-*s %3d  $%7.2f\n", maxLen, display, mdl.v.Sessions, mdl.v.Cost)
 	}
+	modelCard := card("220", modelContent, colW3)
 
-	rightPanel := modelCard.Render(modelContent)
-
-	// Card: Anomalies
-	anomalyCard := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("196")).
-		Padding(1, 2).
-		Width(35)
-
+	// ── Anomalies Card ──
+	anomalyCardW := colW
+	if layoutMode == "2col" {
+		anomalyCardW = colW2
+	}
 	anomalyContent := boldStyle.Render(i18n.T("overview_recent_anomalies")) + "\n"
 	if len(ov.AnomaliesTop) == 0 {
 		anomalyContent += greenStyle.Render("  " + i18n.T("overview_no_anomalies"))
 	} else {
+		maxAnom := 5
+		if layoutMode == "stack" {
+			maxAnom = 3
+		}
 		for i, a := range ov.AnomaliesTop {
-			if i >= 5 {
+			if i >= maxAnom {
 				break
 			}
 			name := a.Session
-			if len(name) > 22 {
-				name = name[:22]
+			nameMax := anomalyCardW - 15
+			if nameMax > 22 {
+				nameMax = 22
 			}
-			anomalyContent += fmt.Sprintf("  ⚠️ %-22s %s\n", name, a.Type)
+			if nameMax < 8 {
+				nameMax = 8
+			}
+			if len(name) > nameMax {
+				name = name[:nameMax]
+			}
+			anomalyContent += fmt.Sprintf("  ⚠️ %-*s %s\n", nameMax, name, a.Type)
 		}
 	}
+	anomalyCard := card("196", anomalyContent, anomalyCardW)
 
-	bottomPanel := anomalyCard.Render(anomalyContent)
-
-	// Health trend indicator
+	// ── Health Trend ──
 	m.healthTrend = engine.AnalyzeHealthTrend(m.sessions)
 	var trendLine string
 	if m.healthTrend.Regressing {
@@ -1052,17 +1116,27 @@ func (m Model) renderOverview() string {
 	} else {
 		trendLine = greenStyle.Render(m.healthTrend.Message)
 	}
+	trendCardW := colW
+	if layoutMode == "2col" {
+		trendCardW = colW3
+	}
+	trendCard := card("63", boldStyle.Render(i18n.T("trend_title"))+"\n"+trendLine, trendCardW)
 
-	trendCard := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("63")).
-		Padding(1, 2).
-		Width(40).
-		Render(boldStyle.Render(i18n.T("trend_title")) + "\n" + trendLine)
-
-	// Layout
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", midPanel, "  ", rightPanel)
-	result := lipgloss.JoinVertical(lipgloss.Left, topRow, "", lipgloss.JoinHorizontal(lipgloss.Top, bottomPanel, "  ", trendCard))
+	// ── Responsive Layout ──
+	var result string
+	switch layoutMode {
+	case "3col":
+		topRow := lipgloss.JoinHorizontal(lipgloss.Top, statsCard, "  ", agentCard, "  ", modelCard)
+		bottomRow := lipgloss.JoinHorizontal(lipgloss.Top, anomalyCard, "  ", trendCard)
+		result = lipgloss.JoinVertical(lipgloss.Left, topRow, "", bottomRow)
+	case "2col":
+		row1 := lipgloss.JoinHorizontal(lipgloss.Top, statsCard, "  ", agentCard)
+		row2 := lipgloss.JoinHorizontal(lipgloss.Top, modelCard, "  ", anomalyCard)
+		result = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2, "", trendCard)
+	default:
+		result = lipgloss.JoinVertical(lipgloss.Left,
+			statsCard, "", agentCard, "", modelCard, "", anomalyCard, "", trendCard)
+	}
 
 	return baseStyle.Render(result)
 }
