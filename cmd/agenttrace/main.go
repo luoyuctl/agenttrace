@@ -20,6 +20,7 @@ func main() {
 	format := flag.String("f", "text", "Output format: text, json")
 	dir := flag.String("d", "", "Directory containing session JSONL files")
 	compare := flag.Bool("compare", false, "Compare all sessions")
+	overview := flag.Bool("overview", false, "Show global overview dashboard")
 	model := flag.String("m", "default", "Model for pricing")
 	output := flag.String("o", "", "Save report to file")
 	latest := flag.Bool("latest", false, "Analyze latest session")
@@ -67,7 +68,7 @@ func main() {
 	}
 
 	path := flag.Arg(0)
-	hasAction := path != "" || *latest || *compare
+	hasAction := path != "" || *latest || *compare || *overview
 
 	if !hasAction {
 		// Launch TUI
@@ -77,6 +78,27 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+		return
+	}
+
+	// Overview mode
+	if *overview {
+		files := engine.FindSessionFiles(sessionsDir)
+		if len(files) == 0 {
+			fmt.Fprintf(os.Stderr, i18n.T("no_session_files")+"\n", sessionsDir)
+			os.Exit(1)
+		}
+		var sessions []engine.Session
+		for _, f := range files {
+			s, err := engine.LoadSession(f)
+			if err != nil {
+				continue
+			}
+			sessions = append(sessions, *s)
+		}
+		ov := engine.ComputeOverview(sessions)
+		out := engine.ReportOverview(ov, sessions)
+		fmt.Print(out)
 		return
 	}
 

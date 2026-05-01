@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.0.4"
+const Version = "0.0.5"
 
 // ── Pricing (USD per 1M tokens) ──
 
@@ -102,6 +102,9 @@ type Metrics struct {
 	SessionEnd      string
 	DurationSec     float64
 	CostEstimated   float64
+	LoopRetryEvents int     `json:"-"`
+	LoopGroups      int     `json:"-"`
+	LoopCostEst     float64 `json:"-"`
 }
 
 // ── Anomaly ──
@@ -121,6 +124,230 @@ type Session struct {
 	Metrics   Metrics
 	Anomalies []Anomaly
 	Health    int
+	LoopCost  LoopCost
+}
+
+// ── Loop Cost Analysis ──
+
+type LoopCost struct {
+	RetryCost       float64 `json:"retry_cost"`
+	ToolLoopCost    float64 `json:"tool_loop_cost"`
+	FormatRetryCost float64 `json:"format_retry_cost"`
+	TotalLoopCost   float64 `json:"total_loop_cost"`
+	RetryEvents     int     `json:"retry_events"`
+	LoopGroups      int     `json:"loop_groups"`
+}
+
+// ── Global Overview ──
+
+// AgentOverview holds per-agent aggregate stats.
+type AgentOverview struct {
+	Sessions int
+	Cost     float64
+}
+
+// ModelOverview holds per-model aggregate stats.
+type ModelOverview struct {
+	Sessions int
+	Cost     float64
+}
+
+// AnomalyTop is a lightweight anomaly reference for the overview.
+type AnomalyTop struct {
+	Session string
+	Type    string
+	Age     string // human-readable relative time
+}
+
+// Overview aggregates all sessions for the dashboard.
+type Overview struct {
+	TotalSessions int
+	Healthy       int
+	Warning       int
+	Critical      int
+	TotalCost     float64
+	AnomaliesTop  []AnomalyTop
+	ByAgent       map[string]AgentOverview
+	ByModel       map[string]ModelOverview
+}
+
+// ComputeOverview builds the global dashboard overview from loaded sessions.
+func ComputeOverview(sessions []Session) Overview {
+	ov := Overview{
+		ByAgent: make(map[string]AgentOverview),
+		ByModel: make(map[string]ModelOverview),
+	}
+	for _, s := range sessions {
+		ov.TotalSessions++
+		ov.TotalCost += s.Metrics.CostEstimated
+		switch {
+		case s.Health >= 80:
+			ov.Healthy++
+		case s.Health >= 50:
+			ov.Warning++
+		default:
+			ov.Critical++
+		}
+		// By agent
+		agent := s.Metrics.SourceTool
+		ao := ov.ByAgent[agent]
+		ao.Sessions++
+		ao.Cost += s.Metrics.CostEstimated
+		ov.ByAgent[agent] = ao
+		// By model
+		model := s.Metrics.ModelUsed
+		if model == "" {
+			model = "unknown"
+		}
+		mo := ov.ByModel[model]
+		mo.Sessions++
+		mo.Cost += s.Metrics.CostEstimated
+		ov.ByModel[model] = mo
+		// Anomalies
+		for _, a := range s.Anomalies {
+			ov.AnomaliesTop = append(ov.AnomaliesTop, AnomalyTop{
+				Session: s.Name,
+				Type:    a.Type,
+				Age:     "now",
+			})
+		}
+	}
+	// Sort anomalies by severity-ish order (high → medium → low)
+	sort.Slice(ov.AnomaliesTop, func(i, j int) bool {
+		severityOrder := map[string]int{"high": 0, "medium": 1, "low": 2}
+		ai := severityOrder[ov.AnomaliesTop[i].Type]
+		aj := severityOrder[ov.AnomaliesTop[j].Type]
+		return ai < aj
+	})
+	return ov
+}
+
+// ── Aggregate Stats (for btop-style health panel) ──
+
+// AggregateStats holds aggregate metrics for the health panel.
+type AggregateStats struct {
+	TotalSessions int
+	Healthy       int
+	Warning       int
+	Critical      int
+	AvgHealth     float64
+	TotalCost     float64
+}
+
+// ComputeAggregateStats computes AggregateStats from sessions.
+func ComputeAggregateStats(sessions []Session) AggregateStats {
+	var as AggregateStats
+	as.TotalSessions = len(sessions)
+	if len(sessions) == 0 {
+		return as
+	}
+	sumHealth := 0
+	sumCost := 0.0
+	for _, s := range sessions {
+		sumHealth += s.Health
+		sumCost += s.Metrics.CostEstimated
+		switch {
+		case s.Health >= 80:
+			as.Healthy++
+		case s.Health >= 50:
+			as.Warning++
+		default:
+			as.Critical++
+		}
+	}
+	as.TotalCost = sumCost
+	as.AvgHealth = float64(sumHealth) / float64(len(sessions))
+	return as
+}
+
+// ── Filter Sessions ──
+
+// FilterSessions filters sessions by a text query (case-insensitive match on Name and SourceTool).
+func FilterSessions(sessions []Session, query string) []Session {
+	if query == "" {
+		return sessions
+	}
+	q := strings.ToLower(query)
+	var filtered []Session
+	for _, s := range sessions {
+		if strings.Contains(strings.ToLower(s.Name), q) ||
+			strings.Contains(strings.ToLower(s.Metrics.SourceTool), q) {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
+// ── Loop Analysis ──
+
+// LoopResult is the result of analyzing events for loops.
+type LoopResult struct {
+	HasLoop   bool
+	LoopType  string // "retry", "tool_loop", etc.
+	Turns     int
+	LoopCost  float64
+}
+
+// AnalyzeLoops detects redundant/looping behavior in events.
+// It looks for patterns of repeated tool calls with the same name.
+func AnalyzeLoops(events []Event) LoopResult {
+	var lr LoopResult
+	if len(events) == 0 {
+		return lr
+	}
+	// Count consecutive repeated tool calls
+	type toolCallKey struct {
+		name string
+		id   string
+	}
+	seen := make(map[string]int) // toolName → consecutive count
+	maxRepeat := 0
+	repeatName := ""
+	lastTool := ""
+	consecutive := 0
+	for _, ev := range events {
+		if len(ev.ToolCalls) > 0 {
+			for _, tc := range ev.ToolCalls {
+				key := tc.Name
+				seen[key]++
+				if key == lastTool {
+					consecutive++
+				} else {
+					if consecutive > maxRepeat {
+						maxRepeat = consecutive
+						repeatName = lastTool
+					}
+					consecutive = 1
+				}
+				lastTool = key
+			}
+		}
+	}
+	if consecutive > maxRepeat {
+		maxRepeat = consecutive
+		repeatName = lastTool
+	}
+
+	if maxRepeat >= 3 {
+		lr.HasLoop = true
+		lr.LoopType = "tool_loop"
+		if repeatName != "" {
+			lr.LoopType = repeatName + "_loop"
+		}
+		lr.Turns = maxRepeat
+		// Estimate loop cost: each turn is roughly cost of 1 assistant turn
+		assistantTurns := 0
+		for _, ev := range events {
+			if ev.Role == "assistant" {
+				assistantTurns++
+			}
+		}
+		if assistantTurns > 0 {
+			avgCost := 0.015 // rough estimate per turn
+			lr.LoopCost = float64(lr.Turns) * avgCost
+		}
+	}
+	return lr
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1413,3 +1640,4 @@ func SuccessRate(ok, total int) string {
 	}
 	return fmt.Sprintf("%.0f%%", float64(ok)/float64(total)*100)
 }
+

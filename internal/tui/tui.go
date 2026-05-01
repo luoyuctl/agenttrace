@@ -54,7 +54,8 @@ var (
 type view int
 
 const (
-	viewList view = iota
+	viewOverview view = iota
+	viewList
 	viewDetail
 	viewCompare
 )
@@ -65,6 +66,21 @@ type Model struct {
 	dir      string
 	lang     i18n.Lang
 
+	// Overview data
+	overview engine.Overview
+
+	// Filter state
+	filterText  string
+	filterMode  string // "", "health", "source"
+	filterValue string // e.g. "good", "hermes_jsonl"
+
+	// 文本筛选输入
+	filterInput  string // 用户输入的筛选文本
+	filterActive bool   // 是否处于文本筛选模式
+
+	// 全局聚合统计
+	aggStats engine.AggregateStats
+
 	// List view
 	table       table.Model
 	tableReady  bool
@@ -72,6 +88,7 @@ type Model struct {
 	// Detail view
 	viewport    viewport.Model
 	detailReady bool
+	loopResult  engine.LoopResult // 循环检测结果
 
 	// Compare view
 	compareLines []string
@@ -85,6 +102,7 @@ type Model struct {
 
 func New(dir string) Model {
 	sessions := engine.LoadAll(dir)
+	overview := engine.ComputeOverview(sessions)
 
 	// Build table
 	columns := []table.Column{
@@ -207,10 +225,12 @@ func New(dir string) Model {
 	ct.SetStyles(cs)
 
 	return Model{
-		view:         viewList,
+		view:         viewOverview,
 		sessions:     sessions,
 		dir:          dir,
 		lang:         i18n.EN,
+		overview:     overview,
+		aggStats:     engine.ComputeAggregateStats(sessions),
 		table:        t,
 		tableReady:   true,
 		compareTable: ct,
@@ -252,26 +272,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 
-		case "esc":
-			if m.view == viewDetail || m.view == viewCompare {
-				m.view = viewList
-			}
-
 		case "tab", "`":
 			// Cycle views
 			switch m.view {
+			case viewOverview:
+				m.view = viewList
 			case viewList:
 				m.view = viewDetail
 				m.openDetail()
 			case viewDetail:
 				m.view = viewCompare
 			case viewCompare:
-				m.view = viewList
+				m.view = viewOverview
 			}
 
 		case "r":
 			// Reload
 			m.sessions = engine.LoadAll(m.dir)
+			m.overview = engine.ComputeOverview(m.sessions)
+			m.aggStats = engine.ComputeAggregateStats(m.sessions)
 			m.refreshTable()
 			m.refreshCompare()
 
@@ -285,6 +304,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			i18n.SetLang(m.lang)
 			m.refreshColumns()
 
+		case "0":
+			m.view = viewOverview
 		case "1":
 			m.view = viewList
 		case "2":
@@ -293,7 +314,85 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "3":
 			m.view = viewCompare
 
+		case "/":
+			if m.view == viewList {
+				m.filterActive = true
+				m.filterInput = ""
+			}
+
+		// 文本筛选输入处理
+		case "enter":
+			if m.filterActive {
+				// 应用文本筛选
+				m.filterText = m.filterInput
+				m.filterActive = false
+				m.applyTextFilter()
+			}
+		case "esc":
+			if m.filterActive {
+				// 退出筛选模式
+				m.filterActive = false
+				m.filterInput = ""
+			} else if m.view == viewDetail || m.view == viewCompare {
+				m.view = viewList
+			}
+		case "backspace":
+			if m.filterActive && len(m.filterInput) > 0 {
+				m.filterInput = m.filterInput[:len(m.filterInput)-1]
+			}
+
+		case "f":
+			if !m.filterActive && m.view == viewList {
+				// Cycle health filter
+				switch m.filterMode {
+				case "health":
+					if m.filterValue == "good" {
+						m.filterValue = "warn"
+					} else if m.filterValue == "warn" {
+						m.filterValue = "crit"
+					} else {
+						m.filterMode = ""
+						m.filterValue = ""
+					}
+				default:
+					m.filterMode = "health"
+					m.filterValue = "good"
+				}
+				m.applyFilter()
+			}
+
+		case "s":
+			if !m.filterActive && m.view == viewList {
+				// Cycle source filter
+				if m.filterMode != "source" {
+					m.filterMode = "source"
+					m.filterValue = "hermes_jsonl"
+				} else {
+					// Cycle through available sources
+					sources := m.getAvailableSources()
+					for i, src := range sources {
+						if src == m.filterValue && i+1 < len(sources) {
+							m.filterValue = sources[i+1]
+							break
+						} else if src == m.filterValue {
+							m.filterMode = ""
+							m.filterValue = ""
+							break
+						}
+					}
+				}
+				m.applyFilter()
+			}
+
 		default:
+			// 筛选输入模式：捕获按键
+			if m.filterActive {
+				// 可打印字符追加到 filterInput
+				if len(msg.Runes) > 0 {
+					m.filterInput += string(msg.Runes)
+				}
+				return m, nil
+			}
 			// Pass keys to the active component
 			switch m.view {
 			case viewList:
@@ -331,6 +430,14 @@ func (m *Model) openDetail() {
 		m.viewport = viewport.New(m.width-4, m.height-6)
 		m.viewport.SetContent(text)
 		m.detailReady = true
+
+		// 循环检测：解析会话事件并分析循环
+		events, err := engine.Parse(s.Path)
+		if err == nil {
+			m.loopResult = engine.AnalyzeLoops(events)
+		} else {
+			m.loopResult = engine.LoopResult{}
+		}
 	}
 }
 
@@ -444,16 +551,40 @@ func (m Model) View() string {
 	// Content
 	var content string
 	switch m.view {
+	case viewOverview:
+		content = m.renderOverview()
 	case viewList:
 		if len(m.sessions) == 0 {
 			content = baseStyle.Render(lipgloss.NewStyle().Padding(1).Render(i18n.T("empty_sessions_hint")))
 		} else {
-			content = baseStyle.Render(m.table.View())
+			var filterBar string
+			// 文本筛选输入栏
+			if m.filterActive {
+				filterBar = lipgloss.NewStyle().
+					Border(lipgloss.NormalBorder()).
+					BorderForeground(lipgloss.Color("63")).
+					Padding(0, 1).
+					Render(fmt.Sprintf("/ %s_", m.filterInput))
+				filterBar += "\n"
+			} else if m.filterText != "" || m.filterMode != "" {
+				filtInfo := fmt.Sprintf("Filter: %s=%s | %d/%d sessions",
+					m.filterMode, m.filterValue,
+					len(m.getFilteredSessions()), m.overview.TotalSessions)
+				filterBar = dimStyle.Render(filtInfo) + "\n"
+			}
+			content = baseStyle.Render(filterBar + m.table.View())
 		}
 	case viewDetail:
 		if m.detailReady {
 			scrollInfo := dimStyle.Render(fmt.Sprintf(" Scroll: %.0f%% ", m.viewport.ScrollPercent()*100))
-			content = baseStyle.Render(lipgloss.JoinVertical(lipgloss.Left, scrollInfo, m.viewport.View()))
+			detailContent := lipgloss.JoinVertical(lipgloss.Left, scrollInfo, m.viewport.View())
+
+			// 循环成本展示
+			loopSection := m.renderLoopAnalysis()
+			if loopSection != "" {
+				detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, "", loopSection)
+			}
+			content = baseStyle.Render(detailContent)
 		} else {
 			content = baseStyle.Render(dimStyle.Render(i18n.T("select_session_hint")))
 		}
@@ -472,7 +603,7 @@ func (m Model) View() string {
 }
 
 func (m Model) renderTabs() string {
-	tabs := []string{i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_compare")}
+	tabs := []string{i18n.T("tab_overview"), i18n.T("tab_list"), i18n.T("tab_detail"), i18n.T("tab_compare")}
 	var rendered []string
 	for i, t := range tabs {
 		active := int(m.view) == i
@@ -498,14 +629,53 @@ func (m Model) renderTabs() string {
 func (m Model) renderHelp() string {
 	var keys string
 	switch m.view {
+	case viewOverview:
+		keys = i18n.T("help_overview")
 	case viewList:
-		keys = i18n.T("help_list") + " | L " + i18n.LangLabel()
+		if m.filterActive {
+			keys = i18n.T("help_list") + " · Esc: clear filter"
+		} else {
+			keys = i18n.T("help_list")
+		}
 	case viewDetail:
-		keys = i18n.T("help_detail") + " | L " + i18n.LangLabel()
+		keys = i18n.T("help_detail")
 	case viewCompare:
-		keys = i18n.T("help_compare") + " | h sort-health | L " + i18n.LangLabel()
+		keys = i18n.T("help_compare")
 	}
 	return helpStyle.Render(" " + keys + " ")
+}
+
+// renderLoopAnalysis 渲染循环成本分析 section
+func (m Model) renderLoopAnalysis() string {
+	if !m.detailReady {
+		return ""
+	}
+	lr := m.loopResult
+	if lr.HasLoop {
+		// 检测到循环：红色警告
+		loopCard := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("196")).
+			Padding(0, 1)
+		content := fmt.Sprintf("%s %s: %s — %d %s, %s $%.4f",
+			redStyle.Render("⚠"),
+			boldStyle.Render(i18n.T("loop_detected")),
+			lr.LoopType,
+			lr.Turns,
+			i18n.T("loop_turns"),
+			i18n.T("loop_cost"),
+			lr.LoopCost)
+		return loopCard.Render(content)
+	}
+	// 未检测到循环：绿色
+	loopCard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("42")).
+		Padding(0, 1)
+	content := fmt.Sprintf("%s %s",
+		greenStyle.Render("✅"),
+		i18n.T("no_loop"))
+	return loopCard.Render(content)
 }
 
 // refreshColumns rebuilds column titles for both tables after a language switch.
@@ -581,4 +751,222 @@ func (m *Model) adjustColumnWidths(width int) {
 		{Title: i18n.T("health"), Width: healthW},
 	}
 	m.compareTable.SetColumns(compCols)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OVERVIEW RENDER
+// ═══════════════════════════════════════════════════════════════
+
+func (m Model) renderOverview() string {
+	ov := m.overview
+
+	// Stats percentages
+	healthyPct := 0
+	warnPct := 0
+	critPct := 0
+	if ov.TotalSessions > 0 {
+		healthyPct = ov.Healthy * 100 / ov.TotalSessions
+		warnPct = ov.Warning * 100 / ov.TotalSessions
+		critPct = ov.Critical * 100 / ov.TotalSessions
+	}
+
+	// Card: Stats
+	statsCard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63")).
+		Padding(1, 2).
+		Width(40)
+
+	statsContent := fmt.Sprintf("%s  %d\n", boldStyle.Render(i18n.T("overview_total")), ov.TotalSessions)
+	statsContent += fmt.Sprintf("%s     %s %d (%d%%)\n",
+		greenStyle.Render("🟢"), i18n.T("overview_healthy"), ov.Healthy, healthyPct)
+	statsContent += fmt.Sprintf("%s     %s %d (%d%%)\n",
+		yellowStyle.Render("🟡"), i18n.T("overview_warning"), ov.Warning, warnPct)
+	statsContent += fmt.Sprintf("%s     %s %d (%d%%)\n",
+		redStyle.Render("🔴"), i18n.T("overview_critical"), ov.Critical, critPct)
+	statsContent += fmt.Sprintf("%s     %d\n", orangeStyle.Render("⚠️"), len(ov.AnomaliesTop))
+	statsContent += fmt.Sprintf("%s  $%.2f", cyanStyle.Render("💰"), ov.TotalCost)
+
+	leftPanel := statsCard.Render(statsContent)
+
+	// Card: By Agent
+	agentCard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")).
+		Padding(1, 2).
+		Width(35)
+
+	agentContent := boldStyle.Render(i18n.T("overview_agents")) + "\n"
+	type akv struct {
+		k string
+		v engine.AgentOverview
+	}
+	var agents []akv
+	for k, v := range ov.ByAgent {
+		agents = append(agents, akv{k, v})
+	}
+	sort.Slice(agents, func(i, j int) bool { return agents[i].v.Sessions > agents[j].v.Sessions })
+	for _, a := range agents {
+		display := a.k
+		if d, ok := engine.ToolDisplayNames[a.k]; ok {
+			display = d
+		}
+		if len(display) > 20 {
+			display = display[:20]
+		}
+		agentContent += fmt.Sprintf("  %-20s %3d  $%7.2f\n", display, a.v.Sessions, a.v.Cost)
+	}
+
+	midPanel := agentCard.Render(agentContent)
+
+	// Card: By Model
+	modelCard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("220")).
+		Padding(1, 2).
+		Width(35)
+
+	modelContent := boldStyle.Render(i18n.T("overview_models")) + "\n"
+	type mkv struct {
+		k string
+		v engine.ModelOverview
+	}
+	var models []mkv
+	for k, v := range ov.ByModel {
+		models = append(models, mkv{k, v})
+	}
+	sort.Slice(models, func(i, j int) bool { return models[i].v.Cost > models[j].v.Cost })
+	for i, mdl := range models {
+		if i >= 6 {
+			break
+		}
+		display := mdl.k
+		if len(display) > 18 {
+			display = display[:18]
+		}
+		modelContent += fmt.Sprintf("  %-18s %3d  $%7.2f\n", display, mdl.v.Sessions, mdl.v.Cost)
+	}
+
+	rightPanel := modelCard.Render(modelContent)
+
+	// Card: Anomalies
+	anomalyCard := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("196")).
+		Padding(1, 2).
+		Width(35)
+
+	anomalyContent := boldStyle.Render(i18n.T("overview_recent_anomalies")) + "\n"
+	if len(ov.AnomaliesTop) == 0 {
+		anomalyContent += greenStyle.Render("  " + i18n.T("overview_no_anomalies"))
+	} else {
+		for i, a := range ov.AnomaliesTop {
+			if i >= 5 {
+				break
+			}
+			name := a.Session
+			if len(name) > 22 {
+				name = name[:22]
+			}
+			anomalyContent += fmt.Sprintf("  ⚠️ %-22s %s\n", name, a.Type)
+		}
+	}
+
+	bottomPanel := anomalyCard.Render(anomalyContent)
+
+	// Layout
+	topRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", midPanel, "  ", rightPanel)
+	result := lipgloss.JoinVertical(lipgloss.Left, topRow, "", bottomPanel)
+
+	return baseStyle.Render(result)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FILTER HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+func (m *Model) getAvailableSources() []string {
+	seen := map[string]bool{}
+	var sources []string
+	for _, s := range m.sessions {
+		src := s.Metrics.SourceTool
+		if !seen[src] {
+			seen[src] = true
+			sources = append(sources, src)
+		}
+	}
+	return sources
+}
+
+func (m *Model) getFilteredSessions() []engine.Session {
+	var filtered []engine.Session
+	for _, s := range m.sessions {
+		keep := true
+		switch m.filterMode {
+		case "health":
+			switch m.filterValue {
+			case "good":
+				keep = s.Health >= 80
+			case "warn":
+				keep = s.Health >= 50 && s.Health < 80
+			case "crit":
+				keep = s.Health < 50
+			default:
+				keep = false
+			}
+		case "source":
+			keep = s.Metrics.SourceTool == m.filterValue
+		}
+		if keep {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
+func (m *Model) applyFilter() {
+	filtered := m.getFilteredSessions()
+	m.rebuildTableWithSessions(filtered)
+}
+
+// applyTextFilter 应用文本模糊筛选
+func (m *Model) applyTextFilter() {
+	filtered := engine.FilterSessions(m.sessions, m.filterText)
+	m.rebuildTableWithSessions(filtered)
+}
+
+func (m *Model) rebuildTableWithSessions(filtered []engine.Session) {
+	var rows []table.Row
+	for _, s := range filtered {
+		met := s.Metrics
+		totalTools := met.ToolCallsOK + met.ToolCallsFail
+		sr := "N/A"
+		if totalTools > 0 {
+			sr = fmt.Sprintf("%.0f", float64(met.ToolCallsOK)/float64(totalTools)*100)
+		}
+		sourceDisplay := met.SourceTool
+		if display, ok := engine.ToolDisplayNames[met.SourceTool]; ok {
+			sourceDisplay = display
+		}
+		healthRaw := fmt.Sprintf("  %d/100 %s", s.Health, engine.HealthEmoji(s.Health))
+		var healthCol string
+		switch {
+		case s.Health >= 80:
+			healthCol = healthGoodStyle.Render(healthRaw)
+		case s.Health >= 50:
+			healthCol = healthWarnStyle.Render(healthRaw)
+		default:
+			healthCol = healthBadStyle.Render(healthRaw)
+		}
+		rows = append(rows, table.Row{
+			s.Name, sourceDisplay,
+			fmt.Sprintf("%d", met.AssistantTurns),
+			fmt.Sprintf("%d", met.ToolCallsTotal),
+			sr,
+			fmt.Sprintf("$%.4f", met.CostEstimated),
+			healthCol,
+		})
+	}
+	m.table.SetRows(rows)
+	m.table.SetCursor(0)
 }

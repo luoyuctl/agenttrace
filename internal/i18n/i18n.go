@@ -230,17 +230,21 @@ var translations = map[string]map[Lang]string{
 	},
 
 	// ── TUI help bars ──
+	"help_overview": {
+		EN: "Tab: sessions · /: filter · q: quit",
+		ZH: "Tab: 会话 · /: 筛选 · q: 退出",
+	},
 	"help_list": {
-		EN: "↑↓/kj navigate | Enter detail | ←→ sort | s reverse | r refresh | Tab next | 1/2/3 views | q quit",
-		ZH: "↑↓/kj 导航 | Enter 详情 | ←→ 排序 | s 反转 | r 刷新 | Tab 切换 | 1/2/3 视图 | q 退出",
+		EN: "↑↓: select · Enter: detail · /: filter · Tab: overview · q: quit",
+		ZH: "↑↓: 选择 · Enter: 详情 · /: 筛选 · Tab: 概览 · q: 退出",
 	},
 	"help_detail": {
-		EN: "↑↓/kj/PgUp/PgDn scroll | Esc back | Tab next | q quit",
-		ZH: "↑↓/kj/PgUp/PgDn 滚动 | Esc 返回 | Tab 切换 | q 退出",
+		EN: "Esc: back · Tab: overview · q: quit",
+		ZH: "Esc: 返回 · Tab: 概览 · q: 退出",
 	},
 	"help_compare": {
-		EN: "↑↓/kj scroll | Esc back | Tab next | r refresh | q quit",
-		ZH: "↑↓/kj 滚动 | Esc 返回 | Tab 切换 | r 刷新 | q 退出",
+		EN: "h: sort health · Tab: overview · q: quit",
+		ZH: "h: 健康排序 · Tab: 概览 · q: 退出",
 	},
 
 	// ── CLI / main ──
@@ -343,6 +347,182 @@ var translations = map[string]map[Lang]string{
 	"separator_single": {
 		EN: "─",
 		ZH: "─",
+	},
+
+	// ── Overview ──
+	"overview_title": {
+		EN: "Global Overview",
+		ZH: "全局概览",
+	},
+	"overview_total": {
+		EN: "Total Sessions",
+		ZH: "总会话数",
+	},
+	"overview_healthy": {
+		EN: "Healthy",
+		ZH: "健康",
+	},
+	"overview_warning": {
+		EN: "Warning",
+		ZH: "警告",
+	},
+	"overview_critical": {
+		EN: "Critical",
+		ZH: "严重",
+	},
+	"overview_agents": {
+		EN: "By Agent",
+		ZH: "按 Agent",
+	},
+	"overview_models": {
+		EN: "By Model",
+		ZH: "按模型",
+	},
+	"overview_recent_anomalies": {
+		EN: "Recent Anomalies",
+		ZH: "近期异常",
+	},
+	"overview_no_anomalies": {
+		EN: "✅ No anomalies",
+		ZH: "✅ 无异常",
+	},
+	"tab_overview": {
+		EN: "0 Overview",
+		ZH: "0 概览",
+	},
+	"total_sessions": {
+		EN: "Total Sessions",
+		ZH: "总会话",
+	},
+	"healthy": {
+		EN: "Healthy",
+		ZH: "健康",
+	},
+	"warning": {
+		EN: "Warning",
+		ZH: "警告",
+	},
+	"critical": {
+		EN: "Critical",
+		ZH: "严重",
+	},
+	"anomalies_detected": {
+		EN: "Anomalies Detected",
+		ZH: "检测到异常",
+	},
+	"total_cost": {
+		EN: "Total Cost",
+		ZH: "总费用",
+	},
+	"health_trend": {
+		EN: "Health Trend",
+		ZH: "健康趋势",
+	},
+	"top_models": {
+		EN: "Top Models",
+		ZH: "热门模型",
+	},
+	"agent_breakdown": {
+		EN: "Agent Breakdown",
+		ZH: "Agent 分布",
+	},
+	"recent_anomalies": {
+		EN: "Recent Anomalies",
+		ZH: "近期异常",
+	},
+	"avg_health": {
+		EN: "Avg Health",
+		ZH: "平均健康",
+	},
+	"sessions_label": {
+		EN: "sessions",
+		ZH: "会话",
+	},
+	"last_scan": {
+		EN: "Last scan",
+		ZH: "上次扫描",
+	},
+	"no_data": {
+		EN: "No data",
+		ZH: "暂无数据",
+	},
+
+	// ── Filter ──
+	"filter_label": {
+		EN: "Filter",
+		ZH: "筛选",
+	},
+	"filter_placeholder": {
+		EN: "Type to filter...",
+		ZH: "输入关键词筛选...",
+	},
+	"filter_all": {
+		EN: "All",
+		ZH: "全部",
+	},
+	"filter_healthy": {
+		EN: "Healthy",
+		ZH: "健康",
+	},
+	"filter_warning": {
+		EN: "Warning",
+		ZH: "警告",
+	},
+	"filter_critical": {
+		EN: "Critical",
+		ZH: "严重",
+	},
+	"filter_has_anomaly": {
+		EN: "Has Anomaly",
+		ZH: "有异常",
+	},
+	"filter_source": {
+		EN: "Source",
+		ZH: "来源",
+	},
+	"filter_clear": {
+		EN: "Clear Filter",
+		ZH: "清除筛选",
+	},
+
+	// ── Loop Cost ──
+	"loop_detected": {
+		EN: "Loop Detected",
+		ZH: "检测到循环",
+	},
+	"retry_loop": {
+		EN: "Retry Loop",
+		ZH: "重试循环",
+	},
+	"tool_loop": {
+		EN: "Tool Loop",
+		ZH: "工具循环",
+	},
+	"loop_turns": {
+		EN: "Loop Turns",
+		ZH: "循环轮次",
+	},
+	"loop_cost": {
+		EN: "Loop Cost",
+		ZH: "循环成本",
+	},
+	"no_loop": {
+		EN: "No Loop Detected",
+		ZH: "未检测到循环",
+	},
+
+	// ── TUI help bars (extended) ──
+	"help_filter": {
+		EN: "Filter",
+		ZH: "筛选",
+	},
+	"help_tab": {
+		EN: "Tab switch view",
+		ZH: "Tab 切换视图",
+	},
+	"key_tab": {
+		EN: "Tab",
+		ZH: "Tab",
 	},
 }
 
