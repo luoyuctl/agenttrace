@@ -287,10 +287,6 @@ func AnalyzeLoops(events []Event) LoopResult {
 		return lr
 	}
 	// Count consecutive repeated tool calls
-	type toolCallKey struct {
-		name string
-		id   string
-	}
 	seen := make(map[string]int) // toolName → consecutive count
 	maxRepeat := 0
 	repeatName := ""
@@ -1492,7 +1488,7 @@ func Analyze(events []Event, model string) Metrics {
 	// Normalize: ToolCallsOK must not exceed ToolCallsTotal
 	// (some parsers may count tool results differently from requests)
 	if m.ToolCallsOK > m.ToolCallsTotal-m.ToolCallsFail {
-		m.ToolCallsOK = m.ToolCallsTotal - m.ToolCallsFail
+		m.ToolCallsOK = max(0, m.ToolCallsTotal-m.ToolCallsFail)
 	}
 
 	m.CostEstimated = round4(
@@ -1601,11 +1597,16 @@ func DetectAnomalies(m Metrics) []Anomaly {
 
 func HealthScore(m Metrics, anoms []Anomaly) int {
 	score := 100
-	// Normalize severity to lowercase for lookup
-	penalties := map[string]int{"high": 30, "medium": 12, "low": 4}
 	for _, a := range anoms {
-		sev := strings.ToLower(a.Severity)
-		score -= penalties[sev]
+		sev := a.Severity
+		switch {
+		case sev == i18n.T("severity_high"):
+			score -= 30
+		case sev == i18n.T("severity_medium"):
+			score -= 12
+		case sev == i18n.T("severity_low"):
+			score -= 4
+		}
 	}
 	if score < 0 {
 		score = 0
@@ -1771,7 +1772,7 @@ func parseTS(raw string) time.Time {
 		return time.Time{}
 	}
 	s := strings.ReplaceAll(raw, "Z", "+00:00")
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
 		return t
 	}
 	if t, err := time.Parse("2006-01-02T15:04:05", s); err == nil {
@@ -2135,9 +2136,9 @@ func compareFloat(field string, va, vb float64, prefer string) DiffEntry {
 // deltaStr 比较字符串并返回变化方向字符串
 func deltaStr(a, b string) string {
 	if a != b {
-		return "→"
+		return a + " → " + b
 	}
-	return "→"
+	return a
 }
 
 // successRateVal 计算工具调用成功率
@@ -2705,6 +2706,13 @@ func AnalyzeCacheEfficiency(m Metrics) CacheEfficiency {
 	if m.TokensInput > 0 {
 		ce.HitRate = float64(m.TokensCacheR) / float64(m.TokensInput) * 100
 	}
+	// Input tokens that could have been cached but weren't
+	ce.WastedTokens = m.TokensInput - m.TokensCacheR
+	if ce.WastedTokens < 0 {
+		ce.WastedTokens = 0
+	}
+	pricing := LookupPrice(m.ModelUsed)
+	ce.WastedCost = round4(float64(ce.WastedTokens) / 1e6 * pricing.Input)
 	switch {
 	case ce.HitRate >= 80:
 		ce.Rating = "excellent"
@@ -2801,7 +2809,11 @@ func DetectStuckPatterns(events []Event) []StuckPattern {
 		}
 	}
 	if emptyStreak >= 3 {
-		p = append(p, StuckPattern{Pattern: "empty_response", Severity: "critical"})
+		p = append(p, StuckPattern{
+			Pattern:     "empty_response",
+			Severity:    "critical",
+			Description: fmt.Sprintf("%d consecutive empty assistant responses — agent likely stuck", emptyStreak),
+		})
 	}
 	return p
 }
