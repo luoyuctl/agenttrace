@@ -65,9 +65,9 @@ func main() {
 
 	// Compare mode
 	if *compare {
-		files := engine.FindJSONLFiles(sessionsDir)
+		files := engine.FindSessionFiles(sessionsDir)
 		if len(files) == 0 {
-			fmt.Fprintf(os.Stderr, "No .jsonl files found in %s\n", sessionsDir)
+			fmt.Fprintf(os.Stderr, "No session files found in %s\n", sessionsDir)
 			os.Exit(1)
 		}
 		if len(files) > 15 {
@@ -97,9 +97,9 @@ func main() {
 	// Resolve target path
 	targetPath := path
 	if *latest {
-		files := engine.FindJSONLFiles(sessionsDir)
+		files := engine.FindSessionFiles(sessionsDir)
 		if len(files) == 0 {
-			fmt.Fprintf(os.Stderr, "No .jsonl files found in %s\n", sessionsDir)
+			fmt.Fprintf(os.Stderr, "No session files found in %s\n", sessionsDir)
 			os.Exit(1)
 		}
 		// Find latest by mtime
@@ -119,7 +119,7 @@ func main() {
 	}
 
 	if targetPath == "" {
-		files := engine.FindJSONLFiles(sessionsDir)
+		files := engine.FindSessionFiles(sessionsDir)
 		if len(files) > 0 {
 			targetPath = files[0]
 		}

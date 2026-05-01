@@ -1,5 +1,5 @@
-// Package engine provides the core analysis engine for agenttrace.
-// Ported from Python agenttrace v3 with identical logic.
+// Package engine provides the core analysis engine for agenttrace v4.
+// Pure Go. Supports 5 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode.
 package engine
 
 import (
@@ -13,21 +13,21 @@ import (
 	"time"
 )
 
-const Version = "4.0.0" // Go rewrite
+const Version = "4.0.0"
 
 // ── Pricing (USD per 1M tokens) ──
 
 type Price struct {
 	Input  float64
 	Output float64
-	CW     float64 // cache write
-	CR     float64 // cache read
+	CW     float64
+	CR     float64
 }
 
 var Pricing = map[string]Price{
-	"claude-opus-4":   {15.00, 75.00, 18.75, 1.50},
-	"claude-opus-4.5": {15.00, 75.00, 18.75, 1.50},
-	"claude-sonnet-4": {3.00, 15.00, 3.75, 0.30},
+	"claude-opus-4":     {15.00, 75.00, 18.75, 1.50},
+	"claude-opus-4.5":   {15.00, 75.00, 18.75, 1.50},
+	"claude-sonnet-4":   {3.00, 15.00, 3.75, 0.30},
 	"claude-sonnet-4.5": {3.00, 15.00, 3.75, 0.30},
 	"claude-haiku-3.5":  {0.80, 4.00, 1.00, 0.08},
 	"claude-haiku-4":    {0.80, 4.00, 1.00, 0.08},
@@ -41,33 +41,35 @@ var Pricing = map[string]Price{
 	"default":           {3.00, 15.00, 0, 0},
 }
 
-// ── Event (normalized) ──
+var ToolDisplayNames = map[string]string{
+	"hermes_jsonl": "Hermes Agent (JSONL)",
+	"hermes_json":  "Hermes Agent (.json)",
+	"claude_code":  "Claude Code",
+	"codex_cli":    "Codex CLI",
+	"gemini_cli":   "Gemini CLI",
+	"opencode":     "OpenCode",
+	"generic":      "Generic JSON/JSONL",
+}
+
+// ── Normalized Event ──
 
 type Event struct {
-	Role      string `json:"role"`
-	Content   string `json:"content,omitempty"`
-	Timestamp string `json:"timestamp,omitempty"`
-	// Claude thinking
-	Reasoning string `json:"reasoning,omitempty"`
-	Redacted  bool   `json:"redacted,omitempty"`
-	// Tool calls
-	ToolCall  *ToolCall   `json:"tool_call,omitempty"`
-	ToolCalls []ToolCall  `json:"tool_calls,omitempty"`
-	// Tool result
-	ToolCallID string `json:"tool_call_id,omitempty"`
-	IsError    bool   `json:"is_error,omitempty"`
-	// Meta
-	Usage     map[string]int `json:"usage,omitempty"`
-	ModelUsed string         `json:"model,omitempty"`
+	Role        string
+	Content     string
+	Timestamp   string
+	Reasoning   string
+	Redacted    bool
+	ToolCalls   []ToolCall
+	ToolCallID  string
+	IsError     bool
+	Usage       map[string]int
+	ModelUsed   string
+	SourceTool  string // which tool produced this session
 }
 
 type ToolCall struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	// Function wrapper (OpenAI style)
-	Function *struct {
-		Name string `json:"name"`
-	} `json:"function,omitempty"`
+	ID   string
+	Name string
 }
 
 // ── Metrics ──
@@ -92,6 +94,7 @@ type Metrics struct {
 	Timestamps      []time.Time
 	GapsSec         []float64
 	ModelUsed       string
+	SourceTool      string
 	SessionStart    string
 	SessionEnd      string
 	DurationSec     float64
@@ -110,93 +113,199 @@ type Anomaly struct {
 // ── Session ──
 
 type Session struct {
-	Name     string
-	Metrics  Metrics
+	Name      string
+	Path      string
+	Metrics   Metrics
 	Anomalies []Anomaly
-	Health   int
+	Health    int
 }
 
-// ── Format Detection ──
+// ═══════════════════════════════════════════════════════════════
+// FORMAT DETECTION
+// ═══════════════════════════════════════════════════════════════
 
-func DetectFormat(path string) string {
+// FormatInfo holds detected format + the parsed top-level data (to avoid re-reading).
+type FormatInfo struct {
+	Format string
+	Raw    []byte   // first ~8KB for JSONL, full content for single JSON
+	Doc    map[string]interface{} // parsed top-level JSON if single blob
+	Arr    []interface{}          // parsed top-level JSON array
+}
+
+func DetectFormat(path string) FormatInfo {
+	fi := FormatInfo{Format: "unknown"}
+
+	// Read first 64KB for detection
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "unknown"
+		return fi
 	}
 	content := strings.TrimSpace(string(data))
 	if content == "" {
-		return "unknown"
+		return fi
 	}
 
-	// Try first line as JSON
+	// Try as single JSON blob first
+	if content[0] == '{' || content[0] == '[' {
+		var doc map[string]interface{}
+		if err := json.Unmarshal(data, &doc); err == nil {
+			fi.Doc = doc
+			fi.Raw = data
+			fi.Format = detectSingleJSON(doc)
+			return fi
+		}
+		var arr []interface{}
+		if err := json.Unmarshal(data, &arr); err == nil {
+			fi.Arr = arr
+			fi.Raw = data
+			fi.Format = detectJSONArray(arr)
+		}
+	}
+
+	// JSONL: check first few lines
 	firstLine := strings.SplitN(content, "\n", 2)[0]
-	var parsed interface{}
-	if err := json.Unmarshal([]byte(firstLine), &parsed); err != nil {
-		return "unknown"
-	}
+	var firstLineObj map[string]interface{}
+	if err := json.Unmarshal([]byte(firstLine), &firstLineObj); err == nil {
+		fi.Raw = data
 
-	switch v := parsed.(type) {
-	case map[string]interface{}:
-		if role, ok := v["role"].(string); ok && role == "session_meta" {
-			return "hermes"
+		// Hermes JSONL: role=session_meta or role with timestamp
+		if role, _ := firstLineObj["role"].(string); role == "session_meta" {
+			fi.Format = "hermes_jsonl"
+			return fi
 		}
-		_, hasMsgs := v["messages"]
-		_, hasModel := v["model"]
-		if hasMsgs && hasModel {
-			return "claude_code"
-		}
-		_, hasCand := v["candidates"]
-		_, hasCont := v["contents"]
-		if hasCand || hasCont {
-			return "gemini"
-		}
-		// JSONL with role/timestamp → hermes
-		role, hasRole := v["role"].(string)
-		_, hasTS := v["timestamp"]
-		if hasRole && hasTS {
-			switch role {
-			case "user", "assistant", "tool":
-				return "hermes"
+		if role, _ := firstLineObj["role"].(string); (role == "user" || role == "assistant" || role == "tool") {
+			if _, hasTS := firstLineObj["timestamp"]; hasTS {
+				fi.Format = "hermes_jsonl"
+				return fi
 			}
 		}
-	case []interface{}:
-		for _, item := range v[:min(3, len(v))] {
-			if m, ok := item.(map[string]interface{}); ok {
-				if _, ok := m["role"]; ok {
-					return "claude_code"
+		// Gemini JSONL
+		if _, hasCand := firstLineObj["candidates"]; hasCand {
+			fi.Format = "gemini_cli"
+			return fi
+		}
+		if _, hasCont := firstLineObj["contents"]; hasCont {
+			fi.Format = "gemini_cli"
+			return fi
+		}
+		// Generic JSONL with role field → try parse as generic
+		if _, hasRole := firstLineObj["role"]; hasRole {
+			fi.Format = "generic"
+			return fi
+		}
+	}
+
+	return fi
+}
+
+func detectSingleJSON(doc map[string]interface{}) string {
+	// Hermes .json: session_id + messages + model + platform, NO "usage" at top level
+	_, hasSessID := doc["session_id"]
+	_, hasMsgs := doc["messages"]
+	_, hasModel := doc["model"]
+	_, hasPlatform := doc["platform"]
+	_, hasUsage := doc["usage"]
+
+	if hasSessID && hasMsgs && hasModel && hasPlatform {
+		return "hermes_json"
+	}
+
+	// Claude Code: messages + model, messages contain Anthropic content blocks
+	if hasMsgs && hasModel {
+		if hasUsage {
+			return "claude_code"
+		}
+		// Check if messages use Anthropic block format (content is array of {"type":"..."})
+		if msgs, ok := doc["messages"].([]interface{}); ok {
+			for _, m := range msgs {
+				if msg, ok := m.(map[string]interface{}); ok {
+					if content, ok := msg["content"]; ok {
+						if _, isArr := content.([]interface{}); isArr {
+							return "claude_code"
+						}
+					}
 				}
 			}
 		}
+		// OpenCode: has messages + model + provider or additional metadata but no usage
+		if _, hasProvider := doc["provider"]; hasProvider {
+			return "opencode"
+		}
+		if _, hasSession := doc["session"]; hasSession {
+			return "opencode"
+		}
+		// Default to Codex CLI for OpenAI-style messages
+		return "codex_cli"
 	}
+
+	// Codex CLI: messages + model + created/id (OpenAI API style)
+	_, hasCreated := doc["created"]
+	_, hasID := doc["id"]
+	if hasMsgs && (hasCreated || hasID) {
+		return "codex_cli"
+	}
+
+	// Gemini CLI: contents + candidates
+	_, hasContents := doc["contents"]
+	_, hasCandidates := doc["candidates"]
+	if hasContents || hasCandidates {
+		return "gemini_cli"
+	}
+
+	// Default with messages → try Claude Code block format
+	if hasMsgs {
+		return "codex_cli"
+	}
+
 	return "unknown"
 }
 
-func Parse(path string) ([]Event, string, error) {
-	fmt := DetectFormat(path)
-	events, err := parseByFormat(path, fmt)
-	return events, fmt, err
+func detectJSONArray(arr []interface{}) string {
+	for _, item := range arr {
+		if m, ok := item.(map[string]interface{}); ok {
+			if _, hasRole := m["role"]; hasRole {
+				// Check content format
+				if content, ok := m["content"]; ok {
+					if _, isArr := content.([]interface{}); isArr {
+						return "claude_code"
+					}
+				}
+				return "codex_cli"
+			}
+		}
+	}
+	return "generic"
 }
 
-func parseByFormat(path string, fmt string) ([]Event, error) {
-	switch fmt {
-	case "hermes":
-		return parseHermes(path)
+// ═══════════════════════════════════════════════════════════════
+// PARSERS
+// ═══════════════════════════════════════════════════════════════
+
+func Parse(path string) ([]Event, error) {
+	fi := DetectFormat(path)
+	switch fi.Format {
+	case "hermes_jsonl":
+		return parseHermesJSONL(string(fi.Raw))
+	case "hermes_json":
+		return parseHermesJSON(fi.Doc)
 	case "claude_code":
-		return parseClaude(path)
-	case "gemini":
-		return parseGemini(path)
+		return parseClaudeCode(fi.Doc, fi.Arr)
+	case "codex_cli":
+		return parseCodexCLI(fi.Doc, fi.Arr, string(fi.Raw))
+	case "gemini_cli":
+		return parseGeminiCLI(fi.Doc, string(fi.Raw))
+	case "opencode":
+		return parseOpenCode(fi.Doc)
 	default:
-		return parseGeneric(path)
+		return parseGeneric(string(fi.Raw))
 	}
 }
 
-func parseHermes(path string) ([]Event, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+// ── Hermes Agent JSONL ──
+
+func parseHermesJSONL(raw string) ([]Event, error) {
 	var events []Event
-	for _, line := range strings.Split(string(data), "\n") {
+	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -205,59 +314,132 @@ func parseHermes(path string) ([]Event, error) {
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
 			continue
 		}
+		ev.SourceTool = "hermes_jsonl"
 		events = append(events, ev)
 	}
 	return events, nil
 }
 
-func parseClaude(path string) ([]Event, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var raw interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
+// ── Hermes Agent .json (message array in dict) ──
 
+func parseHermesJSON(doc map[string]interface{}) ([]Event, error) {
 	var events []Event
-	var messages []interface{}
-	model := "unknown"
-
-	switch v := raw.(type) {
-	case []interface{}:
-		messages = v
-	case map[string]interface{}:
-		if msgs, ok := v["messages"].([]interface{}); ok {
-			messages = msgs
-		}
-		if m, ok := v["model"].(string); ok {
-			model = m
-		}
-		if usage, ok := v["usage"]; ok {
-			events = append(events, Event{
-				Role:      "meta",
-				ModelUsed: model,
-			})
-			// Store usage in a side map (handled in Analyze)
-			ub, _ := json.Marshal(usage)
-			var um map[string]int
-			json.Unmarshal(ub, &um)
-			events[len(events)-1].Usage = um
-		}
+	model := ""
+	if m, ok := doc["model"].(string); ok {
+		model = m
 	}
 
-	for _, msg := range messages {
-		m, ok := msg.(map[string]interface{})
+	msgs, _ := doc["messages"].([]interface{})
+	for _, raw := range msgs {
+		msg, ok := raw.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		role, _ := m["role"].(string)
-		content := m["content"]
 
+		role, _ := msg["role"].(string)
+
+		// Reasonings
+		reasoning, _ := msg["reasoning"].(string)
+		if reasoning == "" {
+			reasoning, _ = msg["reasoning_content"].(string)
+		}
+		redacted, _ := msg["redacted"].(bool)
+
+		// Tool calls (OpenAI function-call style)
+		var toolCalls []ToolCall
+		if tcs, ok := msg["tool_calls"].([]interface{}); ok {
+			for _, tc := range tcs {
+				if tcm, ok := tc.(map[string]interface{}); ok {
+					tc := ToolCall{ID: str(tcm, "id")}
+					if fn, ok := tcm["function"].(map[string]interface{}); ok {
+						tc.Name = str(fn, "name")
+					}
+					toolCalls = append(toolCalls, tc)
+				}
+			}
+		}
+
+		// Content
+		content, _ := msg["content"].(string)
+
+		ev := Event{
+			Role:       role,
+			Content:    content,
+			Reasoning:  reasoning,
+			Redacted:   redacted,
+			ToolCalls:  toolCalls,
+			ModelUsed:  model,
+			SourceTool: "hermes_json",
+		}
+		events = append(events, ev)
+	}
+
+	// Tool results are embedded in messages with role=tool
+	for _, raw := range msgs {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+		if role != "tool" {
+			continue
+		}
+		content, _ := msg["content"].(string)
+		isErr, _ := msg["is_error"].(bool)
+
+		events = append(events, Event{
+			Role:       "tool",
+			Content:    content,
+			ToolCallID: str(msg, "tool_call_id"),
+			IsError:    isErr,
+			SourceTool: "hermes_json",
+		})
+	}
+
+	return events, nil
+}
+
+// ── Claude Code (Anthropic API content blocks) ──
+
+func parseClaudeCode(doc map[string]interface{}, arr []interface{}) ([]Event, error) {
+	var events []Event
+
+	// Resolve messages and model
+	var messages []interface{}
+	model := "unknown"
+
+	if arr != nil {
+		messages = arr
+	} else if doc != nil {
+		if msgs, ok := doc["messages"].([]interface{}); ok {
+			messages = msgs
+		}
+		if m, ok := doc["model"].(string); ok {
+			model = m
+		}
+		// Top-level usage → meta event
+		if usage, ok := doc["usage"]; ok {
+			ev := Event{Role: "meta", ModelUsed: model, SourceTool: "claude_code"}
+			ub, _ := json.Marshal(usage)
+			json.Unmarshal(ub, &ev.Usage)
+			events = append(events, ev)
+		}
+	}
+
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+
+		content := msg["content"]
 		switch c := content.(type) {
 		case string:
-			events = append(events, Event{Role: role, Content: c})
+			events = append(events, Event{
+				Role: role, Content: c,
+				SourceTool: "claude_code",
+			})
 		case []interface{}:
 			for _, block := range c {
 				b, ok := block.(map[string]interface{})
@@ -268,21 +450,26 @@ func parseClaude(path string) ([]Event, error) {
 				switch t {
 				case "text":
 					text, _ := b["text"].(string)
-					events = append(events, Event{Role: role, Content: text})
+					events = append(events, Event{
+						Role: role, Content: text,
+						SourceTool: "claude_code",
+					})
 				case "thinking":
 					think, _ := b["thinking"].(string)
 					redacted, _ := b["redacted"].(bool)
 					events = append(events, Event{
-						Role:      "assistant",
-						Reasoning: think,
-						Redacted:  redacted,
+						Role:       "assistant",
+						Reasoning:  think,
+						Redacted:   redacted,
+						SourceTool: "claude_code",
 					})
 				case "tool_use":
 					id, _ := b["id"].(string)
 					name, _ := b["name"].(string)
 					events = append(events, Event{
 						Role: "assistant",
-						ToolCall: &ToolCall{ID: id, Name: name},
+						ToolCalls: []ToolCall{{ID: id, Name: name}},
+						SourceTool: "claude_code",
 					})
 				case "tool_result":
 					tid, _ := b["tool_use_id"].(string)
@@ -290,39 +477,127 @@ func parseClaude(path string) ([]Event, error) {
 					ct, _ := b["content"].(string)
 					events = append(events, Event{
 						Role:       "tool",
-						ToolCallID:  tid,
+						ToolCallID: tid,
 						Content:    ct,
 						IsError:    isErr,
+						SourceTool: "claude_code",
 					})
 				}
 			}
-		default:
-			// Other content types → skip
 		}
 	}
+
 	return events, nil
 }
 
-func parseGemini(path string) ([]Event, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	raw := strings.TrimSpace(string(data))
+// ── Codex CLI (OpenAI API format) ──
 
+func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([]Event, error) {
 	var events []Event
 
-	// Try single JSON
-	var doc map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &doc); err == nil {
+	var messages []interface{}
+	model := "unknown"
+
+	if arr != nil {
+		messages = arr
+	} else if doc != nil {
+		if msgs, ok := doc["messages"].([]interface{}); ok {
+			messages = msgs
+		}
+		if m, ok := doc["model"].(string); ok {
+			model = m
+		}
+		// Usage at top
+		if usage, ok := doc["usage"]; ok {
+			ev := Event{Role: "meta", ModelUsed: model, SourceTool: "codex_cli"}
+			ub, _ := json.Marshal(usage)
+			json.Unmarshal(ub, &ev.Usage)
+			events = append(events, ev)
+		}
+	}
+
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+
+		// OpenAI reasoning (o1/o3 models)
+		reasoning, _ := msg["reasoning_content"].(string)
+		if reasoning == "" {
+			reasoning, _ = msg["reasoning"].(string)
+		}
+
+		// Content
+		content, _ := msg["content"].(string)
+
+		// Tool calls (OpenAI function-call format)
+		var toolCalls []ToolCall
+		if tcs, ok := msg["tool_calls"].([]interface{}); ok {
+			for _, tc := range tcs {
+				if tcm, ok := tc.(map[string]interface{}); ok {
+					tc := ToolCall{ID: str(tcm, "id")}
+					if fn, ok := tcm["function"].(map[string]interface{}); ok {
+						tc.Name = str(fn, "name")
+					}
+					toolCalls = append(toolCalls, tc)
+				}
+			}
+		}
+
+		// Codex CLI also stores assistant message per tool_use (Anthropic-format hybrid)
+		if role == "assistant" && len(toolCalls) == 0 {
+			// Check for Anthropic-style tool_use blocks in content
+			if cArr, ok := msg["content"].([]interface{}); ok {
+				for _, blk := range cArr {
+					if b, ok := blk.(map[string]interface{}); ok {
+						if tp, _ := b["type"].(string); tp == "tool_use" {
+							toolCalls = append(toolCalls, ToolCall{
+								ID: str(b, "id"), Name: str(b, "name"),
+							})
+						}
+					}
+				}
+			}
+		}
+
+		ev := Event{
+			Role:       role,
+			Content:    content,
+			Reasoning:  reasoning,
+			ToolCalls:  toolCalls,
+			ModelUsed:  model,
+			SourceTool: "codex_cli",
+		}
+
+		// Tool results
+		if role == "tool" {
+			ev.ToolCallID = str(msg, "tool_call_id")
+			ev.IsError, _ = msg["is_error"].(bool)
+		}
+
+		events = append(events, ev)
+	}
+
+	return events, nil
+}
+
+// ── Gemini CLI ──
+
+func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
+	var events []Event
+
+	// Single JSON blob with contents
+	if doc != nil {
 		if contents, ok := doc["contents"].([]interface{}); ok {
 			for _, item := range contents {
-				m, ok := item.(map[string]interface{})
+				cItem, ok := item.(map[string]interface{})
 				if !ok {
 					continue
 				}
-				role, _ := m["role"].(string)
-				parts, _ := m["parts"].([]interface{})
+				role, _ := cItem["role"].(string)
+				parts, _ := cItem["parts"].([]interface{})
 				for _, part := range parts {
 					p, ok := part.(map[string]interface{})
 					if !ok {
@@ -330,7 +605,27 @@ func parseGemini(path string) ([]Event, error) {
 					}
 					text, _ := p["text"].(string)
 					if text != "" {
-						events = append(events, Event{Role: role, Content: text})
+						events = append(events, Event{
+							Role: role, Content: text,
+							SourceTool: "gemini_cli",
+						})
+					}
+					// Function calls
+					if fc, ok := p["functionCall"]; ok {
+						fcJSON, _ := json.Marshal(fc)
+						events = append(events, Event{
+							Role:    role,
+							Content: string(fcJSON),
+							SourceTool: "gemini_cli",
+						})
+					}
+					if fr, ok := p["functionResponse"]; ok {
+						frJSON, _ := json.Marshal(fr)
+						events = append(events, Event{
+							Role:    "tool",
+							Content: string(frJSON),
+							SourceTool: "gemini_cli",
+						})
 					}
 				}
 			}
@@ -338,29 +633,215 @@ func parseGemini(path string) ([]Event, error) {
 		}
 	}
 
-	// Fallback: JSONL
+	// JSONL: each line is a Gemini response object
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		var ev Event
-		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+		var obj map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
 			continue
 		}
-		events = append(events, ev)
+		if contents, ok := obj["contents"].([]interface{}); ok {
+			for _, item := range contents {
+				cItem, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				role, _ := cItem["role"].(string)
+				parts, _ := cItem["parts"].([]interface{})
+				for _, part := range parts {
+					p, ok := part.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					text, _ := p["text"].(string)
+					if text != "" {
+						events = append(events, Event{
+							Role: role, Content: text,
+							SourceTool: "gemini_cli",
+						})
+					}
+				}
+			}
+		}
+		// Candidates format
+		if candidates, ok := obj["candidates"].([]interface{}); ok {
+			for _, cand := range candidates {
+				c, ok := cand.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if cont, ok := c["content"].(map[string]interface{}); ok {
+					role, _ := cont["role"].(string)
+					parts, _ := cont["parts"].([]interface{})
+					for _, part := range parts {
+						p, ok := part.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						text, _ := p["text"].(string)
+						if text != "" {
+							events = append(events, Event{
+								Role: role, Content: text,
+								SourceTool: "gemini_cli",
+							})
+						}
+					}
+				}
+			}
+		}
 	}
+
 	return events, nil
 }
 
-func parseGeneric(path string) ([]Event, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	raw := strings.TrimSpace(string(data))
+// ── OpenCode (Claude-compatible with session wrapper) ──
 
+func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
+	// OpenCode stores sessions similar to Claude Code but with extra metadata
+	// May wrap in {"session": {...}, "messages": [...], "provider": "anthropic"}
 	var events []Event
+	var messages []interface{}
+	model := "unknown"
+
+	// Unwrap session wrapper
+	target := doc
+	if sess, ok := doc["session"].(map[string]interface{}); ok {
+		target = sess
+	}
+
+	if msgs, ok := target["messages"].([]interface{}); ok {
+		messages = msgs
+	}
+	if m, ok := target["model"].(string); ok {
+		model = m
+	}
+	if model == "unknown" {
+		if m, ok := doc["model"].(string); ok {
+			model = m
+		}
+	}
+
+	// Usage at top
+	if usage, ok := target["usage"]; ok {
+		ev := Event{Role: "meta", ModelUsed: model, SourceTool: "opencode"}
+		ub, _ := json.Marshal(usage)
+		json.Unmarshal(ub, &ev.Usage)
+		events = append(events, ev)
+	}
+
+	// Parse messages (Anthropic block format or OpenAI format)
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+
+		content := msg["content"]
+		switch c := content.(type) {
+		case string:
+			events = append(events, Event{
+				Role: role, Content: c,
+				SourceTool: "opencode",
+			})
+		case []interface{}:
+			for _, block := range c {
+				b, ok := block.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				t, _ := b["type"].(string)
+				switch t {
+				case "text":
+					text, _ := b["text"].(string)
+					events = append(events, Event{
+						Role: role, Content: text,
+						SourceTool: "opencode",
+					})
+				case "thinking":
+					think, _ := b["thinking"].(string)
+					redacted, _ := b["redacted"].(bool)
+					events = append(events, Event{
+						Role:      "assistant",
+						Reasoning: think,
+						Redacted:  redacted,
+						SourceTool: "opencode",
+					})
+				case "tool_use":
+					id, _ := b["id"].(string)
+					name, _ := b["name"].(string)
+					events = append(events, Event{
+						Role: "assistant",
+						ToolCalls: []ToolCall{{ID: id, Name: name}},
+						SourceTool: "opencode",
+					})
+				case "tool_result":
+					tid, _ := b["tool_use_id"].(string)
+					isErr, _ := b["is_error"].(bool)
+					ct, _ := b["content"].(string)
+					events = append(events, Event{
+						Role:       "tool",
+						ToolCallID: tid,
+						Content:    ct,
+						IsError:    isErr,
+						SourceTool: "opencode",
+					})
+				}
+			}
+		default:
+			// OpenAI-style tool_calls
+			if tcs, ok := msg["tool_calls"].([]interface{}); ok {
+				var tcList []ToolCall
+				for _, tc := range tcs {
+					if tcm, ok := tc.(map[string]interface{}); ok {
+						tcItem := ToolCall{ID: str(tcm, "id")}
+						if fn, ok := tcm["function"].(map[string]interface{}); ok {
+							tcItem.Name = str(fn, "name")
+						}
+						tcList = append(tcList, tcItem)
+					}
+				}
+				events = append(events, Event{
+					Role: role, ToolCalls: tcList,
+					SourceTool: "opencode",
+				})
+			}
+		}
+	}
+
+	// Tool results may also be in messages
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+		if role != "tool" {
+			continue
+		}
+		content, _ := msg["content"].(string)
+		isErr, _ := msg["is_error"].(bool)
+
+		events = append(events, Event{
+			Role:       "tool",
+			Content:    content,
+			ToolCallID: str(msg, "tool_call_id"),
+			IsError:    isErr,
+			SourceTool: "opencode",
+		})
+	}
+
+	return events, nil
+}
+
+// ── Generic fallback ──
+
+func parseGeneric(raw string) ([]Event, error) {
+	var events []Event
+
 	// JSONL first
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -371,22 +852,28 @@ func parseGeneric(path string) ([]Event, error) {
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
 			continue
 		}
+		ev.SourceTool = "generic"
 		events = append(events, ev)
 	}
-
 	if len(events) > 0 {
 		return events, nil
 	}
 
-	// Single JSON blob
+	// Single JSON array
 	var arr []Event
 	if err := json.Unmarshal([]byte(raw), &arr); err == nil {
+		for i := range arr {
+			arr[i].SourceTool = "generic"
+		}
 		return arr, nil
 	}
+
 	return events, nil
 }
 
-// ── Analysis ──
+// ═══════════════════════════════════════════════════════════════
+// ANALYSIS ENGINE
+// ═══════════════════════════════════════════════════════════════
 
 func Analyze(events []Event, model string) Metrics {
 	m := Metrics{
@@ -400,9 +887,13 @@ func Analyze(events []Event, model string) Metrics {
 	}
 
 	for _, ev := range events {
+		// Track source tool from first non-meta event
+		if m.SourceTool == "" && ev.SourceTool != "" && ev.Role != "meta" && ev.Role != "session_meta" {
+			m.SourceTool = ev.SourceTool
+		}
+
 		// Timestamp
-		ts := parseTS(ev.Timestamp)
-		if !ts.IsZero() {
+		if ts := parseTS(ev.Timestamp); !ts.IsZero() {
 			m.Timestamps = append(m.Timestamps, ts)
 		}
 
@@ -426,14 +917,9 @@ func Analyze(events []Event, model string) Metrics {
 			m.AssistantTurns++
 
 			// Reasoning
-			reasoning := ev.Reasoning
-			if reasoning == "" {
-				// Check for reasoning_content in raw (handled during parse)
-				reasoning = ev.Content // some formats put reasoning in content
-			}
-			if reasoning != "" {
+			if ev.Reasoning != "" {
 				m.ReasoningBlocks++
-				rc := len(reasoning)
+				rc := len(ev.Reasoning)
 				m.ReasoningChars += rc
 				m.ReasoningLens = append(m.ReasoningLens, rc)
 				if ev.Redacted {
@@ -448,16 +934,9 @@ func Analyze(events []Event, model string) Metrics {
 			}
 
 			// Tool calls
-			tcs := ev.ToolCalls
-			if ev.ToolCall != nil {
-				tcs = []ToolCall{*ev.ToolCall}
-			}
-			m.ToolCallsTotal += len(tcs)
-			for _, tc := range tcs {
+			m.ToolCallsTotal += len(ev.ToolCalls)
+			for _, tc := range ev.ToolCalls {
 				name := tc.Name
-				if tc.Function != nil && tc.Function.Name != "" {
-					name = tc.Function.Name
-				}
 				if name == "" {
 					name = "unknown"
 				}
@@ -468,7 +947,6 @@ func Analyze(events []Event, model string) Metrics {
 			m.ToolResults++
 			isErr := ev.IsError
 			if !isErr && ev.Content != "" {
-				// Try parsing JSON for error signals
 				var r map[string]interface{}
 				if err := json.Unmarshal([]byte(ev.Content), &r); err == nil {
 					if s, ok := r["success"]; ok && s == false {
@@ -506,7 +984,6 @@ func Analyze(events []Event, model string) Metrics {
 		}
 	}
 
-	// Cost estimation
 	m.CostEstimated = round4(
 		float64(m.TokensInput)/1e6*pricing.Input +
 			float64(m.TokensOutput)/1e6*pricing.Output +
@@ -517,7 +994,9 @@ func Analyze(events []Event, model string) Metrics {
 	return m
 }
 
-// ── Anomaly Detection ──
+// ═══════════════════════════════════════════════════════════════
+// ANOMALY DETECTION
+// ═══════════════════════════════════════════════════════════════
 
 func DetectAnomalies(m Metrics) []Anomaly {
 	var a []Anomaly
@@ -605,7 +1084,9 @@ func DetectAnomalies(m Metrics) []Anomaly {
 	return a
 }
 
-// ── Health Score ──
+// ═══════════════════════════════════════════════════════════════
+// HEALTH SCORE
+// ═══════════════════════════════════════════════════════════════
 
 func HealthScore(m Metrics, anoms []Anomaly) int {
 	score := 100
@@ -622,25 +1103,33 @@ func HealthScore(m Metrics, anoms []Anomaly) int {
 	return score
 }
 
-// ── Session helpers ──
+// ═══════════════════════════════════════════════════════════════
+// SESSION LOADING
+// ═══════════════════════════════════════════════════════════════
 
 func LoadSession(path string) (*Session, error) {
 	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	events, _, err := Parse(path)
+	events, err := Parse(path)
 	if err != nil {
 		return nil, err
 	}
 	if len(events) == 0 {
-		// Try with format force
-		events, err = parseByFormat(path, "unknown")
-		if err != nil || len(events) == 0 {
-			return nil, fmt.Errorf("no parseable events")
+		return nil, fmt.Errorf("no parseable events in %s", path)
+	}
+
+	// Determine model from events
+	model := "default"
+	for _, ev := range events {
+		if ev.ModelUsed != "" && ev.ModelUsed != "unknown" {
+			model = ev.ModelUsed
+			break
 		}
 	}
-	m := Analyze(events, "default")
+
+	m := Analyze(events, model)
 	a := DetectAnomalies(m)
 	h := HealthScore(m, a)
-	return &Session{Name: name, Metrics: m, Anomalies: a, Health: h}, nil
+	return &Session{Name: name, Path: path, Metrics: m, Anomalies: a, Health: h}, nil
 }
 
 func LoadAll(dir string) []Session {
@@ -650,55 +1139,76 @@ func LoadAll(dir string) []Session {
 	}
 	var sessions []Session
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+		if e.IsDir() {
 			continue
 		}
-		path := filepath.Join(dir, e.Name())
+		name := e.Name()
+		if !strings.HasSuffix(name, ".jsonl") && !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		// Skip non-session files
+		if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
+			continue
+		}
+		path := filepath.Join(dir, name)
 		s, err := LoadSession(path)
 		if err != nil {
 			continue
 		}
 		sessions = append(sessions, *s)
 	}
-	// Sort by name desc (newest first)
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].Name > sessions[j].Name
 	})
 	return sessions
 }
 
-func FindJSONLFiles(dir string) []string {
+func FindSessionFiles(dir string) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
 	var files []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".jsonl") {
-			files = append(files, filepath.Join(dir, e.Name()))
+		if e.IsDir() {
+			continue
 		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".jsonl") && !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
+			continue
+		}
+		files = append(files, filepath.Join(dir, name))
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(files)))
 	return files
 }
 
-// ── Utilities ──
+// ═══════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════
+
+func str(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
 
 func parseTS(raw string) time.Time {
 	if raw == "" {
 		return time.Time{}
 	}
 	s := strings.ReplaceAll(raw, "Z", "+00:00")
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		// Try other formats
-		t, err = time.Parse("2006-01-02T15:04:05", s)
-		if err != nil {
-			return time.Time{}
-		}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	if t, err := time.Parse("2006-01-02T15:04:05", s); err == nil {
 		return t.UTC()
 	}
-	return t
+	return time.Time{}
 }
 
 func percentile(sorted []float64, pct float64) float64 {
