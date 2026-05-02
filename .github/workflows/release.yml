@@ -1,17 +1,19 @@
-name: release
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
   build:
+    name: Build release assets
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - goos: linux
@@ -28,23 +30,30 @@ jobs:
             goarch: arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
+
+      - name: Verify
+        run: go test ./...
 
       - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
         run: |
-          EXT=""
-          [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
-          OUT="agenttrace-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}"
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-            go build -ldflags="-s -w" -o "$OUT" ./cmd/agenttrace/
-          sha256sum "$OUT" > "${OUT}.sha256"
-          echo "BINARY=$OUT" >> $GITHUB_ENV
+          ext=""
+          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
+          out="agenttrace-${GOOS}-${GOARCH}${ext}"
+          go build -trimpath -ldflags="-s -w" -o "$out" ./cmd/agenttrace
+          sha256sum "$out" > "${out}.sha256"
 
-      - name: Upload binary
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: agenttrace-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -53,66 +62,25 @@ jobs:
           if-no-files-found: error
 
   release:
+    name: Publish GitHub release
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all binaries
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist/
+          path: dist
           merge-multiple: true
 
-      - name: Create checksums file
+      - name: Create checksums
         run: |
           cd dist
           cat *.sha256 > checksums.txt
-          cat checksums.txt
+          sort -o checksums.txt checksums.txt
 
-      - name: Create GitHub Release
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true
-
-  homebrew:
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Compute SHA256 from release
-        run: |
-          # extract SHA256 values from the release
-          curl -sL https://github.com/luoyuctl/agenttrace/releases/download/${{ github.ref_name }}/checksums.txt -o checksums.txt
-          echo "DARWIN_ARM64=$(grep darwin-arm64 checksums.txt | awk '{print $1}')" >> $GITHUB_ENV
-          echo "DARWIN_AMD64=$(grep darwin-amd64 checksums.txt | awk '{print $1}')" >> $GITHUB_ENV
-          echo "LINUX_ARM64=$(grep linux-arm64 checksums.txt | awk '{print $1}')" >> $GITHUB_ENV
-          echo "LINUX_AMD64=$(grep linux-amd64 checksums.txt | awk '{print $1}')" >> $GITHUB_ENV
-
-      - name: Clone homebrew-tap
-        run: |
-          git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/luoyuctl/homebrew-tap.git /tmp/homebrew-tap
-          mkdir -p /tmp/homebrew-tap/Formula
-
-      - name: Generate Formula
-        run: |
-          # Read current version from formula, replace with tag version
-          CURRENT_VER=$(grep 'version "' homebrew/Formula/agenttrace.rb | head -1 | sed 's/.*version "//' | sed 's/".*//')
-          TAG_VER=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          sed -e "s/PLACEHOLDER_DARWIN_ARM64_SHA256/${{ env.DARWIN_ARM64 }}/" \
-              -e "s/PLACEHOLDER_DARWIN_AMD64_SHA256/${{ env.DARWIN_AMD64 }}/" \
-              -e "s/PLACEHOLDER_LINUX_ARM64_SHA256/${{ env.LINUX_ARM64 }}/" \
-              -e "s/PLACEHOLDER_LINUX_AMD64_SHA256/${{ env.LINUX_AMD64 }}/" \
-              -e "s/version \"${CURRENT_VER}\"/version \"${TAG_VER}\"/" \
-              -e "s|download/v${CURRENT_VER}|download/${{ github.ref_name }}|g" \
-              homebrew/Formula/agenttrace.rb > /tmp/homebrew-tap/Formula/agenttrace.rb
-
-      - name: Push to homebrew-tap
-        run: |
-          cd /tmp/homebrew-tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/agenttrace.rb
-          git diff --staged --quiet || git commit -m "agenttrace ${{ github.ref_name }}"
-          git push origin main

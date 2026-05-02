@@ -131,7 +131,7 @@ agenttrace --latest --lang zh    # Chinese (supports zh, en)
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v0.3.0 — AI Agent Session Performance Report
+  AGENTTRACE v0.3.1 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST
