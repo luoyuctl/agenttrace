@@ -61,6 +61,7 @@ agenttrace --demo
 The pain point: when an agent gets stuck, retries a tool loop, or silently burns context, the output alone does not tell you what happened. agenttrace gives a quick local view before you dig through raw JSONL logs.
 
 Repo: https://github.com/luoyuctl/agenttrace
+Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
 ## Short Posts
 
@@ -85,6 +86,7 @@ Would love feedback from anyone using Claude Code, Codex CLI, Gemini CLI, Aider,
 Repo: https://github.com/luoyuctl/agenttrace
 
 Feedback thread: https://github.com/luoyuctl/agenttrace/discussions/2
+Sample report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
 ## Target Channels
 

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agenttrace overview</title>
+<link rel="icon" href="data:,">
+<style>
+:root{color-scheme:dark;--bg:#07090b;--panel:#101419;--line:#273039;--text:#f4f0dd;--muted:#a9a391;--green:#54ff00;--cyan:#00d8ff;--amber:#ffb000;--red:#ff4a4a}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0b0f12,#050607);color:var(--text);font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:1180px;margin:0 auto;padding:32px 18px 48px}header{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:24px}
+h1{font-size:clamp(42px,7vw,88px);line-height:.9;margin:0;letter-spacing:0}h2{margin:0 0 14px;font-size:20px;color:var(--cyan)}p{margin:10px 0 0;color:var(--muted)}
+.brand{color:var(--green);font-weight:800}.meta{text-align:right;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin:24px 0}.metric{background:var(--panel);padding:18px;min-height:120px}.metric span{display:block;color:var(--muted);font-size:12px;text-transform:uppercase}.metric strong{display:block;margin-top:12px;font-size:30px;color:var(--green)}.warn strong{color:var(--amber)}.bad strong{color:var(--red)}
+section{border:1px solid var(--line);background:rgba(16,20,25,.78);padding:20px;margin-top:20px}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-size:12px;text-transform:uppercase}td.num,th.num{text-align:right}.health-good{color:var(--green)}.health-warn{color:var(--amber)}.health-bad{color:var(--red)}code{color:var(--cyan)}@media(max-width:760px){header{display:block}.meta{text-align:left;margin-top:16px}.grid{grid-template-columns:1fr}table{font-size:13px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div><div class="brand">agenttrace</div><h1>AI agent session overview</h1><p>Static report generated from local coding-agent traces.</p></div>
+<div class="meta">v0.3.9<br>3 sessions<br><code>agenttrace --overview -f html</code></div>
+</header>
+<div class="grid" aria-label="summary metrics">
+<div class="metric"><span>Sessions</span><strong>3</strong><p>1 healthy / 1 warning / 1 critical</p></div>
+<div class="metric"><span>Average health</span><strong>58.7</strong><p>Fleet quality score</p></div>
+<div class="metric"><span>Total cost</span><strong>$0.81</strong><p>Estimated session cost</p></div>
+<div class="metric bad"><span>Tool failures</span><strong>3/5</strong><p>60.0% failure rate</p></div>
+</div>
+<section><h2>Recent sessions</h2><table><thead><tr><th>Session</th><th>Source</th><th>Model</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Health</th><th class="num">Anomalies</th></tr></thead><tbody>
+<tr><td>03-shallow-chat</td><td>Hermes Agent (JSONL)</td><td>gemini-2.5-pro</td><td class="num">30200</td><td class="num">$0.0570</td><td class="num health-warn">66</td><td class="num">2</td></tr>
+<tr><td>02-hanging-loop</td><td>Hermes Agent (JSONL)</td><td>gpt-5.1</td><td class="num">233000</td><td class="num">$0.7113</td><td class="num health-bad">10</td><td class="num">3</td></tr>
+<tr><td>01-healthy-ship</td><td>Hermes Agent (JSONL)</td><td>claude-sonnet-4</td><td class="num">15000</td><td class="num">$0.0423</td><td class="num health-good">100</td><td class="num">0</td></tr>
+</tbody></table></section>
+<section><h2>By agent</h2><table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>
+<tr><td>Hermes Agent (JSONL)</td><td class="num">3</td><td class="num">$0.81</td></tr>
+</tbody></table></section>
+<section><h2>By model</h2><table><thead><tr><th>Model</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>
+<tr><td>gpt-5.1</td><td class="num">1</td><td class="num">$0.71</td></tr>
+<tr><td>gemini-2.5-pro</td><td class="num">1</td><td class="num">$0.06</td></tr>
+<tr><td>claude-sonnet-4</td><td class="num">1</td><td class="num">$0.04</td></tr>
+</tbody></table></section>
+<section><h2>Recent anomalies</h2>
+<table><thead><tr><th>Session</th><th>Type</th><th>Age</th></tr></thead><tbody>
+<tr><td>03-shallow-chat</td><td>shallow_thinking</td><td>now</td></tr>
+<tr><td>03-shallow-chat</td><td>no_tools</td><td>now</td></tr>
+<tr><td>02-hanging-loop</td><td>hanging</td><td>now</td></tr>
+<tr><td>02-hanging-loop</td><td>tool_failures</td><td>now</td></tr>
+<tr><td>02-hanging-loop</td><td>shallow_thinking</td><td>now</td></tr>
+</tbody></table>
+</section>
+</main>
+</body>
+</html>
+

@@ -23,6 +23,7 @@
       </a>
       <nav aria-label="Primary navigation">
         <a href="#demo">Demo</a>
+        <a href="demo-report.html">Report</a>
         <a href="#install">Install</a>
         <a href="#ci">CI</a>
         <a href="https://github.com/luoyuctl/agenttrace/discussions/2">Feedback</a>
@@ -44,10 +45,12 @@
             <button class="copy-btn" data-copy="curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh">
               Copy install
             </button>
+            <a href="demo-report.html">View sample report</a>
             <a href="https://github.com/luoyuctl/agenttrace/releases/latest">Latest release</a>
           </div>
           <pre><code>curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
-agenttrace --demo</code></pre>
+agenttrace --demo
+agenttrace --demo --overview -f html -o report.html</code></pre>
         </div>
       </section>
 
@@ -66,7 +69,7 @@ agenttrace --demo</code></pre>
         </article>
         <article>
           <strong>CI evidence</strong>
-          <span>JSON and Markdown reports with health and tool failure gates.</span>
+          <span>JSON, Markdown, and HTML reports with health and tool failure gates.</span>
         </article>
       </section>
 
@@ -110,11 +113,12 @@ agenttrace --demo</code></pre>
         <div class="section-copy">
           <h2>Use it locally, then gate it in CI.</h2>
           <p>
-            The same parser powers the TUI, Markdown reports, JSON output, GitHub artifacts,
+            The same parser powers the TUI, Markdown and HTML reports, JSON output, GitHub artifacts,
             and threshold-based build failures.
           </p>
         </div>
-        <pre><code>agenttrace --overview -f markdown -o agenttrace-overview.md
+        <pre><code>agenttrace --overview -f html -o agenttrace-overview.html
+agenttrace --overview -f markdown -o agenttrace-overview.md
 agenttrace --overview \
   --fail-under-health 80 \
   --fail-on-critical \
@@ -130,6 +134,7 @@ agenttrace --overview \
     <footer>
       <span>MIT licensed</span>
       <a href="https://github.com/luoyuctl/agenttrace">GitHub</a>
+      <a href="demo-report.html">Sample report</a>
       <a href="https://github.com/luoyuctl/agenttrace/blob/master/docs/launch-kit.md">Launch kit</a>
       <a href="https://github.com/luoyuctl/agenttrace/discussions/2">Feedback</a>
     </footer>

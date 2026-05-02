@@ -24,6 +24,8 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI) burn tokens in loops, retr
 
 Site: https://luoyuctl.github.io/agenttrace/
 
+Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
+
 <p align="center">
   <img src="assets/agenttrace-demo.gif" alt="agenttrace TUI demo" width="100%">
 </p>
@@ -60,6 +62,7 @@ AI agents now behave like tiny build systems: they plan, call tools, retry, hang
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
 | 💯 **Health Score** | 0-100 composite with visual bar and emoji |
 | 🤖 **Machine Readable** | JSON output for CI/CD and automation |
+| 🌐 **Shareable Reports** | Self-contained HTML overview reports for CI artifacts, issues, and demos |
 
 ---
 
