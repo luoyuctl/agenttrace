@@ -95,6 +95,7 @@ Repo: https://github.com/luoyuctl/agenttrace
 
 ## Demo Checklist
 
+- Render `assets/agenttrace-demo.gif` with `scripts/record-demo.sh` when VHS is available.
 - First screen should show the Overview dashboard.
 - Include Session List filtering and command mode.
 - Show Detail with primary issue and scroll percentage.
@@ -103,6 +104,8 @@ Repo: https://github.com/luoyuctl/agenttrace
 - End with `agenttrace --overview -f json`.
 - Show CI gate output with `agenttrace --overview --fail-under-health 80 --fail-on-critical`.
 - For a reproducible recording, use `agenttrace --demo`.
+
+See [demo-playbook.md](demo-playbook.md) for the recording script and storyline.
 
 ## Verification Before Sharing
 

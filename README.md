@@ -25,6 +25,8 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI) burn tokens in loops, retr
   <img src="assets/terminal-demo.png" alt="agenttrace TUI dashboard" width="100%">
 </p>
 
+> Sharing agenttrace? See [docs/demo-playbook.md](docs/demo-playbook.md) for the GIF recording script, launch storyline, and posting copy.
+
 ## Why it exists
 
 AI agents now behave like tiny build systems: they plan, call tools, retry, hang, and spend money while doing it. Most teams only see the final output, not the session health, token burn, tool failure rate, or whether the agent got stuck. agenttrace gives that missing operational view in the terminal.

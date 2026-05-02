@@ -36,3 +36,6 @@ jobs:
 
       - name: Validate Homebrew formula syntax
         run: ruby -c homebrew/Formula/agenttrace.rb
+
+      - name: Validate helper scripts
+        run: bash -n scripts/record-demo.sh
