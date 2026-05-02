@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/luoyuctl/agentwaste/internal/i18n"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 // ReportText generates the formatted text report.
@@ -338,6 +338,119 @@ func ReportCompareJSON(sessions []Session, model string) string {
 	return string(out)
 }
 
+// ReportOverviewJSON generates machine-readable global overview data.
+func ReportOverviewJSON(ov Overview, sessions []Session) string {
+	type groupItem struct {
+		Name     string  `json:"name"`
+		Sessions int     `json:"sessions"`
+		Cost     float64 `json:"cost"`
+	}
+	type recentSession struct {
+		Name       string  `json:"name"`
+		SourceTool string  `json:"source_tool"`
+		Model      string  `json:"model"`
+		Turns      int     `json:"turns"`
+		Tools      int     `json:"tools"`
+		Tokens     int     `json:"tokens"`
+		Cost       float64 `json:"cost"`
+		Health     int     `json:"health"`
+		Anomalies  int     `json:"anomalies"`
+	}
+
+	totalTokens := 0
+	totalTools := 0
+	failedTools := 0
+	totalHealth := 0
+	for _, s := range sessions {
+		totalTokens += s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
+		totalTools += s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
+		failedTools += s.Metrics.ToolCallsFail
+		totalHealth += s.Health
+	}
+	avgHealth := 0.0
+	if len(sessions) > 0 {
+		avgHealth = round4(float64(totalHealth) / float64(len(sessions)))
+	}
+	toolFailRate := 0.0
+	if totalTools > 0 {
+		toolFailRate = round4(float64(failedTools) / float64(totalTools) * 100)
+	}
+
+	agents := make([]groupItem, 0, len(ov.ByAgent))
+	for k, v := range ov.ByAgent {
+		name := k
+		if display, ok := ToolDisplayNames[k]; ok {
+			name = display
+		}
+		agents = append(agents, groupItem{Name: name, Sessions: v.Sessions, Cost: round4(v.Cost)})
+	}
+	sort.Slice(agents, func(i, j int) bool {
+		if agents[i].Sessions == agents[j].Sessions {
+			return agents[i].Cost > agents[j].Cost
+		}
+		return agents[i].Sessions > agents[j].Sessions
+	})
+
+	models := make([]groupItem, 0, len(ov.ByModel))
+	for k, v := range ov.ByModel {
+		models = append(models, groupItem{Name: k, Sessions: v.Sessions, Cost: round4(v.Cost)})
+	}
+	sort.Slice(models, func(i, j int) bool {
+		if models[i].Cost == models[j].Cost {
+			return models[i].Sessions > models[j].Sessions
+		}
+		return models[i].Cost > models[j].Cost
+	})
+
+	recentCap := len(sessions)
+	if recentCap > 10 {
+		recentCap = 10
+	}
+	recent := make([]recentSession, 0, recentCap)
+	for i, s := range sessions {
+		if i >= 10 {
+			break
+		}
+		recent = append(recent, recentSession{
+			Name:       s.Name,
+			SourceTool: s.Metrics.SourceTool,
+			Model:      s.Metrics.ModelUsed,
+			Turns:      s.Metrics.AssistantTurns,
+			Tools:      s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail,
+			Tokens:     s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR,
+			Cost:       round4(s.Metrics.CostEstimated),
+			Health:     s.Health,
+			Anomalies:  len(s.Anomalies),
+		})
+	}
+	anomalies := ov.AnomaliesTop
+	if anomalies == nil {
+		anomalies = []AnomalyTop{}
+	}
+
+	payload := map[string]interface{}{
+		"version": Version,
+		"summary": map[string]interface{}{
+			"total_sessions": ov.TotalSessions,
+			"healthy":        ov.Healthy,
+			"warning":        ov.Warning,
+			"critical":       ov.Critical,
+			"avg_health":     avgHealth,
+			"total_cost":     round4(ov.TotalCost),
+			"total_tokens":   totalTokens,
+			"tool_calls":     totalTools,
+			"tool_failures":  failedTools,
+			"tool_fail_rate": toolFailRate,
+		},
+		"by_agent":        agents,
+		"by_model":        models,
+		"recent_sessions": recent,
+		"anomalies":       anomalies,
+	}
+	out, _ := json.MarshalIndent(payload, "", "  ")
+	return string(out)
+}
+
 // LoopCostSection generates the loop cost breakdown section for text reports.
 func LoopCostSection(lc LoopCost) string {
 	var b strings.Builder
@@ -364,7 +477,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 	wf := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 
 	w(sep)
-	w(fmt.Sprintf("  AGENTWASTE v%s — "+i18n.T("overview_title")+"  (%d "+i18n.T("sessions_label")+")", Version, ov.TotalSessions))
+	w(fmt.Sprintf("  AGENTTRACE v%s — "+i18n.T("overview_title")+"  (%d "+i18n.T("sessions_label")+")", Version, ov.TotalSessions))
 	w(sep)
 	w("")
 

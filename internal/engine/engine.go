@@ -1,4 +1,4 @@
-// Package engine provides the core analysis engine for agentwaste.
+// Package engine provides the core analysis engine for agenttrace.
 // Pure Go. Supports 8 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI.
 package engine
 
@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/luoyuctl/agentwaste/internal/i18n"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.3.0"
+const Version = "0.3.1"
 
 // Severity constants for anomaly severity (internal, not i18n).
 const (

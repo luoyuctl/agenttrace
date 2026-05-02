@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Go tests
+        run: go test ./...
+
+      - name: Build CLI
+        run: go build -o /tmp/agenttrace ./cmd/agenttrace
+
+      - name: Check npm wrapper syntax
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate npm scripts
+        run: |
+          node --check npm/install.js
+          node --check npm/run.js
+
+      - name: Validate Homebrew formula syntax
+        run: ruby -c homebrew/Formula/agenttrace.rb

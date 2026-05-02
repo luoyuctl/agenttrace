@@ -13,16 +13,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/luoyuctl/agentwaste/internal/i18n"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 // ── LiteLLM source ────────────────────────────────────────────
 
 const (
-	pricingURL      = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
-	pricingCacheDir = "agentwaste"
+	pricingURL       = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+	pricingCacheDir  = "agenttrace"
 	pricingCacheFile = "pricing.json"
-	cacheMaxAge     = 24 * time.Hour
+	cacheMaxAge      = 24 * time.Hour
 )
 
 // ── Backward-compat export ────────────────────────────────────
@@ -35,31 +35,31 @@ var Pricing = BuiltinPricing
 
 var BuiltinPricing = map[string]Price{
 	// Anthropic (official API, updated May 2026)
-	"claude-opus-4.7":    {5.00, 25.00, 6.25, 0.50},
-	"claude-opus-4.6":    {5.00, 25.00, 6.25, 0.50},
-	"claude-opus-4.5":    {5.00, 25.00, 6.25, 0.50},
-	"claude-opus-4":      {15.00, 75.00, 18.75, 1.50},
-	"claude-sonnet-4.6":  {3.00, 15.00, 3.75, 0.30},
-	"claude-sonnet-4.5":  {3.00, 15.00, 3.75, 0.30},
-	"claude-sonnet-4":    {3.00, 15.00, 3.75, 0.30},
-	"claude-haiku-4.5":   {1.00, 5.00, 1.25, 0.10},
-	"claude-haiku-3.5":   {0.80, 4.00, 1.00, 0.08},
+	"claude-opus-4.7":   {5.00, 25.00, 6.25, 0.50},
+	"claude-opus-4.6":   {5.00, 25.00, 6.25, 0.50},
+	"claude-opus-4.5":   {5.00, 25.00, 6.25, 0.50},
+	"claude-opus-4":     {15.00, 75.00, 18.75, 1.50},
+	"claude-sonnet-4.6": {3.00, 15.00, 3.75, 0.30},
+	"claude-sonnet-4.5": {3.00, 15.00, 3.75, 0.30},
+	"claude-sonnet-4":   {3.00, 15.00, 3.75, 0.30},
+	"claude-haiku-4.5":  {1.00, 5.00, 1.25, 0.10},
+	"claude-haiku-3.5":  {0.80, 4.00, 1.00, 0.08},
 	// Google Gemini (official API)
-	"gemini-2.5-pro":     {1.25, 10.00, 0, 0},
-	"gemini-2.5-flash":   {0.15, 0.60, 0, 0},
+	"gemini-2.5-pro":   {1.25, 10.00, 0, 0},
+	"gemini-2.5-flash": {0.15, 0.60, 0, 0},
 	// OpenAI (official API)
-	"gpt-5.1":            {1.25, 10.00, 0, 0},
-	"gpt-5.1-mini":       {0.25, 2.00, 0, 0},
-	"gpt-4.1":            {2.00, 8.00, 0, 0},
-	"gpt-4.1-mini":       {0.40, 1.60, 0, 0},
-	"gpt-4.1-nano":       {0.10, 0.40, 0, 0},
+	"gpt-5.1":      {1.25, 10.00, 0, 0},
+	"gpt-5.1-mini": {0.25, 2.00, 0, 0},
+	"gpt-4.1":      {2.00, 8.00, 0, 0},
+	"gpt-4.1-mini": {0.40, 1.60, 0, 0},
+	"gpt-4.1-nano": {0.10, 0.40, 0, 0},
 	// DeepSeek (official API, updated)
-	"deepseek-chat":      {0.27, 1.10, 0.07, 0.014},
-	"deepseek-reasoner":  {0.55, 2.19, 0.14, 0.028},
+	"deepseek-chat":     {0.27, 1.10, 0.07, 0.014},
+	"deepseek-reasoner": {0.55, 2.19, 0.14, 0.028},
 	// Grok
-	"grok-3":             {3.00, 15.00, 0, 0},
+	"grok-3": {3.00, 15.00, 0, 0},
 	// Default fallback
-	"default":            {3.00, 15.00, 0, 0},
+	"default": {3.00, 15.00, 0, 0},
 }
 
 // ── Dynamic pricing store ─────────────────────────────────────
@@ -82,8 +82,8 @@ var dynamicPricing = &pricingStore{
 // Regexps for stripping provider prefixes and date/version suffixes.
 var (
 	reDateSuffix    = regexp.MustCompile(`[-@]\d{4,}[-\w]*$`) // "-20250514" "@20250929"
-	reVersionSuffix  = regexp.MustCompile(`[:@]v?\d+[\.\d]*$`)  // ":v1:0" "@default"
-	reDoubleDash     = regexp.MustCompile(`-+`)
+	reVersionSuffix = regexp.MustCompile(`[:@]v?\d+[\.\d]*$`) // ":v1:0" "@default"
+	reDoubleDash    = regexp.MustCompile(`-+`)
 )
 
 // normalizeModel reduces a raw model name from any provider to a canonical short form.
@@ -306,22 +306,22 @@ func convertLiteLLM(raw []byte) map[string]Price {
 
 	// Provider priority: official API > gateway > region-specific
 	providerPriority := map[string]int{
-		"anthropic":         10,
-		"openai":            10,
-		"deepseek":          10,
-		"gemini":            10,
-		"xai":               10,
-		"mistral":           10,
-		"cohere":             9,
-		"openrouter":         8,
-		"vercel_ai_gateway":  7,
-		"github_copilot":     6,
-		"bedrock_converse":   5,
-		"bedrock":            5,
+		"anthropic":                  10,
+		"openai":                     10,
+		"deepseek":                   10,
+		"gemini":                     10,
+		"xai":                        10,
+		"mistral":                    10,
+		"cohere":                     9,
+		"openrouter":                 8,
+		"vercel_ai_gateway":          7,
+		"github_copilot":             6,
+		"bedrock_converse":           5,
+		"bedrock":                    5,
 		"vertex_ai-anthropic_models": 5,
 		"vertex_ai-language-models":  5,
-		"azure":              5,
-		"azure_ai":           5,
+		"azure":                      5,
+		"azure_ai":                   5,
 	}
 
 	entries := make(map[string]Price, 2000)
@@ -425,5 +425,3 @@ func loadPricingCache() bool {
 	dynamicPricing.loadedAt = info.ModTime()
 	return true
 }
-
-

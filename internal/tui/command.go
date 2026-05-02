@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/luoyuctl/agentwaste/internal/i18n"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 func (m *Model) runCommand(input string) {

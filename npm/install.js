@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// agentwaste npm install script — downloads platform-specific binary on postinstall
+// agenttrace npm install script — downloads platform-specific binary on postinstall
 
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { execSync } = require('child_process');
 
-const REPO = 'luoyuctl/agentwaste';
-const VERSION = '0.0.4';
+const REPO = 'luoyuctl/agenttrace';
 
 function getPlatform() {
     const os = process.platform;
@@ -50,10 +48,42 @@ async function download(url, dest) {
     });
 }
 
+async function fetchLatestRelease() {
+    return new Promise((resolve, reject) => {
+        const req = https.get({
+            hostname: 'api.github.com',
+            path: `/repos/${REPO}/releases/latest`,
+            headers: { 'User-Agent': 'agenttrace-npm-installer' },
+        }, (res) => {
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => { body += chunk; });
+            res.on('end', () => {
+                if (res.statusCode !== 200) {
+                    reject(new Error(`GitHub release lookup failed: HTTP ${res.statusCode}`));
+                    return;
+                }
+                try {
+                    resolve(JSON.parse(body));
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        });
+        req.on('error', reject);
+    });
+}
+
 async function main() {
     const { goos, goarch, ext } = getPlatform();
-    const binary = 'agentwaste' + ext;
-    const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${binary}-${goos}-${goarch}${ext}`;
+    const binary = 'agenttrace' + ext;
+    const release = await fetchLatestRelease();
+    const suffix = `${goos}-${goarch}${ext}`;
+    const asset = (release.assets || []).find((item) => item.name === `${binary}-${suffix}` || item.name.endsWith(suffix));
+    if (!asset) {
+        throw new Error(`No release asset for ${goos}/${goarch} in ${release.tag_name || 'latest release'}`);
+    }
+    const url = asset.browser_download_url;
 
     // install to node_modules/.bin/ sibling
     const binDir = path.join(__dirname, '..', '..', '.bin');
@@ -61,7 +91,7 @@ async function main() {
 
     const dest = path.join(binDir, binary);
 
-    console.log(`📦 agentwaste: downloading for ${goos}/${goarch}...`);
+    console.log(`📦 agenttrace: downloading for ${goos}/${goarch}...`);
     console.log(`   ${url}`);
 
     // skip if already installed (check size > 1MB)
@@ -77,8 +107,8 @@ async function main() {
 }
 
 main().catch((err) => {
-    console.error('❌ agentwaste install failed:', err.message);
-    console.log('   Try manual install: brew install luoyuctl/tap/agentwaste');
-    console.log('   Or: curl -sL https://raw.githubusercontent.com/luoyuctl/agentwaste/master/install.sh | sh');
+    console.error('❌ agenttrace install failed:', err.message);
+    console.log('   Try manual install: brew install luoyuctl/tap/agenttrace');
+    console.log('   Or: curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh');
     // don't fail the npm install — user can still install manually
 });

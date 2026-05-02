@@ -1,14 +1,14 @@
-# agentwaste Windows installer (PowerShell)
+# agenttrace Windows installer (PowerShell)
 # Usage: powershell -ExecutionPolicy Bypass -File install.ps1
-# Or:    iwr -useb https://raw.githubusercontent.com/luoyuctl/agentwaste/master/install.ps1 | iex
+# Or:    iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
 
 param(
     [string]$Version = "latest",
-    [string]$InstallDir = "$env:LOCALAPPDATA\agentwaste"
+    [string]$InstallDir = "$env:LOCALAPPDATA\agenttrace"
 )
 
-$REPO = "luoyuctl/agentwaste"
-$BIN = "agentwaste.exe"
+$REPO = "luoyuctl/agenttrace"
+$BIN = "agenttrace.exe"
 
 # Detect architecture
 $ARCH = switch ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture) {
@@ -31,14 +31,14 @@ if ($Version -eq "latest") {
 
 if (-not $assets) {
     Write-Host "❌ No binary found for windows/${ARCH}" -ForegroundColor Red
-    Write-Host "   Build from source: git clone https://github.com/$REPO.git && cd agentwaste/go && go build -ldflags='-s -w' -o agentwaste.exe ./cmd/agentwaste/"
+    Write-Host "   Build from source: git clone https://github.com/$REPO.git && cd agenttrace && go build -ldflags='-s -w' -o agenttrace.exe ./cmd/agenttrace/"
     exit 1
 }
 
 $asset = $assets | Select-Object -First 1
 $url = $asset.browser_download_url
 
-Write-Host "⬇️  Downloading agentwaste (windows/${ARCH})..." -ForegroundColor Cyan
+Write-Host "⬇️  Downloading agenttrace (windows/${ARCH})..." -ForegroundColor Cyan
 Write-Host "   $url"
 
 # Create install directory
@@ -67,12 +67,12 @@ if ($userPath -notlike "*$InstallDir*") {
     Write-Host ""
     Write-Host "⚠️  $InstallDir is not in your PATH." -ForegroundColor Yellow
     Write-Host "   Run this to add it:"
-    Write-Host '     [Environment]::SetEnvironmentVariable("Path", "$env:LOCALAPPDATA\agentwaste;$env:PATH", "User")'
+    Write-Host '     [Environment]::SetEnvironmentVariable("Path", "$env:LOCALAPPDATA\agenttrace;$env:PATH", "User")'
     Write-Host "   Then restart your terminal."
     Write-Host ""
 }
 
 Write-Host ""
-Write-Host "🎉 agentwaste installed! Try:" -ForegroundColor Cyan
-Write-Host "   agentwaste --latest"
-Write-Host "   agentwaste            # launch TUI"
+Write-Host "🎉 agenttrace installed! Try:" -ForegroundColor Cyan
+Write-Host "   agenttrace --latest"
+Write-Host "   agenttrace            # launch TUI"
