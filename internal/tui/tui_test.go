@@ -138,6 +138,22 @@ func TestViewsRenderWithinTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestAppHeaderDoesNotWrapStatusBadge(t *testing.T) {
+	for _, width := range []int{72, 80, 96, 100} {
+		m := resizeForTest(t, sampleModelForTest(), width, 24)
+		header := m.renderAppHeader()
+		lines := strings.Split(header, "\n")
+		if got := len(lines); got != 2 {
+			t.Fatalf("expected two header lines at width=%d, got %d:\n%s", width, got, header)
+		}
+		for i, line := range lines {
+			if got := lipgloss.Width(line); got > width {
+				t.Fatalf("header line %d too wide at width=%d: got=%d line=%q", i, width, got, line)
+			}
+		}
+	}
+}
+
 func TestFilterSortKeepsTableColumnShape(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList

@@ -1009,10 +1009,10 @@ func (m Model) renderAppHeader() string {
 	right := lipgloss.JoinHorizontal(lipgloss.Top, status, " ", healthBadge, " ", langBadge)
 	if width < 100 {
 		left = lipgloss.JoinHorizontal(lipgloss.Center, brand, " ", version)
-		right = status
+		right = dimStyle.Render(fmt.Sprintf("%d %s", len(m.sessions), i18n.T("sessions_label")))
 	}
 
-	lineW := maxInt(1, width-4)
+	lineW := maxInt(1, width)
 	if lipgloss.Width(left)+lipgloss.Width(right)+1 > lineW {
 		right = truncate(right, maxInt(1, lineW-lipgloss.Width(left)-1))
 	}
@@ -1021,12 +1021,7 @@ func (m Model) renderAppHeader() string {
 		gap = 1
 	}
 	line := lipgloss.JoinHorizontal(lipgloss.Center, left, strings.Repeat(" ", gap), right)
-	return lipgloss.NewStyle().
-		Width(lineW).
-		Border(lipgloss.NormalBorder(), false, false, true, false).
-		BorderForeground(lipgloss.Color("238")).
-		Padding(0, 1).
-		Render(line)
+	return lipgloss.JoinVertical(lipgloss.Left, truncate(line, width), dimStyle.Render(strings.Repeat("─", width)))
 }
 
 func (m Model) renderTabs() string {
