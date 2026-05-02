@@ -2,7 +2,7 @@ module github.com/luoyuctl/agenttrace
 
 go 1.24.2
 
-// agenttrace v0.3.7 — Go single-binary, supports multi-agent session observability
+// agenttrace v0.3.8 — Go single-binary, supports multi-agent session observability
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
