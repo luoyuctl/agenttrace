@@ -29,7 +29,9 @@
     "performance",
     "claude",
     "gemini",
-    "hermes"
+    "hermes",
+    "codex",
+    "aider"
   ],
   "license": "MIT",
   "os": [
