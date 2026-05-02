@@ -2259,7 +2259,7 @@ func (m Model) renderTopAgentsPanel(width int) string {
 	sort.Slice(items, func(i, j int) bool { return items[i].tokens > items[j].tokens })
 	var lines []string
 	maxTokens := 1
-	if len(items) > 0 {
+	if len(items) > 0 && items[0].tokens > 0 {
 		maxTokens = items[0].tokens
 	}
 	innerW := dashboardInnerWidth(width)

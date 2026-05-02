@@ -569,6 +569,25 @@ func TestFooterRemainsVisibleWhenOverviewIsTall(t *testing.T) {
 	}
 }
 
+func TestOverviewHandlesZeroTokenAgents(t *testing.T) {
+	m := sampleModelForTest()
+	for i := range m.sessions {
+		m.sessions[i].Metrics.TokensInput = 0
+		m.sessions[i].Metrics.TokensOutput = 0
+		m.sessions[i].Metrics.TokensCacheR = 0
+	}
+	m.overview = engine.ComputeOverview(m.sessions)
+	m.costSummary = engine.ComputeCostSummary(m.sessions)
+	m = resizeForTest(t, m, 120, 36)
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	if got := maxRenderedWidth(rendered); got > 120 {
+		t.Fatalf("zero-token overview too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+}
+
 func TestCommandModeFiltersAndSorts(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
