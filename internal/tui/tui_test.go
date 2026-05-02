@@ -970,6 +970,22 @@ func TestDetailDiffShortcutUsesFilteredNeighbor(t *testing.T) {
 	}
 }
 
+func TestDiffEmptyStateExplainsSingleVisibleSession(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewDiff
+	m.filterText = "beta"
+	m.rebuildFilteredView()
+	m.diffResult = engine.SessionDiff{}
+
+	rendered := m.View()
+	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("diff_need_two"))) {
+		t.Fatalf("expected single-visible diff hint, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, strings.TrimSpace(i18n.T("diff_select_neighbor"))) {
+		t.Fatalf("diff empty state should not ask for a neighbor when only one row is visible:\n%s", rendered)
+	}
+}
+
 func TestWideDiffUsesFullComparisonLayout(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 160, 36)
 	m.diffResult = engine.DiffSessions(m.sessions[0], m.sessions[1])

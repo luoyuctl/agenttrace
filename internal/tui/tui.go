@@ -1657,7 +1657,11 @@ func (m Model) renderDiff() string {
 	dr := m.diffResult
 	if len(dr.Entries) == 0 {
 		hint := i18n.T("select_session_hint")
-		if len(m.filteredIndices) < 2 && len(m.sessions) < 2 {
+		visibleCount := len(m.filteredIndices)
+		if visibleCount == 0 && !m.hasAnyFilter() {
+			visibleCount = len(m.sessions)
+		}
+		if len(m.sessions) < 2 || visibleCount < 2 {
 			hint = i18n.T("diff_need_two")
 		} else {
 			hint = i18n.T("diff_select_neighbor")
