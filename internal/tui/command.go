@@ -117,11 +117,11 @@ func (m *Model) applySortCommand(field string, desc bool) {
 	m.sortDesc = desc
 	m.sortAndRefresh()
 	m.view = viewList
-	dir := "desc"
+	dir := i18n.T("sort_desc")
 	if !desc {
-		dir = "asc"
+		dir = i18n.T("sort_asc")
 	}
-	m.commandFeedback = fmt.Sprintf(i18n.T("cmd_sorted"), m.sortBy, dir)
+	m.commandFeedback = fmt.Sprintf(i18n.T("cmd_sorted"), sortFieldLabel(m.sortBy), dir)
 }
 
 func (m *Model) clearFilters() {

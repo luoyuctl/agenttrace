@@ -37,7 +37,7 @@ func buildSessionInsight(s engine.Session, fixes []engine.FixSuggestion, alert e
 
 	if len(s.Anomalies) > 0 {
 		a := s.Anomalies[0]
-		ins.Issue = strings.ReplaceAll(a.Type, "_", " ")
+		ins.Issue = anomalyTypeLabel(a.Type)
 		ins.Evidence = a.Detail
 		ins.Confidence = i18n.T("insight_high")
 		ins.Color = lipgloss.Color("196")
@@ -95,12 +95,12 @@ func buildDiffInsight(dr engine.SessionDiff) (winner string, explanation string)
 		case "A":
 			scoreA++
 			if len(drivers) < 3 {
-				drivers = append(drivers, fmt.Sprintf(i18n.T("diff_favors"), e.Field, "A"))
+				drivers = append(drivers, fmt.Sprintf(i18n.T("diff_favors"), diffFieldLabel(e.Field), "A"))
 			}
 		case "B":
 			scoreB++
 			if len(drivers) < 3 {
-				drivers = append(drivers, fmt.Sprintf(i18n.T("diff_favors"), e.Field, "B"))
+				drivers = append(drivers, fmt.Sprintf(i18n.T("diff_favors"), diffFieldLabel(e.Field), "B"))
 			}
 		}
 	}

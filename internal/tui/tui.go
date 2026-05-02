@@ -719,7 +719,7 @@ func (m *Model) refreshTable() {
 func (m *Model) sessionRow(s engine.Session) table.Row {
 	met := s.Metrics
 	totalTools := met.ToolCallsOK + met.ToolCallsFail
-	sr := "N/A"
+	sr := i18n.T("not_available")
 	if totalTools > 0 {
 		sr = fmt.Sprintf("%.0f", float64(met.ToolCallsOK)/float64(totalTools)*100)
 	}
@@ -931,14 +931,14 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 	s := m.sessions[idx]
 	met := s.Metrics
 	totalTools := met.ToolCallsOK + met.ToolCallsFail
-	success := "N/A"
+	success := i18n.T("not_available")
 	if totalTools > 0 {
 		success = fmt.Sprintf("%.0f%%", float64(met.ToolCallsOK)/float64(totalTools)*100)
 	}
 
 	issue := i18n.T("list_no_major_anomaly")
 	if len(s.Anomalies) > 0 {
-		issue = strings.ReplaceAll(s.Anomalies[0].Type, "_", " ")
+		issue = anomalyTypeLabel(s.Anomalies[0].Type)
 	}
 	line := fmt.Sprintf("%s  %s %d%%  %s $%.4f  %s %s  %s %d  %s %d/%d %s  %s %s",
 		truncate(s.Name, 28),
@@ -979,7 +979,7 @@ func (m Model) renderAppHeader() string {
 	subtitle := dimStyle.Render(i18n.T("app_subtitle"))
 	left := lipgloss.JoinHorizontal(lipgloss.Center, brand, " ", version, "  ", subtitle)
 
-	status := statusBadge(fmt.Sprintf("%d sessions", len(m.sessions)), "82")
+	status := statusBadge(fmt.Sprintf("%d %s", len(m.sessions), i18n.T("sessions_label")), "82")
 	health := int(m.aggStats.AvgHealth)
 	if len(m.sessions) == 0 {
 		health = 0
@@ -1082,11 +1082,11 @@ func (m Model) renderHelp() string {
 	}
 	meta := []string{m.viewName(), fmt.Sprintf("%d/%d", len(m.filteredIndices), len(m.sessions))}
 	if m.sortBy != "" {
-		dir := "asc"
+		dir := i18n.T("sort_asc")
 		if m.sortDesc {
-			dir = "desc"
+			dir = i18n.T("sort_desc")
 		}
-		meta = append(meta, i18n.T("sort_label")+" "+m.sortBy+" "+dir)
+		meta = append(meta, i18n.T("sort_label")+" "+sortFieldLabel(m.sortBy)+" "+dir)
 	}
 	if m.hasAnyFilter() {
 		meta = append(meta, i18n.T("list_filter")+" "+m.filterLabel())
@@ -1152,7 +1152,7 @@ func (m Model) renderQuickSummary() string {
 	costBadge := badge(i18n.T("cost"), fmt.Sprintf("$%.4f", met.CostEstimated), lipgloss.Color("39"))
 
 	totalTools := met.ToolCallsOK + met.ToolCallsFail
-	srStr := "N/A"
+	srStr := i18n.T("not_available")
 	if totalTools > 0 {
 		srStr = fmt.Sprintf("%.0f%%", float64(met.ToolCallsOK)/float64(totalTools)*100)
 	}
@@ -1497,7 +1497,10 @@ func (m Model) renderToolLatency(s engine.Session) string {
 	}
 	if m.contentWidth() < 70 {
 		var lines []string
-		lines = append(lines, dimStyle.Render("  Tool                 Avg     Max"))
+		lines = append(lines, dimStyle.Render(fmt.Sprintf("  %-18s %5s %5s",
+			i18n.T("diag_tool_lat_col_name"),
+			i18n.T("diag_tool_lat_col_avg"),
+			i18n.T("diag_tool_lat_col_max"))))
 		for i, tl := range s.ToolLatencies {
 			if i >= 6 {
 				break
@@ -1505,7 +1508,7 @@ func (m Model) renderToolLatency(s engine.Session) string {
 			name := truncate(tl.ToolName, 18)
 			marker := ""
 			if tl.IsSlow {
-				marker = redStyle.Render(" SLOW")
+				marker = redStyle.Render(" " + i18n.T("diag_tool_slow_badge"))
 			}
 			lines = append(lines, fmt.Sprintf("  %-18s %5.1fs %5.1fs%s", name, tl.AvgSec, tl.MaxSec, marker))
 		}
@@ -1566,21 +1569,21 @@ func (m Model) renderContextUtil(s engine.Session) string {
 		lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(strings.Repeat("░", barWidth-filled)) + "]"
 
 	if m.contentWidth() < 70 {
-		content := fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_total"), cyanStyle.Render(fmt.Sprintf("%d tokens", cu.EstimatedTotal)))
-		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_tool_defs"), dimStyle.Render(fmt.Sprintf("%d tokens", cu.ToolDefinitions)))
-		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_history"), dimStyle.Render(fmt.Sprintf("%d tokens", cu.ConversationHist)))
+		content := fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_total"), cyanStyle.Render(tokenCount(cu.EstimatedTotal)))
+		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_tool_defs"), dimStyle.Render(tokenCount(cu.ToolDefinitions)))
+		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_history"), dimStyle.Render(tokenCount(cu.ConversationHist)))
 		content += fmt.Sprintf("  %-10s %s %s\n", i18n.T("diag_ctx_available"), style.Render(fmt.Sprintf("%d", cu.AvailableForTask)), bar)
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_suggestion"), style.Render(truncate(cu.Suggestion, maxInt(8, m.contentWidth()-18))))
 		return content
 	}
 
-	content := fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_total"), cyanStyle.Render(fmt.Sprintf("%d tokens", cu.EstimatedTotal)))
-	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_tool_defs"), dimStyle.Render(fmt.Sprintf("%d tokens", cu.ToolDefinitions)))
-	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_history"), dimStyle.Render(fmt.Sprintf("%d tokens", cu.ConversationHist)))
-	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_sysprompt"), dimStyle.Render(fmt.Sprintf("%d tokens", cu.SystemPrompt)))
+	content := fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_total"), cyanStyle.Render(tokenCount(cu.EstimatedTotal)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_tool_defs"), dimStyle.Render(tokenCount(cu.ToolDefinitions)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_history"), dimStyle.Render(tokenCount(cu.ConversationHist)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_sysprompt"), dimStyle.Render(tokenCount(cu.SystemPrompt)))
 	content += fmt.Sprintf("  ─────────────────────────────\n")
 	content += fmt.Sprintf("  %-22s %s %s\n", i18n.T("diag_ctx_available"),
-		style.Render(fmt.Sprintf("%d tokens", cu.AvailableForTask)), bar)
+		style.Render(tokenCount(cu.AvailableForTask)), bar)
 	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_suggestion"), style.Render(cu.Suggestion))
 	return content
 }
@@ -1596,7 +1599,7 @@ func (m Model) renderLargeParams(s engine.Session) string {
 			style = redStyle
 		}
 		kb := float64(lp.ParamSize) / 1024.0
-		lines = append(lines, style.Render(fmt.Sprintf("• [%s] %s: %.1f KB — %s", lp.Risk, lp.ToolName, kb, lp.Detail)))
+		lines = append(lines, style.Render(fmt.Sprintf("• [%s] %s: %.1f KB — %s", riskLabel(lp.Risk), lp.ToolName, kb, lp.Detail)))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
@@ -1660,7 +1663,7 @@ func (m Model) renderDiff() string {
 		rows = append(rows, insight)
 		for _, e := range dr.Entries {
 			rows = append(rows, fmt.Sprintf("%s  %s → %s %s",
-				dimStyle.Render(e.Field),
+				dimStyle.Render(diffFieldLabel(e.Field)),
 				truncate(e.ValueA, 16),
 				truncate(e.ValueB, 16),
 				diffDeltaStyle(e).Render(e.Delta)))
@@ -1701,7 +1704,7 @@ func (m Model) renderDiffSessionPanel(label, name string, entries []engine.DiffE
 		if !leftSide {
 			delta = " " + diffDeltaStyle(e).Render(e.Delta)
 		}
-		lines = append(lines, fmt.Sprintf("%-14s %s%s", dimStyle.Render(truncate(e.Field, 13)), style.Render(truncate(value, maxInt(4, bodyW-17))), delta))
+		lines = append(lines, fmt.Sprintf("%-14s %s%s", dimStyle.Render(truncate(diffFieldLabel(e.Field), 13)), style.Render(truncate(value, maxInt(4, bodyW-17))), delta))
 	}
 	return subtlePanel("", lipgloss.JoinVertical(lipgloss.Left, lines...), width)
 }
@@ -1994,10 +1997,10 @@ func (m Model) renderDashboardHero(width int) string {
 		" ",
 		dimStyle.Render(i18n.T("app_monitor_subtitle")),
 	)
-	summary := fmt.Sprintf("%d %s · %s tokens · $%.2f %s · %.1f%% %s · %d%% %s",
+	summary := fmt.Sprintf("%d %s · %s · $%.2f %s · %.1f%% %s · %d%% %s",
 		len(m.sessions),
 		i18n.T("sessions_label"),
-		compactInt(totalTokens),
+		tokenCountCompact(totalTokens),
 		m.costSummary.TotalCost,
 		i18n.T("cost"),
 		errRate,
@@ -2192,7 +2195,7 @@ func (m Model) renderAnomalyPanel(width int) string {
 		for i := 0; i < limit; i++ {
 			a := m.overview.AnomaliesTop[i]
 			name := truncate(a.Session, nameW)
-			kind := truncate(a.Type, maxInt(6, innerW-nameW-5))
+			kind := truncate(anomalyTypeLabel(a.Type), maxInt(6, innerW-nameW-5))
 			lines = append(lines, fmt.Sprintf("%s  %-*s %s",
 				anomalyColor(a.Type).Render("△"),
 				nameW,
@@ -2415,6 +2418,14 @@ func compactInt(v int) string {
 	}
 }
 
+func tokenCount(v int) string {
+	return fmt.Sprintf(i18n.T("token_count"), fmt.Sprintf("%d", v))
+}
+
+func tokenCountCompact(v int) string {
+	return fmt.Sprintf(i18n.T("token_count"), compactInt(v))
+}
+
 func healthLabel(h int) string {
 	switch {
 	case h >= 90:
@@ -2426,6 +2437,62 @@ func healthLabel(h int) string {
 	default:
 		return i18n.T("health_critical")
 	}
+}
+
+func sortFieldLabel(field string) string {
+	switch field {
+	case "name":
+		return i18n.T("sort_field_name")
+	case "health":
+		return i18n.T("sort_field_health")
+	case "cost":
+		return i18n.T("sort_field_cost")
+	case "turns":
+		return i18n.T("sort_field_turns")
+	default:
+		return field
+	}
+}
+
+func diffFieldLabel(field string) string {
+	switch field {
+	case "health":
+		return i18n.T("diff_field_health")
+	case "cost":
+		return i18n.T("diff_field_cost")
+	case "turns":
+		return i18n.T("diff_field_turns")
+	case "tools":
+		return i18n.T("diff_field_tools")
+	case "success_rate":
+		return i18n.T("diff_field_success_rate")
+	case "fail_count":
+		return i18n.T("diff_field_fail_count")
+	case "duration":
+		return i18n.T("diff_field_duration")
+	case "model":
+		return i18n.T("diff_field_model")
+	case "anomaly_count":
+		return i18n.T("diff_field_anomaly_count")
+	default:
+		return field
+	}
+}
+
+func anomalyTypeLabel(kind string) string {
+	key := "anomaly_type_" + kind
+	if translated := i18n.T(key); translated != key {
+		return translated
+	}
+	return strings.ReplaceAll(kind, "_", " ")
+}
+
+func riskLabel(risk string) string {
+	key := "risk_" + risk
+	if translated := i18n.T(key); translated != key {
+		return translated
+	}
+	return risk
 }
 
 func anomalyColor(t string) lipgloss.Style {

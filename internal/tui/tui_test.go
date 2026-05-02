@@ -294,6 +294,53 @@ func TestChineseListUsesTranslatedLabels(t *testing.T) {
 	}
 }
 
+func TestChineseTUITranslatesRuntimeLabels(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 140, 36)
+	m.view = viewOverview
+	overview := m.View()
+	for _, unwanted := range []string{"sessions", "Needs attention"} {
+		if strings.Contains(overview, unwanted) {
+			t.Fatalf("overview leaked English label %q:\n%s", unwanted, overview)
+		}
+	}
+	if !strings.Contains(overview, "会话") || !strings.Contains(overview, "需要关注") {
+		t.Fatalf("overview missing Chinese runtime labels:\n%s", overview)
+	}
+
+	m.view = viewList
+	m.table.SetCursor(1)
+	list := m.View()
+	if strings.Contains(list, "tool failures") {
+		t.Fatalf("list leaked English anomaly label:\n%s", list)
+	}
+	if !strings.Contains(list, "工具失败") {
+		t.Fatalf("list missing translated anomaly label:\n%s", list)
+	}
+}
+
+func TestChineseDiffAndDiagnosticsTranslateComputedLabels(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	if got := diffFieldLabel("success_rate"); got != "成功率" {
+		t.Fatalf("expected translated diff field, got %q", got)
+	}
+	if got := sortFieldLabel("health"); got != "健康" {
+		t.Fatalf("expected translated sort field, got %q", got)
+	}
+	if got := anomalyTypeLabel("shallow_thinking"); got != "浅层思考" {
+		t.Fatalf("expected translated anomaly type, got %q", got)
+	}
+	if got := riskLabel("high"); got != "高" {
+		t.Fatalf("expected translated risk label, got %q", got)
+	}
+}
+
 func TestWideListRendersStableSingleTable(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 160, 36)
 	m.view = viewList
