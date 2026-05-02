@@ -27,32 +27,33 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	sub := strings.Repeat(i18n.T("separator_single"), 40)
 
 	var b strings.Builder
-	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
+	w := func(s string) { b.WriteString(s + "\n") }
+	wf := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 
 	w(sep)
-	w("  "+i18n.T("title"), Version)
+	w(fmt.Sprintf("  "+i18n.T("title"), Version))
 	w(sep)
 	w("")
 
 	// Token Cost
-	w(i18n.T("token_cost"))
+	w(i18n.T("waste_cost"))
 	w(sub)
-	w("  "+i18n.T("input"), m.TokensInput)
-	w("  "+i18n.T("output"), m.TokensOutput)
+	wf("  "+i18n.T("input"), m.TokensInput)
+	wf("  "+i18n.T("output"), m.TokensOutput)
 	if m.TokensCacheW > 0 || m.TokensCacheR > 0 {
-		w("  "+i18n.T("cache_write"), m.TokensCacheW)
-		w("  "+i18n.T("cache_read"), m.TokensCacheR)
+		wf("  "+i18n.T("cache_write"), m.TokensCacheW)
+		wf("  "+i18n.T("cache_read"), m.TokensCacheR)
 	}
 	w("  ────────────────────────────────────")
-	w("  "+i18n.T("total_tokens"), totalTokens)
-	w("  "+i18n.T("est_cost"), m.CostEstimated, m.ModelUsed)
+	wf("  "+i18n.T("total_tokens"), totalTokens)
+	wf("  "+i18n.T("est_cost"), m.CostEstimated, m.ModelUsed)
 	w("")
 
 	// Activity
 	w(i18n.T("activity"))
 	w(sub)
-	w("  "+i18n.T("messages_label"), m.UserMessages, m.AssistantTurns)
-	w("  "+i18n.T("tool_calls_label"), m.ToolCallsTotal)
+	wf("  "+i18n.T("messages_label"), m.UserMessages, m.AssistantTurns)
+	wf("  "+i18n.T("tool_calls_label"), m.ToolCallsTotal)
 	if totalTools > 0 {
 		srEmoji := "🟢"
 		rate := float64(m.ToolCallsOK) / float64(totalTools)
@@ -61,7 +62,7 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 		} else if rate < 0.85 {
 			srEmoji = "🟡"
 		}
-		w("  "+i18n.T("success_label"), successRate, m.ToolCallsOK, totalTools, srEmoji)
+		wf("  "+i18n.T("success_label"), successRate, m.ToolCallsOK, totalTools, srEmoji)
 	}
 	w("")
 
@@ -69,19 +70,19 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	w(i18n.T("latency"))
 	w(sub)
 	if len(gaps) > 0 {
-		w("  "+i18n.T("min_lat"), gaps[0])
-		w("  "+i18n.T("median"), percentile(gaps, 0.50))
-		w("  "+i18n.T("p95"), percentile(gaps, 0.95))
-		w("  "+i18n.T("max_lat"), gaps[len(gaps)-1])
+		wf("  "+i18n.T("min_lat"), gaps[0])
+		wf("  "+i18n.T("median"), percentile(gaps, 0.50))
+		wf("  "+i18n.T("p95"), percentile(gaps, 0.95))
+		wf("  "+i18n.T("max_lat"), gaps[len(gaps)-1])
 		sum := 0.0
 		for _, g := range gaps {
 			sum += g
 		}
-		w("  "+i18n.T("avg_lat"), sum/float64(len(gaps)))
+		wf("  "+i18n.T("avg_lat"), sum/float64(len(gaps)))
 	} else {
 		w("  " + i18n.T("no_gap_data"))
 	}
-	w("  "+i18n.T("duration"), FmtDuration(m.DurationSec))
+	wf("  "+i18n.T("duration"), FmtDuration(m.DurationSec))
 	w("")
 
 	// Top Tools
@@ -101,7 +102,7 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 			if i >= 8 {
 				break
 			}
-			w("  %-35s %4d", item.k, item.v)
+			wf("  %-35s %4d", item.k, item.v)
 		}
 		w("")
 	}
@@ -119,12 +120,12 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 			qualityLbl = i18n.T("quality_moderate")
 			qEmoji = "🟡"
 		}
-		w("  "+i18n.T("blocks"), m.ReasoningBlocks)
-		w("  "+i18n.T("avg_chars"), avgReason)
-		w("  "+i18n.T("total_chars"), m.ReasoningChars)
-		w("  "+i18n.T("quality_label"), qEmoji, qualityLbl)
+		wf("  "+i18n.T("blocks"), m.ReasoningBlocks)
+		wf("  "+i18n.T("avg_chars"), avgReason)
+		wf("  "+i18n.T("total_chars"), m.ReasoningChars)
+		wf("  "+i18n.T("quality_label"), qEmoji, qualityLbl)
 		if m.ReasoningRedact > 0 {
-			w("  "+i18n.T("redacted_blocks"), m.ReasoningRedact)
+			wf("  "+i18n.T("redacted_blocks"), m.ReasoningRedact)
 		}
 	} else {
 		w("  " + i18n.T("no_thinking_blocks"))
@@ -136,7 +137,7 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	w(sub)
 	if len(anoms) > 0 {
 		for _, a := range anoms {
-			w("  %s [%s] %s: %s", a.Emoji, strings.ToUpper(a.Severity), a.Type, a.Detail)
+			wf("  %s [%s] %s: %s", a.Emoji, strings.ToUpper(a.Severity), a.Type, a.Detail)
 		}
 	} else {
 		w("  " + i18n.T("no_anomalies"))
@@ -147,8 +148,8 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	if m.LoopGroups > 0 {
 		w("🔄 LOOP COST")
 		w(sub)
-		w("  Tool Loop Cost:    $%9.4f  (%d groups)", m.LoopCostEst, m.LoopGroups)
-		w("  Retry Events:       %d", m.LoopRetryEvents)
+		wf("  Tool Loop Cost:    $%9.4f  (%d groups)", m.LoopCostEst, m.LoopGroups)
+		wf("  Retry Events:       %d", m.LoopRetryEvents)
 		w("")
 	}
 
@@ -157,7 +158,7 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	w(sub)
 	hBar := HealthBar(h)
 	hEmoji := HealthEmoji(h)
-	w("  %s  %d/100  %s", hEmoji, h, hBar)
+	wf("  %s  %d/100  %s", hEmoji, h, hBar)
 	w("")
 	w(sep)
 
@@ -211,10 +212,10 @@ func ReportJSON(m Metrics, anoms []Anomaly, h int) string {
 		"model_used":  m.ModelUsed,
 		"source_tool": m.SourceTool,
 		"session": map[string]interface{}{
-			"start":             m.SessionStart,
-			"end":               m.SessionEnd,
-			"duration_seconds":  m.DurationSec,
-			"duration_human":    FmtDuration(m.DurationSec),
+			"start":            m.SessionStart,
+			"end":              m.SessionEnd,
+			"duration_seconds": m.DurationSec,
+			"duration_human":   FmtDuration(m.DurationSec),
 		},
 		"tokens": map[string]int{
 			"input":       m.TokensInput,
@@ -240,9 +241,15 @@ func ReportJSON(m Metrics, anoms []Anomaly, h int) string {
 			"median": safeCalc(gaps, func(x []float64) float64 { return percentile(x, 0.50) }),
 			"p95":    safeCalc(gaps, func(x []float64) float64 { return percentile(x, 0.95) }),
 			"max":    safeCalc(gaps, func(x []float64) float64 { return x[len(x)-1] }),
-			"avg":    safeCalc(gaps, func(x []float64) float64 { s := 0.0; for _, v := range x { s += v }; return s / float64(len(x)) }),
+			"avg": safeCalc(gaps, func(x []float64) float64 {
+				s := 0.0
+				for _, v := range x {
+					s += v
+				}
+				return s / float64(len(x))
+			}),
 		},
-		"tools_top":   top10,
+		"tools_top": top10,
 		"reasoning": map[string]interface{}{
 			"blocks":      m.ReasoningBlocks,
 			"total_chars": m.ReasoningChars,
@@ -261,7 +268,7 @@ func ReportJSON(m Metrics, anoms []Anomaly, h int) string {
 func ReportCompare(sessions []Session, model string) string {
 	sep := strings.Repeat(i18n.T("separator_double"), 76)
 	var b strings.Builder
-	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
+	w := func(s string) { b.WriteString(s + "\n") }
 
 	w(sep)
 	ww := func(s string) { b.WriteString(s + "\n") }
@@ -334,16 +341,17 @@ func ReportCompareJSON(sessions []Session, model string) string {
 // LoopCostSection generates the loop cost breakdown section for text reports.
 func LoopCostSection(lc LoopCost) string {
 	var b strings.Builder
-	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
+	w := func(s string) { b.WriteString(s + "\n") }
+	wf := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 	sub := strings.Repeat(i18n.T("separator_single"), 40)
 
-	w("🔄 LOOP COST")
+	w("🔄 " + i18n.T("loop_section_title"))
 	w(sub)
-	w("  Tool Loop Cost:    $%9.4f  (%d groups)", lc.ToolLoopCost, lc.LoopGroups)
-	w("  Retry Cost:        $%9.4f  (%d events)", lc.RetryCost, lc.RetryEvents)
-	w("  Format Retry Cost: $%9.4f", lc.FormatRetryCost)
+	wf("  "+i18n.T("loop_tool_loop_cost"), lc.ToolLoopCost, lc.LoopGroups)
+	wf("  "+i18n.T("loop_retry_cost"), lc.RetryCost, lc.RetryEvents)
+	wf("  "+i18n.T("loop_format_retry_cost"), lc.FormatRetryCost)
 	w("  ─────────────────────────────")
-	w("  Total Loop Waste:  $%9.4f", lc.TotalLoopCost)
+	wf("  "+i18n.T("loop_total_waste"), lc.TotalLoopCost)
 	w("")
 	return b.String()
 }
@@ -352,10 +360,11 @@ func LoopCostSection(lc LoopCost) string {
 func ReportOverview(ov Overview, sessions []Session) string {
 	sep := strings.Repeat(i18n.T("separator_double"), 70)
 	var b strings.Builder
-	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
+	w := func(s string) { b.WriteString(s + "\n") }
+	wf := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 
 	w(sep)
-	w("  AGENTWASTE v%s — "+i18n.T("overview_title")+"  (%d "+i18n.T("sessions_label")+")", Version, ov.TotalSessions)
+	w(fmt.Sprintf("  AGENTWASTE v%s — "+i18n.T("overview_title")+"  (%d "+i18n.T("sessions_label")+")", Version, ov.TotalSessions))
 	w(sep)
 	w("")
 
@@ -366,11 +375,11 @@ func ReportOverview(ov Overview, sessions []Session) string {
 		warnPct = ov.Warning * 100 / ov.TotalSessions
 		critPct = ov.Critical * 100 / ov.TotalSessions
 	}
-	w("  " + i18n.T("overview_total") + ":     %d", ov.TotalSessions)
-	w("  🟢 " + i18n.T("overview_healthy") + ":   %d (%d%%)", ov.Healthy, healthyPct)
-	w("  🟡 " + i18n.T("overview_warning") + ":   %d (%d%%)", ov.Warning, warnPct)
-	w("  🔴 " + i18n.T("overview_critical") + ":   %d (%d%%)", ov.Critical, critPct)
-	w("  💰 " + i18n.T("total_cost") + ":      $%.2f", ov.TotalCost)
+	wf("  "+i18n.T("overview_total")+":     %d", ov.TotalSessions)
+	wf("  🟢 "+i18n.T("overview_healthy")+":   %d (%d%%)", ov.Healthy, healthyPct)
+	wf("  🟡 "+i18n.T("overview_warning")+":   %d (%d%%)", ov.Warning, warnPct)
+	wf("  🔴 "+i18n.T("overview_critical")+":   %d (%d%%)", ov.Critical, critPct)
+	wf("  💰 "+i18n.T("total_cost")+":      $%.2f", ov.TotalCost)
 	w("")
 
 	// By agent
@@ -389,7 +398,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 		if d, ok := ToolDisplayNames[a.k]; ok {
 			display = d
 		}
-		w("    %-30s %4d sessions  $%7.2f", display, a.v.Sessions, a.v.Cost)
+		wf("    %-30s %4d sessions  $%7.2f", display, a.v.Sessions, a.v.Cost)
 	}
 	w("")
 
@@ -408,7 +417,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 		if i >= 8 {
 			break
 		}
-		w("    %-25s %4d sessions  $%7.2f", mdl.k, mdl.v.Sessions, mdl.v.Cost)
+		wf("    %-25s %4d sessions  $%7.2f", mdl.k, mdl.v.Sessions, mdl.v.Cost)
 	}
 	w("")
 
@@ -427,7 +436,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 			if len(name) > 30 {
 				name = name[:30]
 			}
-			w("    ⚠️  %-30s %s", name, a.Type)
+			wf("    ⚠️  %-30s %s", name, a.Type)
 		}
 	}
 	w("")

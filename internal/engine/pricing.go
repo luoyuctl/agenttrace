@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
 // ── LiteLLM source ────────────────────────────────────────────
@@ -217,9 +219,9 @@ func PricingSource() string {
 	ensurePricingLoaded()
 	switch dynamicPricing.source {
 	case "remote":
-		return fmt.Sprintf("LiteLLM (fetched %s)", dynamicPricing.loadedAt.Format("2006-01-02 15:04"))
+		return fmt.Sprintf(i18n.T("pricing_litellm_fetched"), dynamicPricing.loadedAt.Format("2006-01-02 15:04"))
 	case "cache":
-		return fmt.Sprintf("LiteLLM (cached %s)", dynamicPricing.loadedAt.Format("2006-01-02 15:04"))
+		return fmt.Sprintf(i18n.T("pricing_litellm_cached"), dynamicPricing.loadedAt.Format("2006-01-02 15:04"))
 	default:
 		return "built-in fallback (use --update-pricing for latest)"
 	}
@@ -271,7 +273,7 @@ func UpdatePricing() (int, error) {
 
 	if err := savePricingCache(data); err != nil {
 		// Non-fatal: cache save failed but pricing is loaded in memory
-		fmt.Fprintf(os.Stderr, "Warning: failed to save pricing cache: %v\n", err)
+		fmt.Fprintf(os.Stderr, i18n.T("pricing_save_warning"), err)
 	}
 
 	dynamicPricing.entries = entries

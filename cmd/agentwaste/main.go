@@ -42,20 +42,20 @@ func main() {
 
 	// Version
 	if *version {
-		fmt.Printf("agentwaste v%s\n", engine.Version)
+		fmt.Printf(i18n.T("cli_version"), engine.Version)  //nolint:printf
 		return
 	}
 
 	// Update pricing (before --list-models so it reflects new data)
 	if *updatePricing {
-		fmt.Printf("Downloading latest model pricing from LiteLLM...\n")
+		os.Stdout.WriteString(i18n.T("cli_downloading_pricing"))
 		n, err := engine.UpdatePricing()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
 			os.Exit(1)
 		}
-		fmt.Printf("Loaded %d model pricings.\n", n)
-		fmt.Printf("Cache saved to %s\n", engine.CachePath())
+		fmt.Printf(i18n.T("cli_loaded_pricing"), n)
+		fmt.Printf(i18n.T("cli_cache_saved"), engine.CachePath())
 		// Fall through to allow --list-models after update
 	}
 
@@ -111,7 +111,7 @@ func main() {
 		m := tui.New(sessionsDir)
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
 			os.Exit(1)
 		}
 		return
@@ -169,7 +169,7 @@ func main() {
 		if *output != "" {
 			os.MkdirAll(filepath.Dir(*output), 0755)
 			os.WriteFile(*output, []byte(out+"\n"), 0644)
-			fmt.Fprintf(os.Stderr, "Saved: %s\n", *output)
+			fmt.Fprintf(os.Stderr, i18n.T("cli_saved"), *output)
 		}
 		fmt.Print(out)
 		return
@@ -184,7 +184,7 @@ func main() {
 		}
 		s, err := engine.LoadSession(files[0])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
 			os.Exit(1)
 		}
 		events, _ := engine.Parse(s.Path)
@@ -226,14 +226,14 @@ func main() {
 	}
 
 	if targetPath == "" {
-		fmt.Fprintln(os.Stderr, "No session files found.")
+		fmt.Fprint(os.Stderr, i18n.T("cli_no_session_files"))
 		os.Exit(1)
 	}
 
 	// Single session analysis
 	s, err := engine.LoadSession(targetPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading %s: %v\n", targetPath, err)
+		fmt.Fprintf(os.Stderr, i18n.T("cli_error_loading"), targetPath, err)
 		os.Exit(1)
 	}
 
@@ -247,35 +247,14 @@ func main() {
 	if *output != "" {
 		os.MkdirAll(filepath.Dir(*output), 0755)
 		os.WriteFile(*output, []byte(out+"\n"), 0644)
-		fmt.Fprintf(os.Stderr, "Saved: %s\n", *output)
+		fmt.Fprintf(os.Stderr, i18n.T("cli_saved"), *output)
 	}
 	fmt.Print(out)
 }
 
-// resolveDefaultDir scans common agent session directories.
-// Returns the first directory that exists and contains session files.
+// resolveDefaultDir returns "" to signal auto-discovery across all known agent directories.
+// The engine's LoadAll("") and FindSessionFiles("") will use ScanAllDirs()
+// to discover sessions from ~/.hermes, ~/.claude, ~/.codex, ~/.gemini simultaneously.
 func resolveDefaultDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(".hermes", "sessions")
-	}
-	candidates := []string{
-		filepath.Join(home, ".hermes", "sessions"),
-		filepath.Join(home, ".claude", "sessions"),
-		filepath.Join(home, ".gemini", "sessions"),
-		filepath.Join(home, ".codex", "sessions"),
-	}
-	for _, dir := range candidates {
-		if entries, err := os.ReadDir(dir); err == nil {
-			for _, e := range entries {
-				if !e.IsDir() {
-					name := e.Name()
-					if strings.HasSuffix(name, ".jsonl") || strings.HasSuffix(name, ".json") {
-						return dir
-					}
-				}
-			}
-		}
-	}
-	return filepath.Join(home, ".hermes", "sessions")
+	return ""
 }

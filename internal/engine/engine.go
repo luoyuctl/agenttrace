@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agentwaste.
-// Pure Go. Supports 5 formats: Hermes Agent (JSONL/.json), Claude Code (JSONL/.json), Codex CLI (Rollout).
+// Pure Go. Supports Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, and OpenClaw formats.
 package engine
 
 import (
@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 // Severity constants for anomaly severity (internal, not i18n).
 const (
@@ -34,34 +34,38 @@ type Price struct {
 }
 
 var ToolDisplayNames = map[string]string{
-	"hermes_jsonl":     "Hermes Agent (JSONL)",
-	"hermes_json":      "Hermes Agent (.json)",
-	"claude_code":      "Claude Code",
+	"hermes_jsonl":      "Hermes Agent (JSONL)",
+	"hermes_json":       "Hermes Agent (.json)",
+	"claude_code":       "Claude Code",
 	"claude_code_jsonl": "Claude Code (JSONL)",
-	"codex_cli":        "Codex CLI",
-	"codex_rollout":    "Codex CLI (Rollout)",
-	"generic":          "Generic JSON/JSONL",
+	"codex_cli":         "Codex CLI",
+	"codex_rollout":     "Codex CLI (Rollout)",
+	"gemini_cli":        "Gemini CLI",
+	"opencode":          "OpenCode",
+	"openclaw":          "OpenClaw",
+	"generic":           "Generic JSON/JSONL",
 }
 
 // ── Normalized Event ──
 
 type Event struct {
-	Role        string
-	Content     string
-	Timestamp   string
-	Reasoning   string
-	Redacted    bool
-	ToolCalls   []ToolCall `json:"tool_calls"`
-	ToolCallID  string     `json:"tool_call_id"`
-	IsError     bool       `json:"is_error"`
-	Usage       map[string]int
-	ModelUsed   string
-	SourceTool  string // which tool produced this session
+	Role       string
+	Content    string
+	Timestamp  string
+	Reasoning  string
+	Redacted   bool
+	ToolCalls  []ToolCall `json:"tool_calls"`
+	ToolCallID string     `json:"tool_call_id"`
+	IsError    bool       `json:"is_error"`
+	Usage      map[string]int
+	ModelUsed  string
+	SourceTool string // which tool produced this session
 }
 
 type ToolCall struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	Args string `json:"args,omitempty"`
 }
 
 // ── Metrics ──
@@ -281,10 +285,10 @@ func FilterSessions(sessions []Session, query string) []Session {
 
 // LoopResult is the result of analyzing events for loops.
 type LoopResult struct {
-	HasLoop   bool
-	LoopType  string // "retry", "tool_loop", etc.
-	Turns     int
-	LoopCost  float64
+	HasLoop  bool
+	LoopType string // "retry", "tool_loop", etc.
+	Turns    int
+	LoopCost float64
 }
 
 // AnalyzeLoops detects redundant/looping behavior in events.
@@ -369,7 +373,7 @@ func ComputeLoopCost(events []Event) LoopCost {
 				} else {
 					if consecutive > maxConsecutive {
 						maxConsecutive = consecutive
-											}
+					}
 					consecutive = 1
 				}
 				lastTool = tc.Name
@@ -378,7 +382,7 @@ func ComputeLoopCost(events []Event) LoopCost {
 	}
 	if consecutive > maxConsecutive {
 		maxConsecutive = consecutive
-			}
+	}
 
 	// Estimate cost per tool call
 	assistantTurns := 0
@@ -412,7 +416,7 @@ func ComputeLoopCost(events []Event) LoopCost {
 // FormatInfo holds detected format + the parsed top-level data (to avoid re-reading).
 type FormatInfo struct {
 	Format string
-	Raw    []byte   // full file content, shared with Parse() to avoid re-reading
+	Raw    []byte                 // full file content, shared with Parse() to avoid re-reading
 	Doc    map[string]interface{} // parsed top-level JSON if single blob
 	Arr    []interface{}          // parsed top-level JSON array
 }
@@ -466,11 +470,20 @@ func DetectFormat(path string) FormatInfo {
 			fi.Format = "hermes_jsonl"
 			return fi
 		}
-		if role, _ := firstLineObj["role"].(string); (role == "user" || role == "assistant" || role == "tool") {
+		if role, _ := firstLineObj["role"].(string); role == "user" || role == "assistant" || role == "tool" {
 			if _, hasTS := firstLineObj["timestamp"]; hasTS {
 				fi.Format = "hermes_jsonl"
 				return fi
 			}
+		}
+		// Gemini JSONL
+		if _, hasCand := firstLineObj["candidates"]; hasCand {
+			fi.Format = "gemini_cli"
+			return fi
+		}
+		if _, hasCont := firstLineObj["contents"]; hasCont {
+			fi.Format = "gemini_cli"
+			return fi
 		}
 		// Claude Code transcript JSONL: top-level "type" + "sessionId"
 		typ, _ := firstLineObj["type"].(string)
@@ -498,12 +511,18 @@ func DetectFormat(path string) FormatInfo {
 }
 
 func detectSingleJSON(doc map[string]interface{}) string {
+	// OpenClaw: provider="openclaw" distinguishes from other message wrappers.
+	if provider, _ := doc["provider"].(string); provider == "openclaw" {
+		return "openclaw"
+	}
+
 	// Hermes .json: session_id + messages + model + platform, NO "usage" at top level
 	_, hasSessID := doc["session_id"]
 	_, hasMsgs := doc["messages"]
 	_, hasModel := doc["model"]
 	_, hasPlatform := doc["platform"]
 	_, hasUsage := doc["usage"]
+	_, hasProvider := doc["provider"]
 
 	if hasSessID && hasMsgs && hasModel && hasPlatform {
 		return "hermes_json"
@@ -526,6 +545,12 @@ func detectSingleJSON(doc map[string]interface{}) string {
 				}
 			}
 		}
+		if hasProvider {
+			return "opencode"
+		}
+		if _, hasSession := doc["session"]; hasSession {
+			return "opencode"
+		}
 		// Hermes JSON without platform field (backward compat)
 		if hasSessID {
 			return "hermes_json"
@@ -539,6 +564,12 @@ func detectSingleJSON(doc map[string]interface{}) string {
 	_, hasID := doc["id"]
 	if hasMsgs && (hasCreated || hasID) {
 		return "codex_cli"
+	}
+
+	_, hasContents := doc["contents"]
+	_, hasCandidates := doc["candidates"]
+	if hasContents || hasCandidates {
+		return "gemini_cli"
 	}
 
 	// Default with messages → try Claude Code block format
@@ -585,6 +616,12 @@ func Parse(path string) ([]Event, error) {
 		return parseCodexCLI(fi.Doc, fi.Arr, string(fi.Raw))
 	case "codex_rollout":
 		return parseCodexRollout(string(fi.Raw))
+	case "gemini_cli":
+		return parseGeminiCLI(fi.Doc, string(fi.Raw))
+	case "opencode":
+		return parseOpenCode(fi.Doc)
+	case "openclaw":
+		return parseOpenClaw(fi.Doc)
 	default:
 		return parseGeneric(string(fi.Raw))
 	}
@@ -659,6 +696,7 @@ func parseHermesJSON(doc map[string]interface{}) ([]Event, error) {
 					tc := ToolCall{ID: str(tcm, "id")}
 					if fn, ok := tcm["function"].(map[string]interface{}); ok {
 						tc.Name = str(fn, "name")
+						tc.Args = jsonish(fn["arguments"])
 					}
 					toolCalls = append(toolCalls, tc)
 				}
@@ -810,9 +848,13 @@ func parseClaudeCode(doc map[string]interface{}, arr []interface{}) ([]Event, er
 				case "tool_use":
 					id, _ := b["id"].(string)
 					name, _ := b["name"].(string)
+					args := jsonish(b["input"])
+					if args == "" {
+						args = jsonish(b["arguments"])
+					}
 					events = append(events, Event{
 						Role: "assistant", Timestamp: ts,
-						ToolCalls: []ToolCall{{ID: id, Name: name}},
+						ToolCalls:  []ToolCall{{ID: id, Name: name, Args: args}},
 						SourceTool: "claude_code",
 					})
 				case "tool_result":
@@ -889,6 +931,7 @@ func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([
 					tc := ToolCall{ID: str(tcm, "id")}
 					if fn, ok := tcm["function"].(map[string]interface{}); ok {
 						tc.Name = str(fn, "name")
+						tc.Args = jsonish(fn["arguments"])
 					}
 					toolCalls = append(toolCalls, tc)
 				}
@@ -905,7 +948,7 @@ func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([
 						switch tp {
 						case "tool_use":
 							toolCalls = append(toolCalls, ToolCall{
-								ID: str(b, "id"), Name: str(b, "name"),
+								ID: str(b, "id"), Name: str(b, "name"), Args: jsonish(b["input"]),
 							})
 						case "text":
 							if text, _ := b["text"].(string); text != "" {
@@ -945,6 +988,230 @@ func parseCodexCLI(doc map[string]interface{}, arr []interface{}, raw string) ([
 		events = append(events, ev)
 	}
 
+	return events, nil
+}
+
+// ── Gemini CLI ──
+
+func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
+	var events []Event
+	model := "unknown"
+
+	parseParts := func(role, ts string, parts []interface{}) {
+		for _, part := range parts {
+			p, ok := part.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if text, _ := p["text"].(string); text != "" {
+				events = append(events, Event{
+					Role: role, Content: text, Timestamp: ts,
+					ModelUsed: model, SourceTool: "gemini_cli",
+				})
+			}
+			if fc, ok := p["functionCall"].(map[string]interface{}); ok {
+				name, _ := fc["name"].(string)
+				events = append(events, Event{
+					Role: role, Timestamp: ts,
+					ToolCalls: []ToolCall{{Name: name, Args: jsonish(fc["args"])}},
+					ModelUsed: model, SourceTool: "gemini_cli",
+				})
+			}
+			if fr, ok := p["functionResponse"].(map[string]interface{}); ok {
+				name, _ := fr["name"].(string)
+				events = append(events, Event{
+					Role:       "tool",
+					Content:    jsonish(fr["response"]),
+					Timestamp:  ts,
+					ToolCallID: name,
+					SourceTool: "gemini_cli",
+				})
+			}
+		}
+	}
+
+	parseObject := func(obj map[string]interface{}) {
+		if mv, ok := obj["modelVersion"].(string); ok && mv != "" {
+			model = mv
+		}
+		if um, ok := obj["usageMetadata"]; ok {
+			ev := Event{Role: "meta", ModelUsed: model, SourceTool: "gemini_cli"}
+			ev.Usage = geminiUsage(um)
+			events = append(events, ev)
+		}
+		ts, _ := obj["timestamp"].(string)
+		if contents, ok := obj["contents"].([]interface{}); ok {
+			for _, item := range contents {
+				cItem, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				role, _ := cItem["role"].(string)
+				if tsItem, _ := cItem["timestamp"].(string); tsItem != "" {
+					ts = tsItem
+				}
+				parts, _ := cItem["parts"].([]interface{})
+				parseParts(role, ts, parts)
+			}
+		}
+		if candidates, ok := obj["candidates"].([]interface{}); ok {
+			for _, cand := range candidates {
+				c, ok := cand.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if cont, ok := c["content"].(map[string]interface{}); ok {
+					role, _ := cont["role"].(string)
+					parts, _ := cont["parts"].([]interface{})
+					parseParts(role, ts, parts)
+				}
+			}
+		}
+	}
+
+	if doc != nil {
+		parseObject(doc)
+		if len(events) > 0 {
+			return events, nil
+		}
+	}
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var obj map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &obj); err == nil {
+			parseObject(obj)
+		}
+	}
+	return events, nil
+}
+
+// ── OpenCode ──
+
+func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
+	return parseAnthropicMessageWrapper(doc, "opencode")
+}
+
+// ── OpenClaw ──
+
+func parseOpenClaw(doc map[string]interface{}) ([]Event, error) {
+	return parseAnthropicMessageWrapper(doc, "openclaw")
+}
+
+func parseAnthropicMessageWrapper(doc map[string]interface{}, source string) ([]Event, error) {
+	var events []Event
+	var messages []interface{}
+	model := "unknown"
+
+	target := doc
+	if sess, ok := doc["session"].(map[string]interface{}); ok {
+		target = sess
+	}
+	if msgs, ok := target["messages"].([]interface{}); ok {
+		messages = msgs
+	}
+	if m, ok := target["model"].(string); ok {
+		model = m
+	} else if m, ok := doc["model"].(string); ok {
+		model = m
+	}
+	if usage, ok := target["usage"]; ok {
+		ev := Event{Role: "meta", ModelUsed: model, SourceTool: source}
+		ub, _ := json.Marshal(usage)
+		_ = json.Unmarshal(ub, &ev.Usage)
+		events = append(events, ev)
+	} else if model != "unknown" {
+		events = append(events, Event{Role: "meta", ModelUsed: model, SourceTool: source})
+	}
+
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := msg["role"].(string)
+		ts, _ := msg["timestamp"].(string)
+		if role == "tool" {
+			content := extractToolResultContent(msg)
+			if content == "" {
+				content, _ = msg["content"].(string)
+			}
+			isErr, _ := msg["is_error"].(bool)
+			events = append(events, Event{
+				Role: "tool", Content: content, Timestamp: ts,
+				ToolCallID: str(msg, "tool_call_id"), IsError: isErr, SourceTool: source,
+			})
+			continue
+		}
+		switch c := msg["content"].(type) {
+		case string:
+			events = append(events, Event{
+				Role: role, Content: c, Timestamp: ts,
+				ModelUsed: model, SourceTool: source,
+			})
+		case []interface{}:
+			for _, block := range c {
+				b, ok := block.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				t, _ := b["type"].(string)
+				switch t {
+				case "text":
+					text, _ := b["text"].(string)
+					events = append(events, Event{
+						Role: role, Content: text, Timestamp: ts,
+						ModelUsed: model, SourceTool: source,
+					})
+				case "thinking":
+					think, _ := b["thinking"].(string)
+					redacted, _ := b["redacted"].(bool)
+					events = append(events, Event{
+						Role: "assistant", Timestamp: ts, Reasoning: think, Redacted: redacted,
+						ModelUsed: model, SourceTool: source,
+					})
+				case "tool_use":
+					id, _ := b["id"].(string)
+					name, _ := b["name"].(string)
+					args := jsonish(b["input"])
+					if args == "" {
+						args = jsonish(b["arguments"])
+					}
+					events = append(events, Event{
+						Role: "assistant", Timestamp: ts,
+						ToolCalls: []ToolCall{{ID: id, Name: name, Args: args}},
+						ModelUsed: model, SourceTool: source,
+					})
+				case "tool_result":
+					tid, _ := b["tool_use_id"].(string)
+					isErr, _ := b["is_error"].(bool)
+					events = append(events, Event{
+						Role: "tool", Timestamp: ts, ToolCallID: tid,
+						Content: extractToolResultContent(b), IsError: isErr, SourceTool: source,
+					})
+				}
+			}
+		}
+		if tcs, ok := msg["tool_calls"].([]interface{}); ok {
+			var tcList []ToolCall
+			for _, tc := range tcs {
+				if tcm, ok := tc.(map[string]interface{}); ok {
+					tcItem := ToolCall{ID: str(tcm, "id")}
+					if fn, ok := tcm["function"].(map[string]interface{}); ok {
+						tcItem.Name = str(fn, "name")
+						tcItem.Args = jsonish(fn["arguments"])
+					}
+					tcList = append(tcList, tcItem)
+				}
+			}
+			events = append(events, Event{
+				Role: role, Timestamp: ts, ToolCalls: tcList,
+				ModelUsed: model, SourceTool: source,
+			})
+		}
+	}
 	return events, nil
 }
 
@@ -1021,9 +1288,13 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 						case "tool_use":
 							id, _ := b["id"].(string)
 							name, _ := b["name"].(string)
+							args := jsonish(b["input"])
+							if args == "" {
+								args = jsonish(b["arguments"])
+							}
 							events = append(events, Event{
 								Role: "assistant", Timestamp: ts,
-								ToolCalls: []ToolCall{{ID: id, Name: name}},
+								ToolCalls: []ToolCall{{ID: id, Name: name, Args: args}},
 								ModelUsed: modelName, SourceTool: "claude_code",
 							})
 						case "tool_result":
@@ -1114,7 +1385,7 @@ func parseCodexRollout(raw string) ([]Event, error) {
 						for _, blk := range c {
 							if b, ok := blk.(map[string]interface{}); ok {
 								bt, _ := b["type"].(string)
-									if bt == "input_text" || bt == "output_text" || bt == "text" {
+								if bt == "input_text" || bt == "output_text" || bt == "text" {
 									if t, _ := b["text"].(string); t != "" {
 										if content != "" {
 											content += "\n"
@@ -1141,9 +1412,13 @@ func parseCodexRollout(raw string) ([]Event, error) {
 				case "function_call":
 					callID, _ := payload["call_id"].(string)
 					name, _ := payload["name"].(string)
+					args := jsonish(payload["arguments"])
+					if args == "" {
+						args = jsonish(payload["input"])
+					}
 					events = append(events, Event{
 						Role: "assistant", Timestamp: ts,
-						ToolCalls: []ToolCall{{ID: callID, Name: name}},
+						ToolCalls: []ToolCall{{ID: callID, Name: name, Args: args}},
 						ModelUsed: modelName, SourceTool: "codex_cli",
 					})
 
@@ -1486,7 +1761,7 @@ func LoadSession(path string) (*Session, error) {
 	// v0.2: community-driven diagnostics
 	loops := DetectFingerprintLoops(events)
 	latencies := AnalyzeToolLatency(events)
-	ctxUtil := AnalyzeContextUtilization(events, 0) // MCP tool count from user config
+	ctxUtil := AnalyzeContextUtilization(events, model, 0)
 	largeParams := DetectLargeParams(events)
 	unusedTools := DetectUnusedTools(events)
 	stuckExtra := DetectStuckPatternsEnhanced(events)
@@ -1495,18 +1770,18 @@ func LoadSession(path string) (*Session, error) {
 
 	return &Session{
 		Name: name, Path: path,
-		Metrics:           m,
-		Anomalies:         a,
-		Health:            h,
-		LoopCost:          ComputeLoopCost(events),
-		LoopFingerprints:  loops,
-		ToolLatencies:     latencies,
-		ContextUtil:       ctxUtil,
-		LargeParams:       largeParams,
-		UnusedTools:       unusedTools,
+		Metrics:            m,
+		Anomalies:          a,
+		Health:             h,
+		LoopCost:           ComputeLoopCost(events),
+		LoopFingerprints:   loops,
+		ToolLatencies:      latencies,
+		ContextUtil:        ctxUtil,
+		LargeParams:        largeParams,
+		UnusedTools:        unusedTools,
 		StuckPatternsExtra: stuckExtra,
-		LoopResultData:    loopResult,
-		ToolWarnings:      toolWarnings,
+		LoopResultData:     loopResult,
+		ToolWarnings:       toolWarnings,
 	}, nil
 }
 
@@ -1550,8 +1825,7 @@ func FindSessionFiles(dir string) []string {
 		for _, d := range DiscoverSessionDirs() {
 			all = append(all, collectSessionFiles(d)...)
 		}
-		sort.Slice(all, func(i, j int) bool { return all[i] > all[j] })
-		return all
+		return sortFilesByModTime(all)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -1590,6 +1864,29 @@ func FindSessionFiles(dir string) []string {
 	return files
 }
 
+func sortFilesByModTime(paths []string) []string {
+	type item struct {
+		path string
+		t    time.Time
+	}
+	items := make([]item, 0, len(paths))
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		items = append(items, item{path: p, t: info.ModTime()})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].t.After(items[j].t)
+	})
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.path
+	}
+	return out
+}
+
 // DiscoverSessionDirs returns all well-known agent session directories found on this machine.
 func DiscoverSessionDirs() []string {
 	home, _ := os.UserHomeDir()
@@ -1605,6 +1902,9 @@ func DiscoverSessionDirs() []string {
 		dirs = append(dirs, s)
 	}
 	if s := filepath.Join(home, ".codex", "archived_sessions"); dirExists(s) {
+		dirs = append(dirs, s)
+	}
+	if s := filepath.Join(home, ".gemini", "sessions"); dirExists(s) {
 		dirs = append(dirs, s)
 	}
 	if s := filepath.Join(home, ".claude", "projects"); dirExists(s) {
@@ -1713,6 +2013,46 @@ func str(m map[string]interface{}, key string) string {
 	return ""
 }
 
+func jsonish(v interface{}) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	default:
+		if jb, err := json.Marshal(x); err == nil {
+			return string(jb)
+		}
+	}
+	return ""
+}
+
+func geminiUsage(raw interface{}) map[string]int {
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return map[string]int{
+		"input_tokens":  numberAsInt(m["promptTokenCount"]),
+		"output_tokens": numberAsInt(m["candidatesTokenCount"]),
+	}
+}
+
+func numberAsInt(v interface{}) int {
+	switch x := v.(type) {
+	case int:
+		return x
+	case int64:
+		return int(x)
+	case float64:
+		return int(x)
+	case json.Number:
+		n, _ := x.Int64()
+		return int(n)
+	}
+	return 0
+}
+
 // extractToolResultContent handles tool_result content that may be string, array of blocks, or other types.
 func extractToolResultContent(b map[string]interface{}) string {
 	switch v := b["content"].(type) {
@@ -1785,14 +2125,14 @@ func round4(v float64) float64 {
 
 func FmtDuration(sec float64) string {
 	if sec < 60 {
-		return fmt.Sprintf("%.0fs", sec)
+		return fmt.Sprintf(i18n.T("duration_seconds"), sec)
 	}
 	if sec < 3600 {
-		return fmt.Sprintf("%.1fm", sec/60)
+		return fmt.Sprintf(i18n.T("duration_minutes"), sec/60)
 	}
 	h := int(sec / 3600)
 	m := int(int(sec)%3600) / 60
-	return fmt.Sprintf("%dh %dm", h, m)
+	return fmt.Sprintf(i18n.T("duration_hours"), h, m)
 }
 
 func HealthEmoji(h int) string {
@@ -1831,9 +2171,8 @@ type FixSuggestion struct {
 	Category    string // "hanging"/"tool_failure"/"thinking"/"redaction"/"no_tools"
 }
 
-// GenerateFixes 根据异常和指标生成智能修复建议列表。
-// lang 参数: "zh" 返回中文建议, "en" 返回英文建议。
-func GenerateFixes(m Metrics, anomalies []Anomaly, lang string) []FixSuggestion {
+// GenerateFixes builds a list of actionable fix suggestions from anomalies and metrics.
+func GenerateFixes(m Metrics, anomalies []Anomaly) []FixSuggestion {
 	var fixes []FixSuggestion
 	totalTools := m.ToolCallsOK + m.ToolCallsFail
 	var failRate float64
@@ -1844,119 +2183,59 @@ func GenerateFixes(m Metrics, anomalies []Anomaly, lang string) []FixSuggestion 
 	for _, a := range anomalies {
 		switch a.Type {
 		case "hanging":
-			if lang == "zh" {
-				fixes = append(fixes, FixSuggestion{
-					Title:       "添加工具超时保护",
-					Description: fmt.Sprintf("检测到 %d 个间隔 >60s, 最长=%.0fs", len(m.GapsSec), maxGap(m.GapsSec)),
-					Action:      "为工具调用添加 timeout 并限制重试次数",
-					Severity:    a.Severity,
-					Category:    "hanging",
-				})
-			} else {
-				fixes = append(fixes, FixSuggestion{
-					Title:       "Add Tool Timeout Protection",
-					Description: fmt.Sprintf("Detected %d gaps >60s, max=%.0fs", len(m.GapsSec), maxGap(m.GapsSec)),
-					Action:      "Add timeout to tool calls and limit retry attempts",
-					Severity:    a.Severity,
-					Category:    "hanging",
-				})
-			}
+			fixes = append(fixes, FixSuggestion{
+				Title:       i18n.T("fix_hanging_title"),
+				Description: fmt.Sprintf(i18n.T("fix_hanging_desc"), len(m.GapsSec), maxGap(m.GapsSec)),
+				Action:      i18n.T("fix_hanging_action"),
+				Severity:    a.Severity,
+				Category:    "hanging",
+			})
 
 		case "tool_failures":
 			if failRate > 0.30 {
-				if lang == "zh" {
-					fixes = append(fixes, FixSuggestion{
-						Title:       "检查工具 Schema",
-						Description: fmt.Sprintf("工具失败率 %.0f%% (%d/%d)", failRate*100, m.ToolCallsFail, totalTools),
-						Action:      "验证工具参数格式，确保 LLM 传入正确类型的参数",
-						Severity:    a.Severity,
-						Category:    "tool_failure",
-					})
-				} else {
-					fixes = append(fixes, FixSuggestion{
-						Title:       "Check Tool Schema",
-						Description: fmt.Sprintf("Tool failure rate %.0f%% (%d/%d)", failRate*100, m.ToolCallsFail, totalTools),
-						Action:      "Validate tool parameter formats, ensure LLM passes correct argument types",
-						Severity:    a.Severity,
-						Category:    "tool_failure",
-					})
-				}
+				fixes = append(fixes, FixSuggestion{
+					Title:       i18n.T("fix_tool_fail_critical_title"),
+					Description: fmt.Sprintf(i18n.T("fix_tool_fail_critical_desc"), failRate*100, m.ToolCallsFail, totalTools),
+					Action:      i18n.T("fix_tool_fail_critical_action"),
+					Severity:    a.Severity,
+					Category:    "tool_failure",
+				})
 			} else if failRate > 0.15 {
-				if lang == "zh" {
-					fixes = append(fixes, FixSuggestion{
-						Title:       "优化工具描述",
-						Description: fmt.Sprintf("工具失败率 %.0f%% (%d/%d)", failRate*100, m.ToolCallsFail, totalTools),
-						Action:      "在 tool description 中提供更精确的参数示例和约束",
-						Severity:    a.Severity,
-						Category:    "tool_failure",
-					})
-				} else {
-					fixes = append(fixes, FixSuggestion{
-						Title:       "Improve Tool Descriptions",
-						Description: fmt.Sprintf("Tool failure rate %.0f%% (%d/%d)", failRate*100, m.ToolCallsFail, totalTools),
-						Action:      "Provide more precise parameter examples and constraints in tool descriptions",
-						Severity:    a.Severity,
-						Category:    "tool_failure",
-					})
-				}
+				fixes = append(fixes, FixSuggestion{
+					Title:       i18n.T("fix_tool_fail_warning_title"),
+					Description: fmt.Sprintf(i18n.T("fix_tool_fail_warning_desc"), failRate*100, m.ToolCallsFail, totalTools),
+					Action:      i18n.T("fix_tool_fail_warning_action"),
+					Severity:    a.Severity,
+					Category:    "tool_failure",
+				})
 			}
 
 		case "shallow_thinking":
-			if lang == "zh" {
-				fixes = append(fixes, FixSuggestion{
-					Title:       "增加推理深度",
-					Description: fmt.Sprintf("平均推理仅 %.0f 字符", safeAvgReason(m)),
-					Action:      "在 system prompt 中添加 '请一步步思考' 或增加 max_tokens",
-					Severity:    a.Severity,
-					Category:    "thinking",
-				})
-			} else {
-				fixes = append(fixes, FixSuggestion{
-					Title:       "Increase Reasoning Depth",
-					Description: fmt.Sprintf("Average reasoning only %.0f chars", safeAvgReason(m)),
-					Action:      "Add 'Think step by step' to system prompt or increase max_tokens",
-					Severity:    a.Severity,
-					Category:    "thinking",
-				})
-			}
+			fixes = append(fixes, FixSuggestion{
+				Title:       i18n.T("fix_shallow_title"),
+				Description: fmt.Sprintf(i18n.T("fix_shallow_desc"), safeAvgReason(m)),
+				Action:      i18n.T("fix_shallow_action"),
+				Severity:    a.Severity,
+				Category:    "thinking",
+			})
 
 		case "redaction":
-			if lang == "zh" {
-				fixes = append(fixes, FixSuggestion{
-					Title:       "检查脱敏配置",
-					Description: fmt.Sprintf("发现 %d 个思维块被脱敏", m.ReasoningRedact),
-					Action:      "推理内容被脱敏，检查 hermes config 中的 redact 设置",
-					Severity:    a.Severity,
-					Category:    "redaction",
-				})
-			} else {
-				fixes = append(fixes, FixSuggestion{
-					Title:       "Check Redaction Config",
-					Description: fmt.Sprintf("Found %d redacted thinking blocks", m.ReasoningRedact),
-					Action:      "Reasoning content is redacted, check the redact setting in hermes config",
-					Severity:    a.Severity,
-					Category:    "redaction",
-				})
-			}
+			fixes = append(fixes, FixSuggestion{
+				Title:       i18n.T("fix_redact_title"),
+				Description: fmt.Sprintf(i18n.T("fix_redact_desc"), m.ReasoningRedact),
+				Action:      i18n.T("fix_redact_action"),
+				Severity:    a.Severity,
+				Category:    "redaction",
+			})
 
 		case "no_tools":
-			if lang == "zh" {
-				fixes = append(fixes, FixSuggestion{
-					Title:       "启用工具调用",
-					Description: fmt.Sprintf("共 %d 轮对话，零工具调用", m.AssistantTurns),
-					Action:      "当前为纯对话模式，考虑为 agent 配置工具以提升效率",
-					Severity:    a.Severity,
-					Category:    "no_tools",
-				})
-			} else {
-				fixes = append(fixes, FixSuggestion{
-					Title:       "Enable Tool Calling",
-					Description: fmt.Sprintf("%d turns with zero tool calls", m.AssistantTurns),
-					Action:      "Currently in chat-only mode, consider configuring tools for the agent",
-					Severity:    a.Severity,
-					Category:    "no_tools",
-				})
-			}
+			fixes = append(fixes, FixSuggestion{
+				Title:       i18n.T("fix_no_tools_title"),
+				Description: fmt.Sprintf(i18n.T("fix_no_tools_desc"), m.AssistantTurns),
+				Action:      i18n.T("fix_no_tools_action"),
+				Severity:    a.Severity,
+				Category:    "no_tools",
+			})
 		}
 	}
 
@@ -2133,20 +2412,20 @@ func buildDiffSummary(a, b Session) string {
 	costDelta := b.Metrics.CostEstimated - a.Metrics.CostEstimated
 
 	parts := []string{}
-	parts = append(parts, fmt.Sprintf("Session %s vs %s", b.Name, a.Name))
+	parts = append(parts, fmt.Sprintf(i18n.T("diff_summary_session_vs"), b.Name, a.Name))
 
 	if healthDelta > 0 {
-		parts = append(parts, fmt.Sprintf("health +%d", healthDelta))
+		parts = append(parts, fmt.Sprintf(i18n.T("diff_summary_health_up"), healthDelta))
 	} else if healthDelta < 0 {
-		parts = append(parts, fmt.Sprintf("health %d", healthDelta))
+		parts = append(parts, fmt.Sprintf(i18n.T("diff_summary_health_down"), healthDelta))
 	} else {
-		parts = append(parts, "health unchanged")
+		parts = append(parts, i18n.T("diff_summary_health_same"))
 	}
 
 	if costDelta > 0.0001 {
-		parts = append(parts, fmt.Sprintf("cost +$%.4f", costDelta))
+		parts = append(parts, fmt.Sprintf(i18n.T("diff_summary_cost_up"), costDelta))
 	} else if costDelta < -0.0001 {
-		parts = append(parts, fmt.Sprintf("cost -$%.4f", -costDelta))
+		parts = append(parts, fmt.Sprintf(i18n.T("diff_summary_cost_down"), -costDelta))
 	}
 
 	return strings.Join(parts, ", ")
@@ -2170,7 +2449,7 @@ type CostAlert struct {
 // sessions: 历史会话列表（用于计算基线），current: 当前会话。
 func PredictCostAnomaly(sessions []Session, current Session) CostAlert {
 	if len(sessions) == 0 {
-		return CostAlert{Triggered: false, Level: "info", Message: "无历史数据用于比较"}
+		return CostAlert{Triggered: false, Level: "info", Message: i18n.T("cost_alert_no_history")}
 	}
 
 	// 计算所有 session 的平均 cost/turn
@@ -2185,7 +2464,7 @@ func PredictCostAnomaly(sessions []Session, current Session) CostAlert {
 		}
 	}
 	if count == 0 {
-		return CostAlert{Triggered: false, Level: "info", Message: "无有效历史数据"}
+		return CostAlert{Triggered: false, Level: "info", Message: i18n.T("cost_alert_no_valid_history")}
 	}
 
 	avgCostTurn := totalCostTurn / float64(count)
@@ -2214,29 +2493,23 @@ func PredictCostAnomaly(sessions []Session, current Session) CostAlert {
 	if curCostTurn > avgCostTurn*3 {
 		alert.Triggered = true
 		alert.Level = "critical"
-		alert.Message = fmt.Sprintf("本会话单轮成本($%.4f)是平均($%.4f)的%.1f倍",
-			curCostTurn, avgCostTurn, alert.Ratio)
+		alert.Message = fmt.Sprintf(i18n.T("cost_alert_critical"), curCostTurn, avgCostTurn, alert.Ratio)
 	} else if curCostTurn > avgCostTurn*2 {
 		alert.Triggered = true
 		alert.Level = "warning"
-		alert.Message = fmt.Sprintf("本会话单轮成本($%.4f)是平均($%.4f)的%.1f倍",
-			curCostTurn, avgCostTurn, alert.Ratio)
+		alert.Message = fmt.Sprintf(i18n.T("cost_alert_critical"), curCostTurn, avgCostTurn, alert.Ratio)
 	} else if current.Metrics.CostEstimated > 0 && current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated > 0.50 {
 		alert.Triggered = true
 		alert.Level = "critical"
-		alert.Message = fmt.Sprintf("循环成本($%.4f)占总成本($%.4f)的%.0f%%",
-			current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated,
-			current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated*100)
+		alert.Message = fmt.Sprintf(i18n.T("cost_alert_warning"), current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated, current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated*100)
 	} else if current.Metrics.CostEstimated > 0 && current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated > 0.30 {
 		alert.Triggered = true
 		alert.Level = "warning"
-		alert.Message = fmt.Sprintf("循环成本($%.4f)占总成本($%.4f)的%.0f%%",
-			current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated,
-			current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated*100)
+		alert.Message = fmt.Sprintf(i18n.T("cost_alert_warning"), current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated, current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated*100)
 	} else {
 		alert.Triggered = false
 		alert.Level = "info"
-		alert.Message = fmt.Sprintf("单轮成本 $%.4f，在正常范围内 (平均 $%.4f)", curCostTurn, avgCostTurn)
+		alert.Message = fmt.Sprintf(i18n.T("cost_alert_info"), curCostTurn, avgCostTurn)
 	}
 
 	// 同时检查 loop_cost 占比
@@ -2271,7 +2544,7 @@ func AnalyzeHealthTrend(sessions []Session) HealthTrend {
 	trend := HealthTrend{}
 
 	if len(sessions) == 0 {
-		trend.Message = "无可用会话数据"
+		trend.Message = i18n.T("trend_no_data")
 		return trend
 	}
 
@@ -2353,9 +2626,9 @@ func AnalyzeHealthTrend(sessions []Session) HealthTrend {
 		for i := startIdx; i < len(trend.Points); i++ {
 			last3Vals = append(last3Vals, fmt.Sprintf("%d", trend.Points[i].Health))
 		}
-		trend.Message = fmt.Sprintf("健康分持续下降: %s", strings.Join(last3Vals, "→"))
+		trend.Message = fmt.Sprintf(i18n.T("trend_regressing"), strings.Join(last3Vals, "→"))
 	} else {
-		trend.Message = fmt.Sprintf("健康分稳定在 %.0f", trend.AvgHealth)
+		trend.Message = fmt.Sprintf(i18n.T("trend_stable_at"), trend.AvgHealth)
 	}
 
 	return trend
@@ -2395,7 +2668,7 @@ func ValidateToolPatterns(events []Event) []ToolWarning {
 							ToolName: lastTool,
 							Pattern:  "dead_loop",
 							Count:    consecutive,
-							Detail:   fmt.Sprintf("工具 '%s' 连续调用 %d 次，可能存在死循环", lastTool, consecutive),
+							Detail:   fmt.Sprintf(i18n.T("tool_warn_dead_loop_detail"), lastTool, consecutive),
 							Severity: "high",
 						})
 					}
@@ -2411,7 +2684,7 @@ func ValidateToolPatterns(events []Event) []ToolWarning {
 			ToolName: lastTool,
 			Pattern:  "dead_loop",
 			Count:    consecutive,
-			Detail:   fmt.Sprintf("工具 '%s' 连续调用 %d 次，可能存在死循环", lastTool, consecutive),
+			Detail:   fmt.Sprintf(i18n.T("tool_warn_dead_loop_detail"), lastTool, consecutive),
 			Severity: "high",
 		})
 	}
@@ -2433,7 +2706,7 @@ func ValidateToolPatterns(events []Event) []ToolWarning {
 				ToolName: name,
 				Pattern:  "empty_args",
 				Count:    count,
-				Detail:   fmt.Sprintf("工具 '%s' 有 %d 次调用参数为空", name, count),
+				Detail:   fmt.Sprintf(i18n.T("tool_warn_empty_args_detail"), name, count),
 				Severity: "medium",
 			})
 		}
@@ -2463,7 +2736,7 @@ func ValidateToolPatterns(events []Event) []ToolWarning {
 							ToolName: fr.lastFail,
 							Pattern:  "fail_retry_chain",
 							Count:    fr.chain,
-							Detail:   fmt.Sprintf("工具 '%s' 失败后连续重试 %d 次", fr.lastFail, fr.chain),
+							Detail:   fmt.Sprintf(i18n.T("tool_warn_fail_retry_detail"), fr.lastFail, fr.chain),
 							Severity: "high",
 						})
 					}
@@ -2478,7 +2751,7 @@ func ValidateToolPatterns(events []Event) []ToolWarning {
 			ToolName: fr.lastFail,
 			Pattern:  "fail_retry_chain",
 			Count:    fr.chain,
-			Detail:   fmt.Sprintf("工具 '%s' 失败后连续重试 %d 次", fr.lastFail, fr.chain),
+			Detail:   fmt.Sprintf(i18n.T("tool_warn_fail_retry_detail"), fr.lastFail, fr.chain),
 			Severity: "high",
 		})
 	}
@@ -2508,7 +2781,7 @@ func ValidateToolPatterns(events []Event) []ToolWarning {
 					ToolName: name,
 					Pattern:  "redundant",
 					Count:    len(turns),
-					Detail:   fmt.Sprintf("工具 '%s' 在 %d 个轮次中被调用 %d 次，可能存在冗余调用", name, len(uniqueTurns), len(turns)),
+					Detail:   fmt.Sprintf(i18n.T("tool_warn_redundant_detail"), name, len(uniqueTurns), len(turns)),
 					Severity: "low",
 				})
 			}
@@ -2525,9 +2798,9 @@ func ValidateToolPatterns(events []Event) []ToolWarning {
 // PromptChange 一次 prompt 变更
 type PromptChange struct {
 	SessionName string
-	Before      string  // 变更前摘要
-	After       string  // 变更后摘要
-	Impact      string  // 影响描述
+	Before      string // 变更前摘要
+	After       string // 变更后摘要
+	Impact      string // 影响描述
 	HealthDelta int
 	CostDelta   float64
 }
@@ -2546,7 +2819,7 @@ func AnalyzePromptImpact(sessions []Session) PromptImpact {
 
 	if len(sessions) < 2 {
 		impact.Trend = "stable"
-		impact.Suggestion = "需要至少 2 个同名 session 才能分析趋势"
+		impact.Suggestion = i18n.T("prompt_impact_need_more")
 		return impact
 	}
 
@@ -2574,22 +2847,22 @@ func AnalyzePromptImpact(sessions []Session) PromptImpact {
 
 			ch := PromptChange{
 				SessionName: curr.Name,
-				Before:      fmt.Sprintf("health=%d cost=$%.4f", prev.Health, prev.Metrics.CostEstimated),
-				After:       fmt.Sprintf("health=%d cost=$%.4f", curr.Health, curr.Metrics.CostEstimated),
+				Before:      fmt.Sprintf(i18n.T("prompt_change_before_after"), prev.Health, prev.Metrics.CostEstimated),
+				After:       fmt.Sprintf(i18n.T("prompt_change_before_after"), curr.Health, curr.Metrics.CostEstimated),
 				HealthDelta: healthDelta,
 				CostDelta:   costDelta,
 			}
 
 			if healthDelta > 0 && costDelta <= 0 {
-				ch.Impact = "positive"
+				ch.Impact = i18n.T("impact_positive")
 			} else if healthDelta < 0 && costDelta >= 0 {
-				ch.Impact = "negative"
+				ch.Impact = i18n.T("impact_negative")
 			} else if healthDelta > 0 {
-				ch.Impact = "positive (higher cost)"
+				ch.Impact = i18n.T("impact_positive_cost")
 			} else if healthDelta < 0 {
-				ch.Impact = "negative (lower cost)"
+				ch.Impact = i18n.T("impact_negative_cost")
 			} else {
-				ch.Impact = "neutral"
+				ch.Impact = i18n.T("impact_neutral")
 			}
 
 			impact.Changes = append(impact.Changes, ch)
@@ -2599,7 +2872,7 @@ func AnalyzePromptImpact(sessions []Session) PromptImpact {
 	// 判断整体趋势
 	if len(allDeltas) == 0 {
 		impact.Trend = "stable"
-		impact.Suggestion = "无足够数据判断趋势"
+		impact.Suggestion = i18n.T("prompt_impact_no_data")
 		return impact
 	}
 
@@ -2615,13 +2888,13 @@ func AnalyzePromptImpact(sessions []Session) PromptImpact {
 
 	if improving > worsening && worsening == 0 {
 		impact.Trend = "improving"
-		impact.Suggestion = "健康分稳步提升，prompt 优化方向正确，建议继续保持"
+		impact.Suggestion = i18n.T("prompt_impact_suggestion_improve")
 	} else if worsening > improving && improving == 0 {
 		impact.Trend = "worsening"
-		impact.Suggestion = "健康分持续下降，建议回滚最近的 prompt 变更并重新评估"
+		impact.Suggestion = i18n.T("prompt_impact_suggestion_worsen")
 	} else {
 		impact.Trend = "mixed"
-		impact.Suggestion = "健康分波动较大，建议逐一排查每次变更的影响，找出正负因素"
+		impact.Suggestion = i18n.T("prompt_impact_suggestion_mixed")
 	}
 
 	return impact
@@ -2657,8 +2930,6 @@ func extractPrefix(name string) string {
 	return name
 }
 
-
-
 // ═══════════════════════════════════════════════════
 // WASTE ANALYSIS (April 2026)
 // ═══════════════════════════════════════════════════
@@ -2693,20 +2964,19 @@ func AnalyzeCacheEfficiency(m Metrics) CacheEfficiency {
 	switch {
 	case ce.HitRate >= 80:
 		ce.Rating = "excellent"
-		ce.Suggestion = "cache utilization excellent - keep current prompt structure"
+		ce.Suggestion = i18n.T("cache_suggestion_excellent")
 	case ce.HitRate >= 40:
 		ce.Rating = "good"
-		ce.Suggestion = "moderate cache hit - place static system instructions at prompt prefix"
+		ce.Suggestion = i18n.T("cache_suggestion_good")
 	case m.TokensCacheW > 0:
 		ce.Rating = "poor"
-		ce.Suggestion = "low cache hit rate - enable prompt caching with static prefix content"
+		ce.Suggestion = i18n.T("cache_suggestion_poor")
 	default:
 		ce.Rating = "none"
-		ce.Suggestion = "caching not enabled - enable Anthropic prompt caching to save up to 90% on input cost"
+		ce.Suggestion = i18n.T("cache_suggestion_none")
 	}
 	return ce
 }
-
 
 // ToolBloatItem tracks per-tool usage metrics.
 type ToolBloatItem struct {
@@ -2724,6 +2994,7 @@ type ToolBloatAnalysis struct {
 	Suggestion     string
 	TopBloat       []ToolBloatItem
 }
+
 func AnalyzeToolBloat(m Metrics) ToolBloatAnalysis {
 	tba := ToolBloatAnalysis{}
 	if m.AssistantTurns > 0 {
@@ -2737,32 +3008,43 @@ func AnalyzeToolBloat(m Metrics) ToolBloatAnalysis {
 
 	switch {
 	case tba.ToolsPerTurn > 5:
-		tba.BloatScore = 90; tba.BloatLevel = "severe"
-		tba.Suggestion = "severe tool bloat: limit max tool calls per turn or split into smaller tasks"
+		tba.BloatScore = 90
+		tba.BloatLevel = "severe"
+		tba.Suggestion = i18n.T("bloat_suggestion_severe")
 	case tba.ToolsPerTurn > 3:
-		tba.BloatScore = 65; tba.BloatLevel = "high"
-		tba.Suggestion = "too many tool calls: check if simple tasks use over-complex agent orchestration"
+		tba.BloatScore = 65
+		tba.BloatLevel = "high"
+		tba.Suggestion = i18n.T("bloat_suggestion_high")
 	case tba.ToolsPerTurn > 1.5:
-		tba.BloatScore = 35; tba.BloatLevel = "medium"
-		tba.Suggestion = "moderate tool usage: watch for unnecessary tool call patterns"
+		tba.BloatScore = 35
+		tba.BloatLevel = "medium"
+		tba.Suggestion = i18n.T("bloat_suggestion_medium")
 	default:
-		tba.BloatScore = 10; tba.BloatLevel = "low"
-		tba.Suggestion = "tool usage is lean"
+		tba.BloatScore = 10
+		tba.BloatLevel = "low"
+		tba.Suggestion = i18n.T("bloat_suggestion_low")
 	}
 
-	type kv struct { k string; v int }
+	type kv struct {
+		k string
+		v int
+	}
 	var sorted []kv
 	for k, v := range m.ToolUsage {
 		sorted = append(sorted, kv{k, v})
 	}
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].v > sorted[j].v })
 	for i, item := range sorted {
-		if i >= 5 { break }
+		if i >= 5 {
+			break
+		}
 		isRedundant := item.v > m.AssistantTurns && m.AssistantTurns > 0
-		if isRedundant { tba.RedundantCalls += item.v - m.AssistantTurns }
+		if isRedundant {
+			tba.RedundantCalls += item.v - m.AssistantTurns
+		}
 		tba.TopBloat = append(tba.TopBloat, ToolBloatItem{
 			ToolName: item.k, CallCount: item.v,
-			TotalCost: avgCostPerTurn * float64(item.v),
+			TotalCost:   avgCostPerTurn * float64(item.v),
 			IsRedundant: isRedundant,
 		})
 	}
@@ -2789,7 +3071,7 @@ func DetectStuckPatterns(events []Event) []StuckPattern {
 		p = append(p, StuckPattern{
 			Pattern:     "empty_response",
 			Severity:    "critical",
-			Description: fmt.Sprintf("%d consecutive empty assistant responses — agent likely stuck", emptyStreak),
+			Description: fmt.Sprintf(i18n.T("stuck_empty_response"), emptyStreak),
 		})
 	}
 	return p
@@ -2824,38 +3106,61 @@ func ComputeWasteReport(m Metrics, events []Event, loopResult LoopResult) WasteR
 
 	score := 0.0
 	switch wr.Cache.Rating {
-	case "none": score += 20
-	case "poor": score += 15
-	case "good": score += 5
+	case "none":
+		score += 20
+	case "poor":
+		score += 15
+	case "good":
+		score += 5
 	}
 	score += float64(wr.Bloat.BloatScore) * 0.25
 	score += wr.LoopPercent * 0.6
-	if score > 30 { score = 30 }
+	if score > 30 {
+		score = 30
+	}
 	stuckScore := float64(len(wr.Stuck)) * 7.0
 	for _, s := range wr.Stuck {
-		if s.Severity == "critical" { stuckScore += 5 }
+		if s.Severity == "critical" {
+			stuckScore += 5
+		}
 	}
-	if stuckScore > 20 { stuckScore = 20 }
+	if stuckScore > 20 {
+		stuckScore = 20
+	}
 	score += stuckScore
 	if m.TokensCacheR > 0 && m.TokensInput > 0 {
-		if float64(m.TokensCacheR)/float64(m.TokensInput) < 0.3 { score += 6 }
+		if float64(m.TokensCacheR)/float64(m.TokensInput) < 0.3 {
+			score += 6
+		}
 	}
 	wr.WasteScore = int(score)
-	if wr.WasteScore > 100 { wr.WasteScore = 100 }
-	if wr.WasteScore < 0 { wr.WasteScore = 0 }
+	if wr.WasteScore > 100 {
+		wr.WasteScore = 100
+	}
+	if wr.WasteScore < 0 {
+		wr.WasteScore = 0
+	}
 
 	switch {
-	case wr.WasteScore >= 70: wr.WasteLevel = "red"
-	case wr.WasteScore >= 40: wr.WasteLevel = "orange"
-	case wr.WasteScore >= 15: wr.WasteLevel = "yellow"
-	default: wr.WasteLevel = "green"
+	case wr.WasteScore >= 70:
+		wr.WasteLevel = "red"
+	case wr.WasteScore >= 40:
+		wr.WasteLevel = "orange"
+	case wr.WasteScore >= 15:
+		wr.WasteLevel = "yellow"
+	default:
+		wr.WasteLevel = "green"
 	}
 
 	switch wr.WasteLevel {
-	case "green": wr.Summary = "efficient session - no significant waste"
-	case "yellow": wr.Summary = fmt.Sprintf("minor waste - cache %.0f%% hit, room for optimization", wr.Cache.HitRate)
-	case "orange": wr.Summary = fmt.Sprintf("wasting $%.2f: loops %.0f%%, tools %.1f/turn", wr.TotalWasted, wr.LoopPercent, wr.Bloat.ToolsPerTurn)
-	case "red": wr.Summary = fmt.Sprintf("severe waste $%.2f: loops %.0f%%, %d stuck, no cache", wr.TotalWasted, wr.LoopPercent, len(wr.Stuck))
+	case "green":
+		wr.Summary = i18n.T("waste_summary_green")
+	case "yellow":
+		wr.Summary = fmt.Sprintf(i18n.T("waste_summary_yellow"), wr.Cache.HitRate)
+	case "orange":
+		wr.Summary = fmt.Sprintf(i18n.T("waste_summary_orange"), wr.TotalWasted, wr.LoopPercent, wr.Bloat.ToolsPerTurn)
+	case "red":
+		wr.Summary = fmt.Sprintf(i18n.T("waste_summary_red"), wr.TotalWasted, wr.LoopPercent, len(wr.Stuck))
 	}
 
 	if wr.Cache.Rating == "none" || wr.Cache.Rating == "poor" {
@@ -2864,15 +3169,21 @@ func ComputeWasteReport(m Metrics, events []Event, loopResult LoopResult) WasteR
 	if wr.Bloat.BloatLevel == "severe" || wr.Bloat.BloatLevel == "high" {
 		if len(wr.Bloat.TopBloat) > 0 {
 			wr.TopActions = append(wr.TopActions,
-				fmt.Sprintf("top tool %q called %dx - reduce or batch", wr.Bloat.TopBloat[0].ToolName, wr.Bloat.TopBloat[0].CallCount))
-		} else { wr.TopActions = append(wr.TopActions, wr.Bloat.Suggestion) }
+				fmt.Sprintf(i18n.T("waste_action_top_tool"), wr.Bloat.TopBloat[0].ToolName, wr.Bloat.TopBloat[0].CallCount))
+		} else {
+			wr.TopActions = append(wr.TopActions, wr.Bloat.Suggestion)
+		}
 	}
 	if wr.LoopPercent > 20 {
 		wr.TopActions = append(wr.TopActions,
-			fmt.Sprintf("loop waste $%.2f (%.0f%%) - add max retries limit", wr.LoopCost, wr.LoopPercent))
+			fmt.Sprintf(i18n.T("waste_action_loop"), wr.LoopCost, wr.LoopPercent))
 	}
-	if len(wr.TopActions) > 3 { wr.TopActions = wr.TopActions[:3] }
-	if len(wr.TopActions) == 0 { wr.TopActions = []string{"session running optimally"} }
+	if len(wr.TopActions) > 3 {
+		wr.TopActions = wr.TopActions[:3]
+	}
+	if len(wr.TopActions) == 0 {
+		wr.TopActions = []string{i18n.T("waste_action_optimal")}
+	}
 	return wr
 }
 
@@ -2899,38 +3210,61 @@ func ComputeWasteReportFromSession(s *Session) WasteReport {
 	// Compute waste score
 	score := 0.0
 	switch wr.Cache.Rating {
-	case "none": score += 20
-	case "poor": score += 15
-	case "good": score += 5
+	case "none":
+		score += 20
+	case "poor":
+		score += 15
+	case "good":
+		score += 5
 	}
 	score += float64(wr.Bloat.BloatScore) * 0.25
 	score += wr.LoopPercent * 0.6
-	if score > 30 { score = 30 }
+	if score > 30 {
+		score = 30
+	}
 	stuckScore := float64(len(wr.Stuck)) * 7.0
 	for _, st := range wr.Stuck {
-		if st.Severity == "critical" { stuckScore += 5 }
+		if st.Severity == "critical" {
+			stuckScore += 5
+		}
 	}
-	if stuckScore > 20 { stuckScore = 20 }
+	if stuckScore > 20 {
+		stuckScore = 20
+	}
 	score += stuckScore
 	if s.Metrics.TokensCacheR > 0 && s.Metrics.TokensInput > 0 {
-		if float64(s.Metrics.TokensCacheR)/float64(s.Metrics.TokensInput) < 0.3 { score += 6 }
+		if float64(s.Metrics.TokensCacheR)/float64(s.Metrics.TokensInput) < 0.3 {
+			score += 6
+		}
 	}
 	wr.WasteScore = int(score)
-	if wr.WasteScore > 100 { wr.WasteScore = 100 }
-	if wr.WasteScore < 0 { wr.WasteScore = 0 }
+	if wr.WasteScore > 100 {
+		wr.WasteScore = 100
+	}
+	if wr.WasteScore < 0 {
+		wr.WasteScore = 0
+	}
 
 	switch {
-	case wr.WasteScore >= 70: wr.WasteLevel = "red"
-	case wr.WasteScore >= 40: wr.WasteLevel = "orange"
-	case wr.WasteScore >= 15: wr.WasteLevel = "yellow"
-	default: wr.WasteLevel = "green"
+	case wr.WasteScore >= 70:
+		wr.WasteLevel = "red"
+	case wr.WasteScore >= 40:
+		wr.WasteLevel = "orange"
+	case wr.WasteScore >= 15:
+		wr.WasteLevel = "yellow"
+	default:
+		wr.WasteLevel = "green"
 	}
 
 	switch wr.WasteLevel {
-	case "green": wr.Summary = "efficient session - no significant waste"
-	case "yellow": wr.Summary = fmt.Sprintf("minor waste - cache %.0f%% hit, room for optimization", wr.Cache.HitRate)
-	case "orange": wr.Summary = fmt.Sprintf("wasting $%.2f: loops %.0f%%, tools %.1f/turn", wr.TotalWasted, wr.LoopPercent, wr.Bloat.ToolsPerTurn)
-	case "red": wr.Summary = fmt.Sprintf("severe waste $%.2f: loops %.0f%%, %d stuck, no cache", wr.TotalWasted, wr.LoopPercent, len(wr.Stuck))
+	case "green":
+		wr.Summary = i18n.T("waste_summary_green")
+	case "yellow":
+		wr.Summary = fmt.Sprintf(i18n.T("waste_summary_yellow"), wr.Cache.HitRate)
+	case "orange":
+		wr.Summary = fmt.Sprintf(i18n.T("waste_summary_orange"), wr.TotalWasted, wr.LoopPercent, wr.Bloat.ToolsPerTurn)
+	case "red":
+		wr.Summary = fmt.Sprintf(i18n.T("waste_summary_red"), wr.TotalWasted, wr.LoopPercent, len(wr.Stuck))
 	}
 
 	if wr.Cache.Rating == "none" || wr.Cache.Rating == "poor" {
@@ -2939,14 +3273,18 @@ func ComputeWasteReportFromSession(s *Session) WasteReport {
 	if wr.Bloat.BloatLevel == "severe" || wr.Bloat.BloatLevel == "high" {
 		if len(wr.Bloat.TopBloat) > 0 {
 			wr.TopActions = append(wr.TopActions,
-				fmt.Sprintf("top tool %q called %dx - reduce or batch", wr.Bloat.TopBloat[0].ToolName, wr.Bloat.TopBloat[0].CallCount))
-		} else { wr.TopActions = append(wr.TopActions, wr.Bloat.Suggestion) }
+				fmt.Sprintf(i18n.T("waste_action_top_tool"), wr.Bloat.TopBloat[0].ToolName, wr.Bloat.TopBloat[0].CallCount))
+		} else {
+			wr.TopActions = append(wr.TopActions, wr.Bloat.Suggestion)
+		}
 	}
 	if wr.LoopPercent > 20 {
 		wr.TopActions = append(wr.TopActions,
-			fmt.Sprintf("loop waste $%.2f (%.0f%%) - add max retries limit", wr.LoopCost, wr.LoopPercent))
+			fmt.Sprintf(i18n.T("waste_action_loop"), wr.LoopCost, wr.LoopPercent))
 	}
-	if len(wr.TopActions) == 0 { wr.TopActions = []string{"session running optimally"} }
+	if len(wr.TopActions) == 0 {
+		wr.TopActions = []string{i18n.T("waste_action_optimal")}
+	}
 	return wr
 }
 
@@ -2964,7 +3302,7 @@ func detectStuckFromMetrics(m Metrics) []StuckPattern {
 			p = append(p, StuckPattern{
 				Pattern:     "long_gaps",
 				Severity:    "critical",
-				Description: fmt.Sprintf("%d gaps >120s — agent appears stuck", longGaps),
+				Description: fmt.Sprintf(i18n.T("stuck_long_gaps"), longGaps),
 			})
 		}
 	}
@@ -2973,35 +3311,47 @@ func detectStuckFromMetrics(m Metrics) []StuckPattern {
 
 func WasteReportText(wr WasteReport) string {
 	var b strings.Builder
-	w := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
+	w := func(s string) { b.WriteString(s + "\n") }
+	wf := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 	sep := strings.Repeat("━", 60)
 	w(sep)
-	w("  AGENTWASTE v%s - Waste Analysis", Version)
+	wf("  "+i18n.T("waste_analysis_title"), Version)
 	w(sep)
 	w("")
-	w("  Score: %d/100 (%s)", wr.WasteScore, levelEmoji(wr.WasteLevel)+" "+wr.WasteLevel)
-	w("  Wasted: $%.4f", wr.TotalWasted)
-	w("  %s", wr.Summary)
+	wf("  "+i18n.T("waste_score"), wr.WasteScore, levelEmoji(wr.WasteLevel)+" "+i18n.T("waste_level_"+wr.WasteLevel))
+	wf("  "+i18n.T("waste_wasted"), wr.TotalWasted)
+	wf("  %s", wr.Summary)
 	w("")
-	w("  -- Cache --")
-	w("  %s (%.0f%% hit, %d read / %d input)", wr.Cache.Rating, wr.Cache.HitRate, wr.Cache.CacheReadTokens, wr.Cache.TotalInputTokens)
-	if wr.Cache.WastedCost > 0 { w("  Cache waste: $%.4f", wr.Cache.WastedCost) }
-	w("  Suggestion: %s", wr.Cache.Suggestion)
+	w("  " + i18n.T("waste_cache_header"))
+	wf("  "+i18n.T("waste_cache_detail"), i18n.T("cache_rating_"+wr.Cache.Rating), wr.Cache.HitRate, wr.Cache.CacheReadTokens, wr.Cache.TotalInputTokens)
+	if wr.Cache.WastedCost > 0 {
+		wf("  "+i18n.T("waste_cache_waste"), wr.Cache.WastedCost)
+	}
+	wf("  Suggestion: %s", wr.Cache.Suggestion)
 	w("")
-	w("  -- Tool Bloat --")
-	w("  %s (%.1f tools/turn)", wr.Bloat.BloatLevel, wr.Bloat.ToolsPerTurn)
+	w("  " + i18n.T("waste_bloat_header"))
+	wf("  "+i18n.T("waste_bloat_detail"), i18n.T("bloat_level_"+wr.Bloat.BloatLevel), wr.Bloat.ToolsPerTurn)
 	for _, tb := range wr.Bloat.TopBloat {
-		m := ""; if tb.IsRedundant { m = " *redundant" }
-		w("    %-25s %3dx $%.3f%s", tb.ToolName, tb.CallCount, tb.TotalCost, m)
+		m := ""
+		if tb.IsRedundant {
+			m = " " + i18n.T("waste_bloat_redundant")
+		}
+		wf("    %-25s %3dx $%.3f%s", tb.ToolName, tb.CallCount, tb.TotalCost, m)
 	}
 	w("")
-	w("  -- Stuck --")
-	if len(wr.Stuck) == 0 { w("  none") } else {
-		for _, s := range wr.Stuck { w("  [%s] %s", s.Severity, s.Description) }
+	w("  " + i18n.T("waste_stuck_header"))
+	if len(wr.Stuck) == 0 {
+		w("  " + i18n.T("waste_stuck_none"))
+	} else {
+		for _, s := range wr.Stuck {
+			wf("  [%s] %s", s.Severity, s.Description)
+		}
 	}
 	w("")
-	w("  -- Actions --")
-	for i, a := range wr.TopActions { w("  %d. %s", i+1, a) }
+	w("  " + i18n.T("waste_actions_header"))
+	for i, a := range wr.TopActions {
+		wf("  %d. %s", i+1, a)
+	}
 	w("")
 	w(sep)
 	return b.String()
@@ -3009,10 +3359,14 @@ func WasteReportText(wr WasteReport) string {
 
 func levelEmoji(level string) string {
 	switch level {
-	case "green": return "🟢"
-	case "yellow": return "🟡"
-	case "orange": return "🟠"
-	case "red": return "🔴"
+	case "green":
+		return "🟢"
+	case "yellow":
+		return "🟡"
+	case "orange":
+		return "🟠"
+	case "red":
+		return "🔴"
 	}
 	return ""
 }
@@ -3042,9 +3396,9 @@ func DetectFingerprintLoops(events []Event) []LoopFingerprint {
 
 	// Collect consecutive tool-result pairs
 	type pair struct {
-		tool   string
-		rhash  string
-		idx    int
+		tool  string
+		rhash string
+		idx   int
 	}
 	var pairs []pair
 	for i, ev := range events {
@@ -3083,12 +3437,14 @@ func DetectFingerprintLoops(events []Event) []LoopFingerprint {
 		} else {
 			if count >= 3 {
 				sev := "high"
-				if count >= 5 { sev = "critical" }
+				if count >= 5 {
+					sev = "critical"
+				}
 				fingerprints = append(fingerprints, LoopFingerprint{
 					ToolName: currentFP.tool, ResultHash: currentFP.hash,
 					Count: count, FirstIndex: startIdx, LastIndex: pairs[i-1].idx,
 					Severity: sev,
-					Detail:   fmt.Sprintf("tool '%s' returned same result %dx consecutively — no progress", currentFP.tool, count),
+					Detail:   fmt.Sprintf(i18n.T("diag_loop_fp_detail"), currentFP.tool, count),
 				})
 			}
 			currentFP = thisFP
@@ -3098,12 +3454,14 @@ func DetectFingerprintLoops(events []Event) []LoopFingerprint {
 	}
 	if count >= 3 && currentFP.hash != "" {
 		sev := "high"
-		if count >= 5 { sev = "critical" }
+		if count >= 5 {
+			sev = "critical"
+		}
 		fingerprints = append(fingerprints, LoopFingerprint{
 			ToolName: currentFP.tool, ResultHash: currentFP.hash,
 			Count: count, FirstIndex: startIdx, LastIndex: pairs[len(pairs)-1].idx,
 			Severity: sev,
-			Detail:   fmt.Sprintf("tool '%s' returned same result %dx consecutively — no progress", currentFP.tool, count),
+			Detail:   fmt.Sprintf(i18n.T("diag_loop_fp_detail"), currentFP.tool, count),
 		})
 	}
 
@@ -3143,7 +3501,9 @@ func AnalyzeToolLatency(events []Event) []ToolLatencyItem {
 	for i, ev := range events {
 		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 && ev.Timestamp != "" {
 			tsStart := parseTS(ev.Timestamp)
-			if tsStart.IsZero() { continue }
+			if tsStart.IsZero() {
+				continue
+			}
 			for _, tc := range ev.ToolCalls {
 				// Find matching tool result
 				for j := i + 1; j < len(events); j++ {
@@ -3167,12 +3527,16 @@ func AnalyzeToolLatency(events []Event) []ToolLatencyItem {
 				found := false
 				for j := i + 1; j < len(events); j++ {
 					if events[j].Role == "tool" && events[j].ToolCallID == tc.ID {
-						found = true; break
+						found = true
+						break
 					}
 				}
 				if !found {
 					rec := toolLats[tc.Name]
-					if rec == nil { rec = &latRec{}; toolLats[tc.Name] = rec }
+					if rec == nil {
+						rec = &latRec{}
+						toolLats[tc.Name] = rec
+					}
 					rec.timeouts++
 				}
 			}
@@ -3181,7 +3545,9 @@ func AnalyzeToolLatency(events []Event) []ToolLatencyItem {
 
 	var items []ToolLatencyItem
 	for name, rec := range toolLats {
-		if len(rec.durations) == 0 && rec.timeouts == 0 { continue }
+		if len(rec.durations) == 0 && rec.timeouts == 0 {
+			continue
+		}
 		sort.Float64s(rec.durations)
 		item := ToolLatencyItem{
 			ToolName: name,
@@ -3190,7 +3556,9 @@ func AnalyzeToolLatency(events []Event) []ToolLatencyItem {
 		}
 		if len(rec.durations) > 0 {
 			sum := 0.0
-			for _, d := range rec.durations { sum += d }
+			for _, d := range rec.durations {
+				sum += d
+			}
 			item.AvgSec = sum / float64(len(rec.durations))
 			item.MaxSec = rec.durations[len(rec.durations)-1]
 			item.MinSec = rec.durations[0]
@@ -3210,25 +3578,25 @@ func AnalyzeToolLatency(events []Event) []ToolLatencyItem {
 // ── 3. Context Window Utilization ──
 
 type ContextUtilization struct {
-	EstimatedTotal    int
-	ToolDefinitions   int
-	ConversationHist  int
-	SystemPrompt      int
-	AvailableForTask  int
-	UtilizationPct    float64
-	RiskLevel         string // "critical"/"warning"/"good"
-	Suggestion        string
+	EstimatedTotal   int
+	ToolDefinitions  int
+	ConversationHist int
+	SystemPrompt     int
+	AvailableForTask int
+	UtilizationPct   float64
+	RiskLevel        string // "critical"/"warning"/"good"
+	Suggestion       string
 }
 
 // modelContextSizes maps model prefixes to estimated context window sizes.
 var modelContextSizes = map[string]int{
-	"claude": 200000,
-	"gpt":    128000,
-	"gemini": 1048576,
+	"claude":   200000,
+	"gpt":      128000,
+	"gemini":   1048576,
 	"deepseek": 128000,
-	"qwen":   131072,
-	"llama":  131072,
-	"mistral": 131072,
+	"qwen":     131072,
+	"llama":    131072,
+	"mistral":  131072,
 }
 
 func contextSizeForModel(model string) int {
@@ -3240,10 +3608,10 @@ func contextSizeForModel(model string) int {
 	return 200000 // default
 }
 
-func AnalyzeContextUtilization(events []Event, mcpToolCount int) ContextUtilization {
+func AnalyzeContextUtilization(events []Event, model string, mcpToolCount int) ContextUtilization {
 	cu := ContextUtilization{
-		EstimatedTotal: 200000, // default for Claude
-		SystemPrompt:   12000,  // typical system prompt
+		EstimatedTotal: contextSizeForModel(model),
+		SystemPrompt:   12000, // typical system prompt
 	}
 	if mcpToolCount == 0 {
 		mcpToolCount = 8 // typical default
@@ -3260,7 +3628,9 @@ func AnalyzeContextUtilization(events []Event, mcpToolCount int) ContextUtilizat
 	cu.ConversationHist = totalContent / 2 // rough char→token
 
 	cu.AvailableForTask = cu.EstimatedTotal - cu.ToolDefinitions - cu.ConversationHist - cu.SystemPrompt
-	if cu.AvailableForTask < 0 { cu.AvailableForTask = 0 }
+	if cu.AvailableForTask < 0 {
+		cu.AvailableForTask = 0
+	}
 
 	if cu.EstimatedTotal > 0 {
 		cu.UtilizationPct = float64(cu.ToolDefinitions+cu.ConversationHist+cu.SystemPrompt) / float64(cu.EstimatedTotal) * 100
@@ -3269,13 +3639,13 @@ func AnalyzeContextUtilization(events []Event, mcpToolCount int) ContextUtilizat
 	switch {
 	case cu.AvailableForTask < 20000:
 		cu.RiskLevel = "critical"
-		cu.Suggestion = "context nearly full — reduce MCP tools or compact conversation immediately"
+		cu.Suggestion = i18n.T("diag_ctx_suggestion_critical")
 	case cu.AvailableForTask < 50000:
 		cu.RiskLevel = "warning"
-		cu.Suggestion = "context filling up — consider compacting or removing unused tools"
+		cu.Suggestion = i18n.T("diag_ctx_suggestion_warning")
 	default:
 		cu.RiskLevel = "good"
-		cu.Suggestion = "plenty of context headroom"
+		cu.Suggestion = i18n.T("diag_ctx_suggestion_good")
 	}
 	return cu
 }
@@ -3293,6 +3663,27 @@ type LargeParamCall struct {
 func DetectLargeParams(events []Event) []LargeParamCall {
 	var large []LargeParamCall
 	for _, ev := range events {
+		for _, tc := range ev.ToolCalls {
+			size := len(tc.Args)
+			if size <= 10000 {
+				continue
+			}
+			risk := "medium"
+			if size > 50000 {
+				risk = "high"
+			}
+			name := tc.Name
+			if name == "" {
+				name = "unknown_tool"
+			}
+			large = append(large, LargeParamCall{
+				ToolName:  name,
+				ParamSize: size,
+				Timestamp: ev.Timestamp,
+				Risk:      risk,
+				Detail:    fmt.Sprintf(i18n.T("diag_large_param_args"), name, size),
+			})
+		}
 		if ev.Role == "assistant" && len(ev.Content) > 0 {
 			size := len(ev.Content)
 			var risk string
@@ -3305,26 +3696,30 @@ func DetectLargeParams(events []Event) []LargeParamCall {
 			}
 			toolNames := ""
 			for i, tc := range ev.ToolCalls {
-				if i > 0 { toolNames += "," }
+				if i > 0 {
+					toolNames += ","
+				}
 				toolNames += tc.Name
 			}
-			if toolNames == "" { toolNames = "text_response" }
+			if toolNames == "" {
+				toolNames = "text_response"
+			}
 			large = append(large, LargeParamCall{
 				ToolName: toolNames, ParamSize: size, Timestamp: ev.Timestamp,
-				Risk: risk,
-				Detail: fmt.Sprintf("%s call with %d chars — may cause timeout or hang", toolNames, size),
+				Risk:   risk,
+				Detail: fmt.Sprintf(i18n.T("diag_large_param_call"), toolNames, size),
 			})
 		}
 	}
 	return large
 }
 
-// ── 5. Unused / Rare Tool Detection ──
+// ── 5. Rare Tool Detection ──
 
 type UnusedToolInfo struct {
 	ToolName  string
 	CallCount int
-	Level     string // "unused"/"rare"/"normal"
+	Level     string // "rare"/"normal"
 	Detail    string
 }
 
@@ -3332,19 +3727,18 @@ func DetectUnusedTools(events []Event) []UnusedToolInfo {
 	usage := make(map[string]int)
 	for _, ev := range events {
 		for _, tc := range ev.ToolCalls {
-			if tc.Name != "" { usage[tc.Name]++ }
+			if tc.Name != "" {
+				usage[tc.Name]++
+			}
 		}
 	}
 	var info []UnusedToolInfo
 	for name, count := range usage {
 		level := "normal"
 		detail := ""
-		if count == 0 {
-			level = "unused"
-			detail = fmt.Sprintf("tool '%s' registered but never called — wasting context window", name)
-		} else if count <= 2 {
+		if count <= 2 {
 			level = "rare"
-			detail = fmt.Sprintf("tool '%s' called only %dx — consider removing to free context", name, count)
+			detail = fmt.Sprintf(i18n.T("diag_unused_detail"), name, count)
 		}
 		if level != "normal" {
 			info = append(info, UnusedToolInfo{ToolName: name, CallCount: count, Level: level, Detail: detail})
@@ -3375,7 +3769,7 @@ func DetectStuckPatternsEnhanced(events []Event) []StuckPattern {
 		if cnt >= 4 && ck.role == "assistant" {
 			patterns = append(patterns, StuckPattern{
 				Pattern:     "repeated_response",
-				Description: fmt.Sprintf("assistant repeated same response %dx (drift pattern)", cnt),
+				Description: fmt.Sprintf(i18n.T("stuck_repeated_response"), cnt),
 				Severity:    "warning",
 			})
 		}
@@ -3384,20 +3778,24 @@ func DetectStuckPatternsEnhanced(events []Event) []StuckPattern {
 	// Pattern: tool call without corresponding result (zombie tool calls)
 	hasResult := make(map[string]bool)
 	for _, ev := range events {
-		if ev.Role == "tool" && ev.ToolCallID != "" { hasResult[ev.ToolCallID] = true }
+		if ev.Role == "tool" && ev.ToolCallID != "" {
+			hasResult[ev.ToolCallID] = true
+		}
 	}
 	zombieCount := 0
 	for _, ev := range events {
 		if ev.Role == "assistant" {
 			for _, tc := range ev.ToolCalls {
-				if tc.ID != "" && !hasResult[tc.ID] { zombieCount++ }
+				if tc.ID != "" && !hasResult[tc.ID] {
+					zombieCount++
+				}
 			}
 		}
 	}
 	if zombieCount > 0 {
 		patterns = append(patterns, StuckPattern{
 			Pattern:     "zombie_tool_calls",
-			Description: fmt.Sprintf("%d tool call(s) with no response — may indicate hang/timeout", zombieCount),
+			Description: fmt.Sprintf(i18n.T("stuck_zombie_calls"), zombieCount),
 			Severity:    "warning",
 		})
 	}

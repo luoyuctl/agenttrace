@@ -2,8 +2,13 @@ package engine
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/luoyuctl/agentwaste/internal/i18n"
 )
 
 func mustJSON(v interface{}) string {
@@ -121,6 +126,163 @@ func TestParseGeneric_Invalid(t *testing.T) {
 	_, err := parseGeneric("not json at all")
 	if err == nil {
 		t.Error("Bug7: expected error for invalid input")
+	}
+}
+
+func TestDetectFormat_GeminiAndOpenClaw(t *testing.T) {
+	dir := t.TempDir()
+	geminiPath := filepath.Join(dir, "gemini.json")
+	geminiDoc := map[string]interface{}{
+		"modelVersion": "gemini-2.5-pro",
+		"contents": []interface{}{
+			map[string]interface{}{"role": "user", "parts": []interface{}{map[string]interface{}{"text": "hi"}}},
+		},
+	}
+	if err := os.WriteFile(geminiPath, []byte(mustJSON(geminiDoc)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectFormat(geminiPath).Format; got != "gemini_cli" {
+		t.Fatalf("gemini format: %s", got)
+	}
+
+	openClawPath := filepath.Join(dir, "openclaw.json")
+	openClawDoc := map[string]interface{}{
+		"provider": "openclaw",
+		"model":    "claude-sonnet-4",
+		"messages": []interface{}{
+			map[string]interface{}{"role": "assistant", "content": "ok"},
+		},
+	}
+	if err := os.WriteFile(openClawPath, []byte(mustJSON(openClawDoc)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectFormat(openClawPath).Format; got != "openclaw" {
+		t.Fatalf("openclaw format: %s", got)
+	}
+}
+
+func TestDetectLargeParams_UsesToolArguments(t *testing.T) {
+	arg := strings.Repeat("x", 10001)
+	events := []Event{{
+		Role:      "assistant",
+		ToolCalls: []ToolCall{{Name: "write_file", Args: arg}},
+	}}
+	large := DetectLargeParams(events)
+	if len(large) != 1 {
+		t.Fatalf("expected one large arg call, got %d", len(large))
+	}
+	if large[0].ToolName != "write_file" || large[0].ParamSize != len(arg) {
+		t.Fatalf("bad large param result: %+v", large[0])
+	}
+}
+
+func TestFindSessionFilesAutoDiscoverySortsByModTime(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	oldDir := filepath.Join(home, ".codex", "sessions")
+	newDir := filepath.Join(home, ".gemini", "sessions")
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(newDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	oldPath := filepath.Join(oldDir, "z-old.jsonl")
+	newPath := filepath.Join(newDir, "a-new.jsonl")
+	if err := os.WriteFile(oldPath, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newPath, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Now().Add(-time.Hour)
+	newTime := time.Now()
+	if err := os.Chtimes(oldPath, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(newPath, newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+	files := FindSessionFiles("")
+	if len(files) != 2 {
+		t.Fatalf("files: %v", files)
+	}
+	if files[0] != newPath {
+		t.Fatalf("expected newest first, got %v", files)
+	}
+}
+
+func TestFindSessionFilesCachedUsesDirIndexAndFindsNewFiles(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.jsonl")
+	if err := os.WriteFile(first, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	firstTime := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(first, firstTime, firstTime); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := SessionCache{
+		Entries: map[string]CacheEntry{},
+		Dirs:    map[string]DirCacheEntry{},
+	}
+	files := FindSessionFilesCached(dir, cache)
+	if len(files) != 1 || files[0] != first {
+		t.Fatalf("first scan files: %v", files)
+	}
+	if _, ok := cache.Dirs[dir]; !ok {
+		t.Fatalf("expected directory listing cached")
+	}
+
+	second := filepath.Join(dir, "second.jsonl")
+	if err := os.WriteFile(second, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	secondTime := time.Now()
+	if err := os.Chtimes(second, secondTime, secondTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(dir, secondTime, secondTime); err != nil {
+		t.Fatal(err)
+	}
+
+	files = FindSessionFilesCached(dir, cache)
+	if len(files) != 2 {
+		t.Fatalf("second scan files: %v", files)
+	}
+	if files[0] != second {
+		t.Fatalf("expected newest file first, got %v", files)
+	}
+}
+
+func TestLoadSessionCacheSkipsOnlyBadEntries(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cachePath := sessionCachePath()
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	payload := `{
+		"entries": {
+			"/tmp/good.jsonl": {"mod_time": 1, "size": 2, "session": {"Name": "good", "Health": 90}},
+			"/tmp/bad.jsonl": {"mod_time": "bad"}
+		},
+		"dirs": {
+			"/tmp": {"mod_time": 3, "files": ["/tmp/good.jsonl"], "dirs": []},
+			"/bad": {"mod_time": "bad"}
+		}
+	}`
+	if err := os.WriteFile(cachePath, []byte(payload), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := LoadSessionCache()
+	if len(cache.Entries) != 1 || cache.Entries["/tmp/good.jsonl"].Session.Name != "good" {
+		t.Fatalf("expected only good entry loaded: %+v", cache.Entries)
+	}
+	if len(cache.Dirs) != 1 || len(cache.Dirs["/tmp"].Files) != 1 {
+		t.Fatalf("expected only good dir loaded: %+v", cache.Dirs)
 	}
 }
 
@@ -243,7 +405,9 @@ func TestDiffSessions(t *testing.T) {
 func TestGenerateFixes_Hanging(t *testing.T) {
 	m := Metrics{GapsSec: []float64{350}}
 	anoms := []Anomaly{{Type: "hanging", Severity: SeverityHigh}}
-	fixes := GenerateFixes(m, anoms, "zh")
+	i18n.Current = i18n.ZH
+	fixes := GenerateFixes(m, anoms)
+	i18n.Current = i18n.EN
 	if len(fixes) == 0 {
 		t.Fatal("no fixes")
 	}
@@ -255,7 +419,7 @@ func TestGenerateFixes_Hanging(t *testing.T) {
 func TestGenerateFixes_English(t *testing.T) {
 	m := Metrics{GapsSec: []float64{350}}
 	anoms := []Anomaly{{Type: "hanging", Severity: SeverityHigh}}
-	fixes := GenerateFixes(m, anoms, "en")
+	fixes := GenerateFixes(m, anoms)
 	if len(fixes) == 0 {
 		t.Fatal("no fixes")
 	}

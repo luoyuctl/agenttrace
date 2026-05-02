@@ -25,8 +25,8 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI) burn tokens in loops, retr
 | Feature | Description |
 |---|---|
 | 🚀 **Single Binary** | 7.5 MB — `curl -sL ... \| sh` install, no runtime deps |
-| 🖥️ **Bubble Tea TUI** | Modern terminal UI: Session List → Detail → Compare (3 views) |
-| 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Gemini CLI / OpenClaw — all parsed seamlessly |
+| 🖥️ **Bubble Tea TUI** | Modern terminal UI: Overview → Session List → Detail → Diagnostics → Diff |
+| 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Codex CLI / Gemini CLI / OpenCode / OpenClaw — all parsed seamlessly |
 | 💸 **Cost & Time Waste** | How much 💰 you burned + ⏱️ time lost to loops, retries, failures |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
@@ -96,7 +96,7 @@ agentwaste --update-pricing
 agentwaste --update-pricing --list-models
 
 # Specify session language for cost estimation
-agentwaste --latest --lang zh    # Chinese (supports zh, ja, ko, en)
+agentwaste --latest --lang zh    # Chinese (supports zh, en)
 ```
 
 ### TUI Navigation
@@ -105,7 +105,11 @@ agentwaste --latest --lang zh    # Chinese (supports zh, ja, ko, en)
 |---|---|
 | `↑↓` / `jk` | Navigate sessions |
 | `Enter` | View session detail |
-| `Tab` | Switch view: List → Detail → Compare |
+| `Tab` | Switch view: Overview → List → Detail → Diagnostics → Diff |
+| `0`-`4` | Jump directly to a view |
+| `h` / `c` / `t` / `n` | Sort by health / cost / turns / name |
+| `f` / `s` / `/` | Filter by health / source / text |
+| `d` / `w` | Open diff / diagnostics |
 | `q` / `Esc` | Quit / Back |
 
 ---
@@ -221,7 +225,8 @@ Session                   Turns  Tools   Succ     Cost  Health
 - [ ] Historical trend tracking
 - [ ] Web dashboard (React + Charts)
 - [ ] VS Code extension
-- [ ] OpenCode / Aider / Cursor format support
+- [x] OpenCode format support
+- [ ] Aider / Cursor format support
 
 ---
 
