@@ -84,6 +84,8 @@ Would love feedback from anyone using Claude Code, Codex CLI, Gemini CLI, Aider,
 
 Repo: https://github.com/luoyuctl/agenttrace
 
+Feedback thread: https://github.com/luoyuctl/agenttrace/discussions/2
+
 ## Target Channels
 
 - Hacker News: Show HN

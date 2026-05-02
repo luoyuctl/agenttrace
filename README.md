@@ -283,6 +283,8 @@ See [CI Integration](docs/ci-integration.md) for a ready-to-copy GitHub Actions 
 
 Planning to share or collect feedback? See [docs/launch-kit.md](docs/launch-kit.md) for positioning, launch posts, short social copy, target communities, and demo checklist.
 
+Feedback and workflow examples are welcome in [GitHub Discussions](https://github.com/luoyuctl/agenttrace/discussions/2).
+
 ---
 
 ## 🧩 Add a Parser
