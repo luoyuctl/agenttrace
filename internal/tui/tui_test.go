@@ -980,6 +980,27 @@ func TestLongCommandAndFilterBarsFitTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestCommandHelpShowsOutsideListView(t *testing.T) {
+	for _, v := range []view{viewOverview, viewDetail, viewDiagnostics, viewDiff} {
+		m := resizeForTest(t, sampleModelForTest(), 120, 30)
+		m.view = v
+		if v == viewDetail {
+			m.openDetail()
+		}
+		if v == viewDiff {
+			m.diffResult = engine.DiffSessions(m.sessions[0], m.sessions[1])
+		}
+
+		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")})
+		m = next.(Model)
+
+		rendered := m.View()
+		if !strings.Contains(rendered, "Enter: run") {
+			t.Fatalf("expected command help in view=%d, got:\n%s", v, rendered)
+		}
+	}
+}
+
 func TestOverviewShortcutsOpenWorkbenchLists(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewOverview
@@ -1048,6 +1069,18 @@ func TestDiagnosticsShowsNoVisibleSessionsHint(t *testing.T) {
 	rendered := m.View()
 	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("no_visible_sessions_hint"))) {
 		t.Fatalf("expected no visible sessions hint, got:\n%s", rendered)
+	}
+}
+
+func TestDiagnosticsClampsInvalidContextUtilization(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 80, 30)
+	m.sessions[0].ContextUtil.UtilizationPct = -25
+	m.view = viewDiagnostics
+
+	rendered := m.View()
+
+	if got := maxRenderedWidth(rendered); got > 80 {
+		t.Fatalf("diagnostics render too wide: got=%d line=%q", got, widestLine(rendered))
 	}
 }
 

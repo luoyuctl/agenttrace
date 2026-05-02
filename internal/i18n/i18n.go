@@ -786,7 +786,7 @@ var translations = map[string]map[Lang]string{
 	"diff_similar":                  {EN: "Sessions are broadly similar across tracked metrics.", ZH: "两个会话在跟踪指标上整体接近。"},
 
 	// ── Dashboard labels ──
-	"dash_controls_short":     {EN: "$ top cost · ! critical · a anomalies · : command", ZH: "$ 高费用 · ! 严重 · a 异常 · : 命令"},
+	"dash_controls_short":     {EN: "$ top cost · ! critical · a anomalies · / search · : command", ZH: "$ 高费用 · ! 严重 · a 异常 · / 搜索 · : 命令"},
 	"dash_top_cost":           {EN: "$ top cost", ZH: "$ 高费用"},
 	"dash_critical":           {EN: "! critical", ZH: "! 严重"},
 	"dash_anomalies":          {EN: "a anomalies", ZH: "a 异常"},

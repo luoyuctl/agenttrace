@@ -1059,23 +1059,25 @@ func (m Model) renderHelp() string {
 		return helpStyle.Render(" " + i18n.T("help_loading"))
 	}
 	var keys string
-	switch m.view {
-	case viewOverview:
-		keys = i18n.T("help_overview_modern")
-	case viewList:
-		if m.commandActive {
-			keys = i18n.T("help_command")
-		} else if m.filterActive {
-			keys = i18n.T("help_list") + " · " + i18n.T("help_filter_clear")
-		} else {
-			keys = i18n.T("help_list") + " · " + i18n.T("help_force_reload")
+	if m.commandActive {
+		keys = i18n.T("help_command")
+	} else {
+		switch m.view {
+		case viewOverview:
+			keys = i18n.T("help_overview_modern")
+		case viewList:
+			if m.filterActive {
+				keys = i18n.T("help_list") + " · " + i18n.T("help_filter_clear")
+			} else {
+				keys = i18n.T("help_list") + " · " + i18n.T("help_force_reload")
+			}
+		case viewDetail:
+			keys = i18n.T("help_detail")
+		case viewDiagnostics:
+			keys = i18n.T("help_diag")
+		case viewDiff:
+			keys = i18n.T("help_diff")
 		}
-	case viewDetail:
-		keys = i18n.T("help_detail")
-	case viewDiagnostics:
-		keys = i18n.T("help_diag")
-	case viewDiff:
-		keys = i18n.T("help_diff")
 	}
 	width := m.width
 	if width <= 0 {
@@ -1582,10 +1584,13 @@ func (m Model) renderContextUtil(s engine.Session) string {
 	if m.contentWidth() < 70 {
 		barWidth = maxInt(8, m.contentWidth()-34)
 	}
-	filled := int(cu.UtilizationPct / 100 * float64(barWidth))
-	if filled > barWidth {
-		filled = barWidth
+	utilPct := cu.UtilizationPct
+	if !isFiniteNumber(utilPct) || utilPct < 0 {
+		utilPct = 0
+	} else if utilPct > 100 {
+		utilPct = 100
 	}
+	filled := int(utilPct / 100 * float64(barWidth))
 	bar := "[" + lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(strings.Repeat("█", filled)) +
 		lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(strings.Repeat("░", barWidth-filled)) + "]"
 
