@@ -696,6 +696,20 @@ func TestSortCommandSupportsSource(t *testing.T) {
 	}
 }
 
+func TestSourceSortShowsColumnIndicator(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.runCommand("sort source asc")
+
+	cols := m.table.Columns()
+	if len(cols) < 2 {
+		t.Fatalf("expected source column, got %+v", cols)
+	}
+	if !strings.Contains(cols[1].Title, "▲") {
+		t.Fatalf("source sort column should show ascending indicator, got %q", cols[1].Title)
+	}
+}
+
 func TestSortCommandRejectsUnknownDirection(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
@@ -899,8 +913,20 @@ func TestOpeningDetailWithNoVisibleRowsClearsStaleViewport(t *testing.T) {
 		t.Fatalf("expected stale detail viewport to be cleared")
 	}
 	rendered := m.View()
-	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("select_session_hint"))) {
+	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("no_visible_sessions_hint"))) {
 		t.Fatalf("expected empty detail hint, got:\n%s", rendered)
+	}
+}
+
+func TestDiagnosticsShowsNoVisibleSessionsHint(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 36)
+	m.view = viewDiagnostics
+	m.filterText = "no-such-session"
+	m.rebuildFilteredView()
+
+	rendered := m.View()
+	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("no_visible_sessions_hint"))) {
+		t.Fatalf("expected no visible sessions hint, got:\n%s", rendered)
 	}
 }
 

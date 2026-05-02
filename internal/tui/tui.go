@@ -860,7 +860,7 @@ func (m Model) View() string {
 			detailContent := lipgloss.JoinVertical(lipgloss.Left, summaryBar, "", scrollInfo, m.viewport.View())
 			content = m.frameContent(detailContent)
 		} else {
-			content = m.frameContent(dimStyle.Render(i18n.T("select_session_hint")))
+			content = m.frameContent(dimStyle.Render(m.selectionHint()))
 		}
 	case viewDiagnostics:
 		content = m.renderWaste()
@@ -960,6 +960,13 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 		i18n.T("list_issue"), issue,
 	)
 	return dimStyle.Render(truncate(line, width))
+}
+
+func (m Model) selectionHint() string {
+	if len(m.sessions) > 0 && m.hasAnyFilter() && len(m.filteredIndices) == 0 {
+		return i18n.T("no_visible_sessions_hint")
+	}
+	return i18n.T("select_session_hint")
 }
 
 func (m Model) renderAppHeader() string {
@@ -1309,7 +1316,7 @@ func (m Model) renderCostAlert() string {
 func (m Model) renderWaste() string {
 	idx := m.findSessionIndex()
 	if idx < 0 || idx >= len(m.sessions) {
-		return m.frameContent(dimStyle.Render(i18n.T("select_session_hint")))
+		return m.frameContent(dimStyle.Render(m.selectionHint()))
 	}
 	s := m.sessions[idx]
 	panelW := m.contentWidth() - 8
@@ -1832,8 +1839,7 @@ func (m *Model) sortAndRefresh() {
 			return m.sessions[i].Name < m.sessions[j].Name
 		})
 	}
-	m.refreshTable()
-	m.rebuildFilteredView()
+	m.refreshColumns()
 	m.restoreSelection(selected)
 }
 
@@ -1867,7 +1873,7 @@ func (m *Model) refreshColumns() {
 	if m.width > 0 {
 		m.adjustColumnWidths(m.width)
 	} else {
-		m.table.SetColumns(m.fullListColumns(20, 12, 5, 5, 5, 5, 8, 7, 9))
+		m.setColumnsAndRefreshRows(m.fullListColumns(20, 12, 5, 5, 5, 5, 8, 7, 9))
 	}
 }
 
@@ -1901,7 +1907,7 @@ func (m *Model) adjustColumnWidths(width int) {
 func (m *Model) fullListColumns(sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW int) []table.Column {
 	return []table.Column{
 		{Title: m.sortColTitle(i18n.T("session"), "name"), Width: sessW},
-		{Title: m.sortColTitle(i18n.T("source_tool"), ""), Width: srcW},
+		{Title: m.sortColTitle(i18n.T("source_tool"), "source"), Width: srcW},
 		{Title: m.sortColTitle(i18n.T("turns_header"), "turns"), Width: turnsW},
 		{Title: m.sortColTitle(i18n.T("tools"), ""), Width: toolsW},
 		{Title: m.sortColTitle(i18n.T("succ_pct"), ""), Width: succW},
@@ -1915,7 +1921,7 @@ func (m *Model) fullListColumns(sessW, srcW, turnsW, toolsW, succW, failW, costW
 func (m *Model) compactListColumns(sessW, srcW, costW, tokensW, healthW int) []table.Column {
 	return []table.Column{
 		{Title: m.sortColTitle(i18n.T("session"), "name"), Width: sessW},
-		{Title: m.sortColTitle(i18n.T("source_tool"), ""), Width: srcW},
+		{Title: m.sortColTitle(i18n.T("source_tool"), "source"), Width: srcW},
 		{Title: m.sortColTitle(i18n.T("cost"), "cost"), Width: costW},
 		{Title: m.sortColTitle(i18n.T("tokens"), ""), Width: tokensW},
 		{Title: m.sortColTitle(i18n.T("health"), "health"), Width: healthW},
@@ -1925,7 +1931,7 @@ func (m *Model) compactListColumns(sessW, srcW, costW, tokensW, healthW int) []t
 func (m *Model) mediumListColumns(sessW, srcW, turnsW, toolsW, failW, costW, tokensW, healthW int) []table.Column {
 	return []table.Column{
 		{Title: m.sortColTitle(i18n.T("session"), "name"), Width: sessW},
-		{Title: m.sortColTitle(i18n.T("source_tool"), ""), Width: srcW},
+		{Title: m.sortColTitle(i18n.T("source_tool"), "source"), Width: srcW},
 		{Title: m.sortColTitle(i18n.T("turns_header"), "turns"), Width: turnsW},
 		{Title: m.sortColTitle(i18n.T("tools"), ""), Width: toolsW},
 		{Title: m.sortColTitle(i18n.T("fail"), ""), Width: failW},

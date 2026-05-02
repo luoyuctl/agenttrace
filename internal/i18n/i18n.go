@@ -236,6 +236,10 @@ var translations = map[string]map[Lang]string{
 		EN: " Select a session and press Enter to see details ",
 		ZH: " 选择会话并按回车查看详情 ",
 	},
+	"no_visible_sessions_hint": {
+		EN: " No visible sessions match the current filters ",
+		ZH: " 当前筛选没有可见会话 ",
+	},
 
 	// ── TUI help bars ──
 	"help_overview": {
