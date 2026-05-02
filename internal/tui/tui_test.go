@@ -1239,12 +1239,33 @@ func TestDiagnosticsShowsNoVisibleSessionsHint(t *testing.T) {
 func TestDiagnosticsClampsInvalidContextUtilization(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 80, 30)
 	m.sessions[0].ContextUtil.UtilizationPct = -25
+	m.sessions[0].ContextUtil.AvailableForTask = -200
+	m.sessions[0].ToolLatencies = []engine.ToolLatencyItem{{
+		ToolName: "slow",
+		Count:    -4,
+		AvgSec:   math.NaN(),
+		P95Sec:   math.Inf(1),
+		MaxSec:   -10,
+		Timeouts: -2,
+		IsSlow:   true,
+	}}
+	m.sessions[0].LargeParams = []engine.LargeParamCall{{
+		ToolName:  "write_file",
+		ParamSize: -4096,
+		Risk:      "high",
+		Detail:    "bad arg",
+	}}
 	m.view = viewDiagnostics
 
 	rendered := m.View()
 
 	if got := maxRenderedWidth(rendered); got > 80 {
 		t.Fatalf("diagnostics render too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+	for _, bad := range []string{"NaN", "Inf", "-10", "-4", "-2", "-200", "-4.0"} {
+		if strings.Contains(rendered, bad) {
+			t.Fatalf("diagnostics should sanitize invalid metric %q:\n%s", bad, rendered)
+		}
 	}
 }
 
