@@ -22,7 +22,7 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI) burn tokens in loops, retr
 **agenttrace** finds the waste in both — so you stop paying for nothing and start shipping faster.
 
 <p align="center">
-  <img src="assets/terminal-demo.png" alt="agenttrace TUI dashboard" width="100%">
+  <img src="assets/agenttrace-demo.gif" alt="agenttrace TUI demo" width="100%">
 </p>
 
 > Sharing agenttrace? See [docs/demo-playbook.md](docs/demo-playbook.md) for the GIF recording script, launch storyline, and posting copy.
