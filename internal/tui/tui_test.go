@@ -575,6 +575,22 @@ func TestSortCommandSupportsSource(t *testing.T) {
 	}
 }
 
+func TestSortCommandRejectsUnknownDirection(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.sortBy = "name"
+	m.sortDesc = false
+
+	m.runCommand("sort cost sideways")
+
+	if m.sortBy != "name" || m.sortDesc {
+		t.Fatalf("invalid sort direction should not change sort: sortBy=%q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if !strings.Contains(m.commandFeedback, "sideways") {
+		t.Fatalf("expected feedback to mention invalid direction, got %q", m.commandFeedback)
+	}
+}
+
 func TestSourceShortcutRecoversFromUnknownSourceFilter(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList

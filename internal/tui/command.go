@@ -95,7 +95,15 @@ func (m *Model) runCommand(input string) {
 		}
 		desc := true
 		if len(fields) >= 3 {
-			desc = strings.ToLower(fields[2]) != "asc"
+			switch strings.ToLower(fields[2]) {
+			case "asc":
+				desc = false
+			case "desc":
+				desc = true
+			default:
+				m.commandFeedback = fmt.Sprintf(i18n.T("cmd_unknown_sort_direction"), fields[2])
+				return
+			}
 		}
 		m.applySortCommand(fields[1], desc)
 	default:
