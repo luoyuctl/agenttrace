@@ -126,6 +126,7 @@ Open PRs:
 - awesome-agent-cortex: https://github.com/0xNyk/awesome-agent-cortex/pull/20
 - ARUNAGIRINATHAN-K/awesome-ai-agents: https://github.com/ARUNAGIRINATHAN-K/awesome-ai-agents/pull/27
 - awesome-cli-tui-software: https://github.com/lgaggini/awesome-cli-tui-software/pull/3
+- LangGPT/awesome-claude-code: https://github.com/LangGPT/awesome-claude-code/pull/58
 
 Merged listings:
 
