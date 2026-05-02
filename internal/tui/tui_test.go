@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -170,6 +171,24 @@ func TestFilterSortKeepsTableColumnShape(t *testing.T) {
 	}
 }
 
+func TestSortPreservesSelectedSession(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.table.SetCursor(1)
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "session_beta_with_a_long_name" {
+		t.Fatalf("test setup selected wrong session: idx=%d", idx)
+	}
+
+	m.sortBy = "name"
+	m.sortDesc = false
+	m.sortAndRefresh()
+
+	idx := m.findSessionIndex()
+	if idx < 0 || m.sessions[idx].Name != "session_beta_with_a_long_name" {
+		t.Fatalf("sort should preserve selected session, idx=%d", idx)
+	}
+}
+
 func TestTextFilterKeepsRowsAndSelectionInSync(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
@@ -225,6 +244,41 @@ func TestFilterInputAllowsQCharacter(t *testing.T) {
 	}
 	if !m.filterActive || m.filterInput != "q" {
 		t.Fatalf("expected q to be typed into filter, active=%v input=%q", m.filterActive, m.filterInput)
+	}
+}
+
+func TestFilterBackspaceRemovesWholeRune(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("测试")})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	m = next.(Model)
+
+	if m.filterInput != "测" {
+		t.Fatalf("expected backspace to remove one rune, got %q", m.filterInput)
+	}
+	if !utf8.ValidString(m.filterInput) {
+		t.Fatalf("filter input became invalid UTF-8: %q", m.filterInput)
+	}
+}
+
+func TestCommandBackspaceRemovesWholeRune(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(":")})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("费用")})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	m = next.(Model)
+
+	if m.commandInput != "费" {
+		t.Fatalf("expected backspace to remove one rune, got %q", m.commandInput)
+	}
+	if !utf8.ValidString(m.commandInput) {
+		t.Fatalf("command input became invalid UTF-8: %q", m.commandInput)
 	}
 }
 

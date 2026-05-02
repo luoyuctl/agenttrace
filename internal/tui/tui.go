@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -400,9 +401,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.commandActive = false
 				m.commandInput = ""
 			case "backspace":
-				if len(m.commandInput) > 0 {
-					m.commandInput = m.commandInput[:len(m.commandInput)-1]
-				}
+				m.commandInput = dropLastRune(m.commandInput)
 			default:
 				if len(msg.Runes) > 0 {
 					m.commandInput += string(msg.Runes)
@@ -427,9 +426,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.filterInput = ""
 				}
 			case "backspace":
-				if len(m.filterInput) > 0 {
-					m.filterInput = m.filterInput[:len(m.filterInput)-1]
-				}
+				m.filterInput = dropLastRune(m.filterInput)
 			default:
 				if len(msg.Runes) > 0 {
 					m.filterInput += string(msg.Runes)
@@ -1800,6 +1797,7 @@ func (m *Model) findSessionIndex() int {
 }
 
 func (m *Model) sortAndRefresh() {
+	selected := m.selectedSessionKey()
 	switch m.sortBy {
 	case "health":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
@@ -1841,6 +1839,7 @@ func (m *Model) sortAndRefresh() {
 	}
 	m.refreshTable()
 	m.rebuildFilteredView()
+	m.restoreSelection(selected)
 }
 
 func (m *Model) sortColTitle(base, field string) string {
@@ -2565,6 +2564,17 @@ func truncate(s string, maxLen int) string {
 	return b.String() + "…"
 }
 
+func dropLastRune(s string) string {
+	if s == "" {
+		return ""
+	}
+	_, size := utf8.DecodeLastRuneInString(s)
+	if size <= 0 {
+		return ""
+	}
+	return s[:len(s)-size]
+}
+
 func sourceDisplayName(source string) string {
 	if display, ok := engine.ToolDisplayNames[source]; ok {
 		return display
@@ -2823,6 +2833,33 @@ func (m *Model) rebuildFilteredView() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetCursor(0)
+}
+
+func (m *Model) selectedSessionKey() string {
+	idx := m.findSessionIndex()
+	if idx < 0 || idx >= len(m.sessions) {
+		return ""
+	}
+	return sessionKey(m.sessions[idx])
+}
+
+func (m *Model) restoreSelection(key string) {
+	if key == "" {
+		return
+	}
+	for row, idx := range m.filteredIndices {
+		if idx >= 0 && idx < len(m.sessions) && sessionKey(m.sessions[idx]) == key {
+			m.table.SetCursor(row)
+			return
+		}
+	}
+}
+
+func sessionKey(s engine.Session) string {
+	if s.Path != "" {
+		return "path:" + s.Path
+	}
+	return "name:" + s.Name
 }
 
 func (m *Model) applyFilter() {
