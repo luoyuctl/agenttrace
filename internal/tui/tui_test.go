@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -622,6 +623,27 @@ func TestOverviewHandlesZeroTokenAgents(t *testing.T) {
 
 	if got := maxRenderedWidth(rendered); got > 120 {
 		t.Fatalf("zero-token overview too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+}
+
+func TestOverviewClampsInvalidChartValues(t *testing.T) {
+	m := sampleModelForTest()
+	for i := range m.sessions {
+		m.sessions[i].Metrics.TokensInput = -1000
+		m.sessions[i].Metrics.TokensOutput = -1000
+		m.sessions[i].Metrics.TokensCacheR = -1000
+		m.sessions[i].Metrics.GapsSec = []float64{-100, math.NaN(), math.Inf(1)}
+	}
+	m.sessions[0].Metrics.GapsSec = append(m.sessions[0].Metrics.GapsSec, 10)
+	m.overview = engine.ComputeOverview(m.sessions)
+	m.costSummary = engine.ComputeCostSummary(m.sessions)
+	m = resizeForTest(t, m, 120, 36)
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	if got := maxRenderedWidth(rendered); got > 120 {
+		t.Fatalf("invalid metric overview too wide: got=%d line=%q", got, widestLine(rendered))
 	}
 }
 

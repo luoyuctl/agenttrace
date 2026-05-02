@@ -2257,7 +2257,7 @@ func (m Model) renderTopAgentsPanel(width int) string {
 	var items []item
 	bySource := map[string]int{}
 	for _, s := range m.sessions {
-		bySource[s.Metrics.SourceTool] += s.Metrics.TokensInput + s.Metrics.TokensOutput
+		bySource[s.Metrics.SourceTool] += nonNegativeInt(s.Metrics.TokensInput + s.Metrics.TokensOutput)
 	}
 	for k, v := range bySource {
 		name := k
@@ -2279,7 +2279,10 @@ func (m Model) renderTopAgentsPanel(width int) string {
 			nameW = 10
 		}
 		barW := maxInt(4, innerW-nameW-10)
-		filled := barW * items[i].tokens / maxTokens
+		filled := barW * nonNegativeInt(items[i].tokens) / maxTokens
+		if filled > barW {
+			filled = barW
+		}
 		bar := brandStyle.Render(strings.Repeat("█", filled)) + dimStyle.Render(strings.Repeat("░", barW-filled))
 		lines = append(lines, fmt.Sprintf("%-*s %s %6s", nameW, truncate(items[i].name, nameW), bar, compactInt(items[i].tokens)))
 	}
@@ -2361,7 +2364,7 @@ func recentTokenSeries(sessions []engine.Session, n int) []float64 {
 	limit := minInt(n, len(sessions))
 	for i := 0; i < limit; i++ {
 		s := sessions[limit-1-i]
-		vals[n-limit+i] = float64(s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheR)
+		vals[n-limit+i] = chartValue(float64(s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheR))
 	}
 	return vals
 }
@@ -2369,7 +2372,9 @@ func recentTokenSeries(sessions []engine.Session, n int) []float64 {
 func recentLatencySeries(sessions []engine.Session, n int) []float64 {
 	var raw []float64
 	for _, s := range sessions {
-		raw = append(raw, s.Metrics.GapsSec...)
+		for _, gap := range s.Metrics.GapsSec {
+			raw = append(raw, chartValue(gap))
+		}
 	}
 	if len(raw) == 0 {
 		return make([]float64, n)
@@ -2397,6 +2402,7 @@ func miniBarChart(vals []float64, width, height int, colors []string) string {
 	}
 	maxVal := 0.0
 	for _, v := range vals {
+		v = chartValue(v)
 		if v > maxVal {
 			maxVal = v
 		}
@@ -2408,7 +2414,14 @@ func miniBarChart(vals []float64, width, height int, colors []string) string {
 	for level := height; level >= 1; level-- {
 		var row strings.Builder
 		for i, v := range vals {
+			v = chartValue(v)
 			fill := int(v / maxVal * float64(height))
+			if fill < 0 {
+				fill = 0
+			}
+			if fill > height {
+				fill = height
+			}
 			ch := " "
 			if fill >= level {
 				color := colors[i%len(colors)]
@@ -2433,6 +2446,7 @@ func sparkline(vals []float64, width int) string {
 	}
 	maxVal := 0.0
 	for _, v := range vals {
+		v = chartValue(v)
 		if v > maxVal {
 			maxVal = v
 		}
@@ -2443,10 +2457,31 @@ func sparkline(vals []float64, width int) string {
 	levels := []rune("▁▂▃▄▅▆▇█")
 	var b strings.Builder
 	for _, v := range vals {
+		v = chartValue(v)
 		idx := int(v / maxVal * float64(len(levels)-1))
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(levels) {
+			idx = len(levels) - 1
+		}
 		b.WriteRune(levels[idx])
 	}
 	return b.String()
+}
+
+func chartValue(v float64) float64 {
+	if !isFiniteNumber(v) || v < 0 {
+		return 0
+	}
+	return v
+}
+
+func nonNegativeInt(v int) int {
+	if v < 0 {
+		return 0
+	}
+	return v
 }
 
 func compactInt(v int) string {
