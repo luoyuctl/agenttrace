@@ -240,6 +240,18 @@ var translations = map[string]map[Lang]string{
 		EN: " No visible sessions match the current filters ",
 		ZH: " 当前筛选没有可见会话 ",
 	},
+	"no_visible_sessions_title": {
+		EN: "No matching sessions",
+		ZH: "没有匹配会话",
+	},
+	"no_visible_sessions_active": {
+		EN: "Active filter: %s",
+		ZH: "当前筛选: %s",
+	},
+	"no_visible_sessions_clear": {
+		EN: "Esc or :clear to show all sessions",
+		ZH: "按 Esc 或输入 :clear 显示全部会话",
+	},
 
 	// ── TUI help bars ──
 	"help_overview": {

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -307,6 +308,24 @@ func TestEmptyTextFilterDoesNotRestoreAllRows(t *testing.T) {
 	}
 	if got := m.findSessionIndex(); got != -1 {
 		t.Fatalf("expected no selected session, got %d", got)
+	}
+}
+
+func TestListEmptyFilterStateShowsRecoveryPath(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.filterText = "no-such-session"
+	m.rebuildFilteredView()
+
+	rendered := m.View()
+	for _, want := range []string{
+		i18n.T("no_visible_sessions_title"),
+		fmt.Sprintf(i18n.T("no_visible_sessions_active"), m.filterLabel()),
+		i18n.T("no_visible_sessions_clear"),
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("empty filter state missing %q:\n%s", want, rendered)
+		}
 	}
 }
 
@@ -627,6 +646,16 @@ func TestChineseListUsesTranslatedLabels(t *testing.T) {
 	rendered = m.View()
 	if !strings.Contains(rendered, "健康=良好") {
 		t.Fatalf("expected translated health filter label in list view:\n%s", rendered)
+	}
+
+	m.runCommand("clear")
+	m.filterText = "不存在"
+	m.rebuildFilteredView()
+	rendered = m.View()
+	for _, want := range []string{"没有匹配会话", "当前筛选", "按 Esc"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected translated empty filter state %q:\n%s", want, rendered)
+		}
 	}
 }
 
@@ -1425,7 +1454,8 @@ func TestOpeningDetailWithNoVisibleRowsClearsStaleViewport(t *testing.T) {
 		t.Fatalf("expected stale detail viewport to be cleared")
 	}
 	rendered := m.View()
-	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("no_visible_sessions_hint"))) {
+	if !strings.Contains(rendered, i18n.T("no_visible_sessions_title")) ||
+		!strings.Contains(rendered, i18n.T("no_visible_sessions_clear")) {
 		t.Fatalf("expected empty detail hint, got:\n%s", rendered)
 	}
 }
@@ -1437,7 +1467,8 @@ func TestDiagnosticsShowsNoVisibleSessionsHint(t *testing.T) {
 	m.rebuildFilteredView()
 
 	rendered := m.View()
-	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("no_visible_sessions_hint"))) {
+	if !strings.Contains(rendered, i18n.T("no_visible_sessions_title")) ||
+		!strings.Contains(rendered, i18n.T("no_visible_sessions_clear")) {
 		t.Fatalf("expected no visible sessions hint, got:\n%s", rendered)
 	}
 }

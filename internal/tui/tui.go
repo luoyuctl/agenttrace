@@ -890,6 +890,8 @@ func (m Model) View() string {
 				summaryBar := m.renderQuickSummary()
 				detailContent := lipgloss.JoinVertical(lipgloss.Left, summaryBar, "", scrollInfo, m.viewport.View())
 				content = m.frameContent(detailContent)
+			} else if empty := m.renderNoVisibleSessionsState(m.frameBodyWidth()); empty != "" {
+				content = m.frameContent(empty)
 			} else {
 				content = m.frameContent(dimStyle.Render(m.selectionHint()))
 			}
@@ -929,6 +931,10 @@ func (m Model) renderListView() string {
 	if summary := m.renderSelectedSessionSummary(contentW); summary != "" {
 		sections = append(sections, summary)
 		extraLines += renderedLineCount(summary)
+	}
+	if empty := m.renderNoVisibleSessionsState(contentW); empty != "" {
+		sections = append(sections, empty)
+		extraLines += renderedLineCount(empty)
 	}
 	tableView := m.table
 	tableView.SetHeight(m.listTableHeight(extraLines))
@@ -1092,6 +1098,23 @@ func (m Model) selectionHint() string {
 		return i18n.T("no_visible_sessions_hint")
 	}
 	return i18n.T("select_session_hint")
+}
+
+func (m Model) renderNoVisibleSessionsState(width int) string {
+	if len(m.sessions) == 0 || !m.hasAnyFilter() || len(m.filteredIndices) > 0 {
+		return ""
+	}
+	innerW := maxInt(8, width-4)
+	lines := []string{
+		yellowStyle.Render(truncate(i18n.T("no_visible_sessions_title"), innerW)),
+		dimStyle.Render(truncate(fmt.Sprintf(i18n.T("no_visible_sessions_active"), m.filterLabel()), innerW)),
+		cyanStyle.Render(truncate(i18n.T("no_visible_sessions_clear"), innerW)),
+	}
+	style := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("238")).
+		Padding(0, 1)
+	return styleForOuterWidth(style, width).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func (m Model) renderAppHeader() string {
@@ -1472,12 +1495,15 @@ func (m Model) renderCostAlert() string {
 // ═══════════════════════════════════════════════════════════════
 
 func (m Model) renderWaste() string {
+	panelW := m.frameBodyWidth()
 	idx := m.findSessionIndex()
 	if idx < 0 || idx >= len(m.sessions) {
+		if empty := m.renderNoVisibleSessionsState(panelW); empty != "" {
+			return m.frameContent(empty)
+		}
 		return m.frameContent(dimStyle.Render(m.selectionHint()))
 	}
 	s := m.sessions[idx]
-	panelW := m.frameBodyWidth()
 	cardW := panelW
 	twoColumn := panelW >= 92
 	if twoColumn {
