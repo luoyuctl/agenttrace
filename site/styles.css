@@ -323,6 +323,43 @@ code {
   color: var(--ink);
 }
 
+.community {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.62fr) minmax(16rem, 0.38fr);
+  gap: clamp(1.5rem, 5vw, 4rem);
+  align-items: start;
+  padding: clamp(4rem, 8vw, 7rem) clamp(1rem, 4vw, 4.5rem);
+  border-top: 1px solid var(--line);
+  background: rgba(16, 19, 23, 0.58);
+}
+
+.community-links {
+  display: grid;
+  gap: 0.7rem;
+  padding-top: 0.2rem;
+}
+
+.community-links a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.4rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(243, 239, 216, 0.16);
+  background: #050607;
+  color: var(--ink);
+}
+
+.community-links a::after {
+  content: "->";
+  color: var(--green);
+}
+
+.community-links a:hover {
+  border-color: rgba(84, 255, 0, 0.55);
+  color: var(--green);
+}
+
 footer {
   flex-wrap: wrap;
   gap: 1rem;
@@ -371,7 +408,8 @@ footer a {
   }
 
   .demo,
-  .workflow {
+  .workflow,
+  .community {
     grid-template-columns: 1fr;
   }
 }

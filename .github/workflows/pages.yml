@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p public/assets
           cp -R site/. public/
-          cp assets/agenttrace-demo.gif assets/hero-banner.png assets/logo-icon.png public/assets/
+          cp assets/agenttrace-demo.gif assets/hero-banner.png assets/logo-icon.png assets/tui-preview.png public/assets/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
