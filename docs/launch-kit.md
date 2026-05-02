@@ -112,6 +112,7 @@ Open PRs:
 - awesome-agents: https://github.com/kyrolabs/awesome-agents/pull/437
 - awesome-ai-devtools: https://github.com/jamesmurdza/awesome-ai-devtools/pull/492
 - awesome_ai_agents: https://github.com/jim-schwoebel/awesome_ai_agents/pull/250
+- awesome-ai-agents-2026: https://github.com/caramaschiHG/awesome-ai-agents-2026/pull/207
 
 Manual-only submission:
 
