@@ -839,6 +839,37 @@ func TestCompactOverviewUsesScanFriendlySmallViewport(t *testing.T) {
 	}
 }
 
+func TestDashboardHeroKeepsTitleSingleLineAtNarrowWidth(t *testing.T) {
+	for _, lang := range []i18n.Lang{i18n.EN, i18n.ZH} {
+		t.Run(string(lang), func(t *testing.T) {
+			prev := i18n.Current
+			i18n.SetLang(lang)
+			t.Cleanup(func() { i18n.SetLang(prev) })
+
+			m := sampleModelForTest()
+			hero := m.renderDashboardHero(78)
+			if got := renderedHeight(hero); got != 1 {
+				t.Fatalf("wide compact hero should stay on one line, got %d:\n%s", got, hero)
+			}
+			if got := maxRenderedWidth(hero); got > 78 {
+				t.Fatalf("hero too wide: got=%d line=%q", got, widestLine(hero))
+			}
+		})
+	}
+}
+
+func TestDashboardTitleFallsBackInsteadOfWrapping(t *testing.T) {
+	for _, width := range []int{4, 10, 20, 29} {
+		title := renderDashboardTitle(width)
+		if got := renderedHeight(title); got != 1 {
+			t.Fatalf("title should not wrap at width=%d, got %d:\n%s", width, got, title)
+		}
+		if got := maxRenderedWidth(title); got > width {
+			t.Fatalf("title too wide at width=%d: got=%d line=%q", width, got, widestLine(title))
+		}
+	}
+}
+
 func TestOverviewShowsActionHint(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 120, 36)
 	m.view = viewOverview

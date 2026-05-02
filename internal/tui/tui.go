@@ -2401,11 +2401,6 @@ func (m Model) renderDashboardHero(width int) string {
 		health = 0
 	}
 
-	title := lipgloss.JoinHorizontal(lipgloss.Top,
-		brandStyle.Render("agenttrace"),
-		" ",
-		dimStyle.Render(i18n.T("app_monitor_subtitle")),
-	)
 	summary := fmt.Sprintf("%d %s · %s · $%.2f %s · %.1f%% %s · %d%% %s",
 		len(m.sessions),
 		i18n.T("sessions_label"),
@@ -2418,20 +2413,32 @@ func (m Model) renderDashboardHero(width int) string {
 		healthLabel(health),
 	)
 	if width < 70 {
-		subtitle := i18n.T("app_monitor_subtitle")
-		if width < 46 {
-			subtitle = i18n.T("app_monitor_short")
-		}
 		return lipgloss.NewStyle().Width(width).Render(lipgloss.JoinVertical(lipgloss.Left,
-			brandStyle.Render("agenttrace")+" "+dimStyle.Render(subtitle),
+			renderDashboardTitle(width),
 			dimStyle.Render(truncate(summary, width)),
 		))
 	}
 	leftW := width * 38 / 100
 	rightW := width - leftW - 2
-	left := lipgloss.NewStyle().Width(leftW).Render(title)
+	left := lipgloss.NewStyle().Width(leftW).Render(renderDashboardTitle(leftW))
 	right := lipgloss.NewStyle().Width(rightW).Align(lipgloss.Right).Render(dimStyle.Render(truncate(summary, rightW)))
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right)
+}
+
+func renderDashboardTitle(width int) string {
+	if width <= 0 {
+		return ""
+	}
+	brand := "agenttrace"
+	if lipgloss.Width(brand) > width {
+		return brandStyle.Render(truncate(brand, width))
+	}
+	for _, subtitle := range []string{i18n.T("app_monitor_subtitle"), i18n.T("app_monitor_short")} {
+		if lipgloss.Width(brand)+1+lipgloss.Width(subtitle) <= width {
+			return brandStyle.Render(brand) + " " + dimStyle.Render(subtitle)
+		}
+	}
+	return brandStyle.Render(brand)
 }
 
 func dashBadge(label, color string) string {
