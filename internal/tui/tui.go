@@ -680,7 +680,7 @@ func (m Model) renderDetailViewportContent(s engine.Session) string {
 	sections := []string{
 		m.renderDiagnosticSummary(),
 		"",
-		engine.ReportText(s.Metrics, s.Anomalies, s.Health),
+		engine.ReportText(s.Metrics, s.Anomalies, clampHealth(s.Health)),
 	}
 	if loopSection := m.renderLoopAnalysis(); loopSection != "" {
 		sections = append(sections, "", loopSection)
@@ -719,7 +719,8 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 		sourceDisplay = display
 	}
 
-	healthRaw := fmt.Sprintf("%d%%", s.Health)
+	health := clampHealth(s.Health)
+	healthRaw := fmt.Sprintf("%d%%", health)
 	healthCol := healthRaw
 
 	failStr := fmt.Sprintf("%d", failTools)
@@ -955,7 +956,7 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 	}
 	line := fmt.Sprintf("%s  %s %d%%  %s $%.4f  %s %s  %s %d  %s %d/%d %s  %s %s",
 		truncate(s.Name, 28),
-		i18n.T("health"), s.Health,
+		i18n.T("health"), clampHealth(s.Health),
 		i18n.T("cost"), safeAmount(met.CostEstimated),
 		i18n.T("tokens"), compactInt(met.TokensInput+met.TokensOutput),
 		i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
@@ -997,7 +998,7 @@ func (m Model) renderAppHeader() string {
 	left := lipgloss.JoinHorizontal(lipgloss.Center, brand, " ", version, "  ", subtitle)
 
 	status := statusBadge(fmt.Sprintf("%d %s", len(m.sessions), i18n.T("sessions_label")), "82")
-	health := int(m.aggStats.AvgHealth)
+	health := clampHealth(int(m.aggStats.AvgHealth))
 	if len(m.sessions) == 0 {
 		health = 0
 	}
@@ -1168,12 +1169,13 @@ func (m Model) renderQuickSummary() string {
 			Render(lipgloss.NewStyle().Foreground(color).Render(label) + " " + boldStyle.Render(value))
 	}
 
-	healthBadge := badge(i18n.T("health"), fmt.Sprintf("%d/100", s.Health), lipgloss.Color("42"))
-	if s.Health < 80 {
-		healthBadge = badge(i18n.T("health"), fmt.Sprintf("%d/100", s.Health), lipgloss.Color("220"))
+	health := clampHealth(s.Health)
+	healthBadge := badge(i18n.T("health"), fmt.Sprintf("%d/100", health), lipgloss.Color("42"))
+	if health < 80 {
+		healthBadge = badge(i18n.T("health"), fmt.Sprintf("%d/100", health), lipgloss.Color("220"))
 	}
-	if s.Health < 50 {
-		healthBadge = badge(i18n.T("health"), fmt.Sprintf("%d/100", s.Health), lipgloss.Color("196"))
+	if health < 50 {
+		healthBadge = badge(i18n.T("health"), fmt.Sprintf("%d/100", health), lipgloss.Color("196"))
 	}
 
 	costBadge := badge(i18n.T("cost"), money4(met.CostEstimated), lipgloss.Color("39"))
@@ -1201,7 +1203,7 @@ func (m Model) renderQuickSummary() string {
 	if m.width > 0 && m.width < 100 {
 		summary := fmt.Sprintf("%s %d/100 · %s $%.4f · %s %d/%d %s · %s %d · %s",
 			i18n.T("health"),
-			s.Health,
+			health,
 			i18n.T("cost"),
 			safeAmount(met.CostEstimated),
 			i18n.T("tools"),
@@ -1812,9 +1814,9 @@ func (m *Model) sortAndRefresh() {
 	case "health":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
 			if m.sortDesc {
-				return m.sessions[i].Health > m.sessions[j].Health
+				return clampHealth(m.sessions[i].Health) > clampHealth(m.sessions[j].Health)
 			}
-			return m.sessions[i].Health < m.sessions[j].Health
+			return clampHealth(m.sessions[i].Health) < clampHealth(m.sessions[j].Health)
 		})
 	case "cost":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
@@ -2030,7 +2032,7 @@ func (m Model) renderDashboardHero(width int) string {
 	if toolTotal > 0 {
 		errRate = float64(toolFail) / float64(toolTotal) * 100
 	}
-	health := int(m.aggStats.AvgHealth)
+	health := clampHealth(int(m.aggStats.AvgHealth))
 	if len(m.sessions) == 0 {
 		health = 0
 	}
@@ -2122,7 +2124,7 @@ func (m Model) renderDashboardMetrics(width int) string {
 			errorRate = float64(toolFail) / float64(toolTotal) * 100
 		}
 		p95 := aggregateP95Latency(m.sessions)
-		health := int(m.aggStats.AvgHealth)
+		health := clampHealth(int(m.aggStats.AvgHealth))
 		if len(m.sessions) == 0 {
 			health = 0
 		}
@@ -2147,7 +2149,7 @@ func (m Model) renderDashboardMetrics(width int) string {
 		errorRate = float64(toolFail) / float64(toolTotal) * 100
 	}
 	p95 := aggregateP95Latency(m.sessions)
-	health := int(m.aggStats.AvgHealth)
+	health := clampHealth(int(m.aggStats.AvgHealth))
 	if len(m.sessions) == 0 {
 		health = 0
 	}
@@ -2198,7 +2200,7 @@ func (m Model) renderLatencyPanel(width int) string {
 }
 
 func (m Model) renderHealthPanel(width int) string {
-	health := int(m.aggStats.AvgHealth)
+	health := clampHealth(int(m.aggStats.AvgHealth))
 	if len(m.sessions) == 0 {
 		health = 0
 	}
@@ -2300,10 +2302,11 @@ func (m Model) renderRecentSessionsPanel(width int) string {
 	nameW := maxInt(8, innerW-17)
 	for i := 0; i < limit; i++ {
 		s := m.sessions[i]
+		health := clampHealth(s.Health)
 		status := greenStyle.Render("●")
-		if s.Health < 50 {
+		if health < 50 {
 			status = redStyle.Render("●")
-		} else if s.Health < 80 {
+		} else if health < 80 {
 			status = orangeStyle.Render("●")
 		}
 		name := truncate(s.Name, nameW)
@@ -2313,7 +2316,7 @@ func (m Model) renderRecentSessionsPanel(width int) string {
 			nameW,
 			name,
 			tokens,
-			s.Health,
+			health,
 		))
 	}
 	if len(lines) == 0 {
@@ -2531,6 +2534,7 @@ func tokenCountCompact(v int) string {
 }
 
 func healthLabel(h int) string {
+	h = clampHealth(h)
 	switch {
 	case h >= 90:
 		return i18n.T("health_excellent")
@@ -2541,6 +2545,16 @@ func healthLabel(h int) string {
 	default:
 		return i18n.T("health_critical")
 	}
+}
+
+func clampHealth(h int) int {
+	if h < 0 {
+		return 0
+	}
+	if h > 100 {
+		return 100
+	}
+	return h
 }
 
 func sortFieldLabel(field string) string {
@@ -2817,21 +2831,22 @@ func (m *Model) matchesFilters(s engine.Session) bool {
 	}
 
 	if healthFilter != "" {
+		health := clampHealth(s.Health)
 		switch healthFilter {
 		case "good":
-			if s.Health < 80 {
+			if health < 80 {
 				return false
 			}
 		case "warn":
-			if s.Health < 50 || s.Health >= 80 {
+			if health < 50 || health >= 80 {
 				return false
 			}
 		case "crit":
-			if s.Health >= 50 {
+			if health >= 50 {
 				return false
 			}
 		default:
-			if !matchHealthExpression(s.Health, healthFilter) {
+			if !matchHealthExpression(health, healthFilter) {
 				return false
 			}
 		}
@@ -2850,7 +2865,7 @@ func (m *Model) matchesFilters(s engine.Session) bool {
 	if m.filterModel != "" && !strings.Contains(strings.ToLower(s.Metrics.ModelUsed), strings.ToLower(m.filterModel)) {
 		return false
 	}
-	if m.filterCostOp != "" && !matchFloatExpression(s.Metrics.CostEstimated, m.filterCostOp, m.filterCostValue) {
+	if m.filterCostOp != "" && !matchFloatExpression(safeAmount(s.Metrics.CostEstimated), m.filterCostOp, m.filterCostValue) {
 		return false
 	}
 	if m.filterAnomaly && len(s.Anomalies) == 0 {
