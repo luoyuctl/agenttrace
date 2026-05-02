@@ -661,12 +661,12 @@ func (m *Model) openDetail() {
 			vw = 40
 		}
 
-			m.prepareDetailState(s)
-			m.viewport = viewport.New(vw, m.detailViewportHeight())
-			m.viewport.SetContent(m.renderDetailViewportContent(s))
-			m.detailReady = true
-		}
+		m.prepareDetailState(s)
+		m.viewport = viewport.New(vw, m.detailViewportHeight())
+		m.viewport.SetContent(m.renderDetailViewportContent(s))
+		m.detailReady = true
 	}
+}
 
 func (m *Model) prepareDetailState(s engine.Session) {
 	m.fixSuggestions = engine.GenerateFixes(s.Metrics, s.Anomalies)
