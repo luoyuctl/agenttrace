@@ -130,6 +130,22 @@ Manual-only submission:
 - e2b-dev/awesome-ai-agents: submit through the Google Form linked from the README; the repo asks for product submissions through the form instead of direct README edits.
 - awesome-claude-skills: skip automated PRs unless submitted manually by a human; its contribution guide asks that PRs are not AI-assisted and generally expects social proof.
 - awesome-go: defer until the project is older and has the required quality links; contribution checks expect repository maturity, pkg.go.dev, Go Report Card, and coverage evidence.
+- Terminal Trove: submit through https://terminaltrove.com/post/ after confirming the author contact email. Suggested categories: `macos`, `linux`, `windows`, `monitoring`, `observability`, `tui`, `json`, `ai`, `cli`, `debugging`, `cross-platform`. Preview PNG: `https://luoyuctl.github.io/agenttrace/assets/tui-preview.png`; GIF: `https://luoyuctl.github.io/agenttrace/assets/agenttrace-demo.gif`.
+
+Terminal Trove draft:
+
+- Name: `agenttrace`
+- URL: `github.com/luoyuctl/agenttrace`
+- Tagline: `Local-first TUI observability for AI coding agent sessions.`
+- Description: `agenttrace parses local Claude Code, Codex CLI, Gemini CLI, Aider, Cursor export, Hermes, OpenCode, Kimi, and Copilot-style logs into a fast terminal dashboard for session health, cost, token usage, latency, tool failures, anomalies, diffs, and CI evidence.`
+- Standout features: `Overview, session list, detail, diagnostics, and diff views; incremental local cache; JSON, Markdown, and self-contained HTML reports with CI gates for health and tool failure rate.`
+- Who it is for: `Developers using AI coding agents who need to find expensive, stuck, slow, or low-quality sessions without uploading private logs to a hosted observability service.`
+- Primary language: `go`
+- License: `mit`
+- Install:
+  - macOS/Linux: `curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh`
+  - Homebrew: `brew install luoyuctl/tap/agenttrace`
+  - Windows PowerShell: `iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex`
 
 ## Demo Checklist
 
