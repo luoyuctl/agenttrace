@@ -680,7 +680,7 @@ func (m Model) renderDetailViewportContent(s engine.Session) string {
 	sections := []string{
 		m.renderDiagnosticSummary(),
 		"",
-		engine.ReportText(s.Metrics, s.Anomalies, clampHealth(s.Health)),
+		engine.ReportText(safeReportMetrics(s.Metrics), s.Anomalies, clampHealth(s.Health)),
 	}
 	if loopSection := m.renderLoopAnalysis(); loopSection != "" {
 		sections = append(sections, "", loopSection)
@@ -2511,6 +2511,46 @@ func normalizedToolCounts(m engine.Metrics) (ok, fail, observed, total int) {
 		total = observed
 	}
 	return ok, fail, observed, total
+}
+
+func safeReportMetrics(m engine.Metrics) engine.Metrics {
+	m.EventsTotal = nonNegativeInt(m.EventsTotal)
+	m.UserMessages = nonNegativeInt(m.UserMessages)
+	m.AssistantTurns = nonNegativeInt(m.AssistantTurns)
+	m.ToolResults = nonNegativeInt(m.ToolResults)
+	ok, fail, _, total := normalizedToolCounts(m)
+	m.ToolCallsOK = ok
+	m.ToolCallsFail = fail
+	m.ToolCallsTotal = total
+	m.ReasoningBlocks = nonNegativeInt(m.ReasoningBlocks)
+	m.ReasoningChars = nonNegativeInt(m.ReasoningChars)
+	m.ReasoningRedact = nonNegativeInt(m.ReasoningRedact)
+	m.TokensInput = nonNegativeInt(m.TokensInput)
+	m.TokensOutput = nonNegativeInt(m.TokensOutput)
+	m.TokensCacheW = nonNegativeInt(m.TokensCacheW)
+	m.TokensCacheR = nonNegativeInt(m.TokensCacheR)
+	m.DurationSec = chartValue(m.DurationSec)
+	m.CostEstimated = safeAmount(m.CostEstimated)
+	m.LoopRetryEvents = nonNegativeInt(m.LoopRetryEvents)
+	m.LoopGroups = nonNegativeInt(m.LoopGroups)
+	m.LoopCostEst = safeAmount(m.LoopCostEst)
+
+	m.GapsSec = make([]float64, 0, len(m.GapsSec))
+	for _, gap := range m.GapsSec {
+		m.GapsSec = append(m.GapsSec, chartValue(gap))
+	}
+	m.ReasoningLens = make([]int, 0, len(m.ReasoningLens))
+	for _, n := range m.ReasoningLens {
+		m.ReasoningLens = append(m.ReasoningLens, nonNegativeInt(n))
+	}
+	if len(m.ToolUsage) > 0 {
+		toolUsage := make(map[string]int, len(m.ToolUsage))
+		for name, count := range m.ToolUsage {
+			toolUsage[name] = nonNegativeInt(count)
+		}
+		m.ToolUsage = toolUsage
+	}
+	return m
 }
 
 func compactInt(v int) string {
