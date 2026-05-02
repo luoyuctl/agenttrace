@@ -1291,6 +1291,31 @@ func TestListDiffShortcutWorksAtLastRow(t *testing.T) {
 	}
 }
 
+func TestDiffUsesSafeSessionValues(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.view = viewList
+	m.sessions[0].Health = -20
+	m.sessions[0].Metrics.AssistantTurns = -5
+	m.sessions[0].Metrics.ToolCallsTotal = -3
+	m.sessions[0].Metrics.ToolCallsFail = -2
+	m.sessions[0].Metrics.CostEstimated = math.Inf(1)
+	m.sessions[0].Metrics.DurationSec = math.Inf(1)
+	m.sessions[1].Health = 150
+	m.sessions[1].Metrics.CostEstimated = math.NaN()
+
+	if !m.prepareDiffForCursor() {
+		t.Fatalf("expected diff to be prepared")
+	}
+	m.view = viewDiff
+	rendered := m.View()
+
+	for _, bad := range []string{"NaN", "Inf", "-20", "150", "-5", "-3", "-2"} {
+		if strings.Contains(rendered, bad) {
+			t.Fatalf("diff should sanitize invalid metric %q:\n%s", bad, rendered)
+		}
+	}
+}
+
 func TestDetailDiffShortcutUsesFilteredNeighbor(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList

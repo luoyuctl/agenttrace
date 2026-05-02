@@ -1786,7 +1786,7 @@ func (m *Model) prepareDiffForCursor() bool {
 		m.diffResult = engine.SessionDiff{}
 		return false
 	}
-	m.diffResult = engine.DiffSessions(m.sessions[m.filteredIndices[a]], m.sessions[m.filteredIndices[b]])
+	m.diffResult = engine.DiffSessions(safeDiffSession(m.sessions[m.filteredIndices[a]]), safeDiffSession(m.sessions[m.filteredIndices[b]]))
 	return true
 }
 
@@ -2551,6 +2551,12 @@ func safeReportMetrics(m engine.Metrics) engine.Metrics {
 		m.ToolUsage = toolUsage
 	}
 	return m
+}
+
+func safeDiffSession(s engine.Session) engine.Session {
+	s.Health = clampHealth(s.Health)
+	s.Metrics = safeReportMetrics(s.Metrics)
+	return s
 }
 
 func compactInt(v int) string {
