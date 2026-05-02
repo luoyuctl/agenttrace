@@ -421,6 +421,31 @@ func TestWideListKeepsFullOperationalColumns(t *testing.T) {
 	}
 }
 
+func TestListAndDetailClampInvalidToolCounts(t *testing.T) {
+	m := sampleModelForTest()
+	m.sessions[0].Metrics.AssistantTurns = -2
+	m.sessions[0].Metrics.ToolCallsTotal = -5
+	m.sessions[0].Metrics.ToolCallsOK = -3
+	m.sessions[0].Metrics.ToolCallsFail = -2
+	m = resizeForTest(t, m, 160, 36)
+	m.view = viewList
+
+	row := m.table.Rows()[0]
+	if row[2] != "0" || row[3] != "0" || row[4] != "N/A" {
+		t.Fatalf("expected invalid tool counts to be clamped in list row, got row=%v", row)
+	}
+
+	m.openDetail()
+	m.view = viewDetail
+	rendered := m.View()
+	if !strings.Contains(rendered, "TOOLS 0/0 N/A") || !strings.Contains(rendered, "0 turns") {
+		t.Fatalf("detail should clamp invalid tool counts:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "-200%") {
+		t.Fatalf("detail should not render negative success rate:\n%s", rendered)
+	}
+}
+
 func TestLanguageSwitchKeepsFilteredRows(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.EN)

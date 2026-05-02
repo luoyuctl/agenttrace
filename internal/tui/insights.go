@@ -20,15 +20,15 @@ type sessionInsight struct {
 
 func buildSessionInsight(s engine.Session, fixes []engine.FixSuggestion, alert engine.CostAlert) sessionInsight {
 	met := s.Metrics
-	totalTools := met.ToolCallsOK + met.ToolCallsFail
+	okTools, _, totalTools, _ := normalizedToolCounts(met)
 	success := 100.0
 	if totalTools > 0 {
-		success = float64(met.ToolCallsOK) / float64(totalTools) * 100
+		success = float64(okTools) / float64(totalTools) * 100
 	}
 
 	ins := sessionInsight{
 		Issue:      i18n.T("insight_no_major_waste"),
-		Impact:     fmt.Sprintf(i18n.T("insight_impact_fmt"), met.CostEstimated, met.AssistantTurns),
+		Impact:     fmt.Sprintf(i18n.T("insight_impact_fmt"), met.CostEstimated, nonNegativeInt(met.AssistantTurns)),
 		Evidence:   fmt.Sprintf(i18n.T("insight_evidence_fmt"), len(s.Anomalies), success),
 		NextAction: i18n.T("insight_default_next"),
 		Confidence: i18n.T("insight_medium"),
