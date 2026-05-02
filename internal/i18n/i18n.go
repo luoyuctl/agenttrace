@@ -251,8 +251,8 @@ var translations = map[string]map[Lang]string{
 		ZH: "Esc: 返回 · d: 对比上一 · w: 诊断 · Tab: 下一个 · q: 退出",
 	},
 	"help_compare": {
-		EN: "h: sort health · 0-5: jump · Tab: overview · q: quit",
-		ZH: "h: 健康排序 · 0-5: 跳转 · Tab: 概览 · q: 退出",
+		EN: "h: sort health · 0-4: jump · Tab: overview · q: quit",
+		ZH: "h: 健康排序 · 0-4: 跳转 · Tab: 概览 · q: 退出",
 	},
 
 	// ── CLI / main ──

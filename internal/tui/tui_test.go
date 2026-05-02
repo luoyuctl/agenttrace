@@ -575,6 +575,25 @@ func TestSortCommandSupportsSource(t *testing.T) {
 	}
 }
 
+func TestSourceShortcutRecoversFromUnknownSourceFilter(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.runCommand("source does-not-exist")
+	if got := len(m.table.Rows()); got != 0 {
+		t.Fatalf("expected unknown source filter to hide all rows, got %d", got)
+	}
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	m = next.(Model)
+
+	if m.filterSource == "does-not-exist" {
+		t.Fatalf("source shortcut should not stay stuck on unknown source")
+	}
+	if got := len(m.table.Rows()); got == 0 {
+		t.Fatalf("expected source shortcut to recover visible rows")
+	}
+}
+
 func TestCommandClearResetsAdvancedFilters(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList

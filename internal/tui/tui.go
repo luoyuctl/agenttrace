@@ -552,23 +552,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "s":
 			if !m.filterActive && m.view == viewList {
-				if m.filterSource == "" {
-					sources := m.getAvailableSources()
-					if len(sources) > 0 {
-						m.filterSource = sources[0]
-					}
-				} else {
-					sources := m.getAvailableSources()
-					for i, src := range sources {
-						if src == m.filterSource && i+1 < len(sources) {
-							m.filterSource = sources[i+1]
-							break
-						} else if src == m.filterSource {
-							m.filterSource = ""
-							break
-						}
-					}
-				}
+				m.cycleSourceFilter()
 				m.filterMode = ""
 				m.filterValue = ""
 				m.rebuildFilteredView()
@@ -2719,6 +2703,30 @@ func (m *Model) getAvailableSources() []string {
 		}
 	}
 	return sources
+}
+
+func (m *Model) cycleSourceFilter() {
+	sources := m.getAvailableSources()
+	if len(sources) == 0 {
+		m.filterSource = ""
+		return
+	}
+	if m.filterSource == "" {
+		m.filterSource = sources[0]
+		return
+	}
+	for i, src := range sources {
+		if src != m.filterSource {
+			continue
+		}
+		if i+1 < len(sources) {
+			m.filterSource = sources[i+1]
+		} else {
+			m.filterSource = ""
+		}
+		return
+	}
+	m.filterSource = sources[0]
 }
 
 func (m *Model) rebuildFilteredIndices() {
