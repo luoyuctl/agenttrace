@@ -358,6 +358,17 @@ func TestWideListRendersStableSingleTable(t *testing.T) {
 	}
 }
 
+func TestListFrameClearsFullTerminalWidth(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 180, 40)
+	m.view = viewList
+
+	for i, line := range strings.Split(m.View(), "\n") {
+		if got := lipgloss.Width(line); got != 180 {
+			t.Fatalf("line %d should fill terminal width, got=%d line=%q", i, got, line)
+		}
+	}
+}
+
 func TestListViewFitsTerminalHeight(t *testing.T) {
 	for _, height := range []int{24, 30, 62} {
 		m := resizeForTest(t, sampleModelForTest(), 160, height)

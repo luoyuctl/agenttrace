@@ -844,7 +844,7 @@ func (m Model) View() string {
 	tabs := m.renderTabs()
 
 	if m.loading {
-		return m.renderLoading()
+		return m.fitTerminalFrame(m.renderLoading())
 	}
 
 	var content string
@@ -878,7 +878,7 @@ func (m Model) View() string {
 
 	help := m.renderHelp()
 
-	return strings.Join([]string{header, tabs, content, help}, "\n")
+	return m.fitTerminalFrame(strings.Join([]string{header, tabs, content, help}, "\n"))
 }
 
 func (m Model) renderCommandBar() string {
@@ -2552,6 +2552,29 @@ func renderedLineCount(s string) int {
 		return 0
 	}
 	return len(strings.Split(s, "\n"))
+}
+
+func (m Model) fitTerminalFrame(s string) string {
+	if m.width <= 0 {
+		return s
+	}
+	width := maxInt(1, m.width)
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if w := lipgloss.Width(line); w < width {
+			lines[i] = line + strings.Repeat(" ", width-w)
+		}
+	}
+	if m.height > 0 {
+		if len(lines) > m.height {
+			lines = lines[:m.height]
+		}
+		blank := strings.Repeat(" ", width)
+		for len(lines) < m.height {
+			lines = append(lines, blank)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) contentWidth() int {
