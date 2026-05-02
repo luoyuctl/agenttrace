@@ -465,6 +465,33 @@ func TestListAndDetailClampInvalidToolCounts(t *testing.T) {
 	}
 }
 
+func TestDetailReportUsesSafeMetricValues(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 80)
+	m.sessions[0].Metrics.UserMessages = -4
+	m.sessions[0].Metrics.AssistantTurns = -3
+	m.sessions[0].Metrics.ToolCallsTotal = -8
+	m.sessions[0].Metrics.ToolCallsOK = -6
+	m.sessions[0].Metrics.ToolCallsFail = -2
+	m.sessions[0].Metrics.TokensInput = -100
+	m.sessions[0].Metrics.TokensOutput = -200
+	m.sessions[0].Metrics.TokensCacheW = -300
+	m.sessions[0].Metrics.TokensCacheR = -400
+	m.sessions[0].Metrics.CostEstimated = math.NaN()
+	m.sessions[0].Metrics.DurationSec = math.Inf(1)
+	m.sessions[0].Metrics.GapsSec = []float64{-12, math.NaN(), math.Inf(1)}
+	m.sessions[0].Metrics.ToolUsage = map[string]int{"bad_tool": -7}
+	m.view = viewList
+	m.openDetail()
+
+	content := m.renderDetailViewportContent(m.sessions[0])
+
+	for _, bad := range []string{"NaN", "Inf", "-100", "-200", "-300", "-400", "-12", "-7", "-6", "-4", "-3", "-2"} {
+		if strings.Contains(content, bad) {
+			t.Fatalf("detail report should sanitize invalid metric %q:\n%s", bad, content)
+		}
+	}
+}
+
 func TestViewsClampInvalidHealthScores(t *testing.T) {
 	m := sampleModelForTest()
 	m.sessions[0].Health = -20
