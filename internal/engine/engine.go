@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agenttrace.
-// Pure Go. Supports 9 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Aider.
+// Pure Go. Supports 10 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Aider, Cursor.
 package engine
 
 import (
@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.3.6"
+const Version = "0.3.7"
 
 // Severity constants for anomaly severity (internal, not i18n).
 const (
@@ -52,6 +52,7 @@ var ToolDisplayNames = map[string]string{
 	"copilot_cli":       "Copilot CLI",
 	"kimi_cli":          "Kimi CLI",
 	"aider":             "Aider",
+	"cursor":            "Cursor",
 	"generic":           "Generic JSON/JSONL",
 }
 
@@ -545,6 +546,10 @@ func detectSingleJSON(doc map[string]interface{}) string {
 	_, hasUsage := doc["usage"]
 	_, hasProvider := doc["provider"]
 
+	if isCursorExport(doc) {
+		return "cursor"
+	}
+
 	if hasSessID && hasMsgs && hasModel && hasPlatform {
 		return "hermes_json"
 	}
@@ -626,6 +631,9 @@ func detectSingleJSON(doc map[string]interface{}) string {
 }
 
 func detectJSONArray(arr []interface{}) string {
+	if isCursorGenerationArray(arr) || isCursorPromptArray(arr) {
+		return "cursor"
+	}
 	for _, item := range arr {
 		if m, ok := item.(map[string]interface{}); ok {
 			if _, hasRole := m["role"]; hasRole {
@@ -673,6 +681,8 @@ func Parse(path string) ([]Event, error) {
 		return parseKimiCLI(fi.Doc)
 	case "aider_chat_history":
 		return parseAiderChatHistory(string(fi.Raw))
+	case "cursor":
+		return parseCursorExport(fi.Doc, fi.Arr)
 	default:
 		return parseGeneric(string(fi.Raw))
 	}

@@ -215,6 +215,77 @@ func TestFindSessionFilesIncludesAiderHistory(t *testing.T) {
 	}
 }
 
+func TestParseCursorSQLiteJSONExport(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cursor-export.json")
+	raw := map[string]interface{}{
+		"aiService.prompts": []interface{}{
+			map[string]interface{}{"text": "Refactor the auth flow", "commandType": 1},
+		},
+		"aiService.generations": []interface{}{
+			map[string]interface{}{
+				"unixMs":          float64(1710000000000),
+				"generationUUID":  "gen-1",
+				"type":            "composer",
+				"textDescription": "Updated the login component and tests",
+			},
+		},
+		"composer.composerData": map[string]interface{}{
+			"allComposers": []interface{}{
+				map[string]interface{}{
+					"composerId":    "cmp-1",
+					"name":          "Auth cleanup",
+					"subtitle":      "2 files changed",
+					"lastUpdatedAt": float64(1710000060000),
+				},
+			},
+		},
+	}
+	if err := os.WriteFile(path, []byte(mustJSON(raw)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectFormat(path).Format; got != "cursor" {
+		t.Fatalf("cursor format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "default")
+	if m.SourceTool != "cursor" || m.UserMessages != 1 || m.AssistantTurns != 2 {
+		t.Fatalf("bad cursor metrics: %+v", m)
+	}
+	if m.SessionStart == "" || m.SessionEnd == "" {
+		t.Fatalf("expected cursor timestamps, got %+v", m)
+	}
+}
+
+func TestParseCursorGenerationArray(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cursor-generations.json")
+	raw := []interface{}{
+		map[string]interface{}{
+			"unixMs":          float64(1710000000000),
+			"generationUUID":  "gen-1",
+			"type":            "chat",
+			"textDescription": "Explained the failing test",
+		},
+	}
+	if err := os.WriteFile(path, []byte(mustJSON(raw)), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectFormat(path).Format; got != "cursor" {
+		t.Fatalf("cursor array format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].SourceTool != "cursor" || events[0].Role != "assistant" {
+		t.Fatalf("bad cursor array events: %+v", events)
+	}
+}
+
 func TestDetectLargeParams_UsesToolArguments(t *testing.T) {
 	arg := strings.Repeat("x", 10001)
 	events := []Event{{

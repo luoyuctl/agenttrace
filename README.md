@@ -8,7 +8,7 @@
   <a href="https://github.com/luoyuctl/agenttrace/stargazers"><img src="https://img.shields.io/github/stars/luoyuctl/agenttrace?style=social" alt="GitHub stars"></a>
   <img src="https://img.shields.io/badge/go-1.24+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.3.6-2bbc8a.svg" alt="Homebrew">
+  <img src="https://img.shields.io/badge/Homebrew-v0.3.7-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <h3 align="center">💸 Stop burning cash and hours on invisible AI agent waste</h3>
@@ -38,7 +38,7 @@ AI agents now behave like tiny build systems: they plan, call tools, retry, hang
 | ⚡ **Persistent Cache** | Incremental session cache avoids a full disk parse on every startup |
 | 🩺 **Doctor Mode** | `--doctor` checks detected agent dirs, cache health, and next steps |
 | ⌨️ **Command Mode** | `:health <80`, `:cost >0.1`, `:sort cost desc`, `:anomalies` |
-| 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Codex CLI / Gemini CLI / OpenCode / OpenClaw / Aider — all parsed seamlessly |
+| 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Codex CLI / Gemini CLI / OpenCode / OpenClaw / Aider / Cursor exports — all parsed seamlessly |
 | 💸 **Cost & Time Waste** | How much 💰 you burned + ⏱️ time lost to loops, retries, failures |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
@@ -92,6 +92,9 @@ agenttrace --demo
 # Diagnose local session discovery and cache status
 agenttrace --doctor
 
+# Import a Cursor workspace export
+agenttrace cursor-export.json
+
 # Analyze latest session
 agenttrace --latest
 
@@ -126,6 +129,18 @@ agenttrace --update-pricing --list-models
 agenttrace --latest --lang zh    # Chinese (supports zh, en)
 ```
 
+### Cursor Import
+
+Cursor keeps local composer/chat state in SQLite `state.vscdb` files. Export the relevant JSON keys once, then point `agenttrace` at the exported file:
+
+```bash
+db="$HOME/Library/Application Support/Cursor/User/workspaceStorage/<workspace-id>/state.vscdb"
+sqlite3 "$db" "select json_group_object(key, json(value)) from ItemTable where key in ('aiService.prompts','aiService.generations','composer.composerData');" > cursor-export.json
+agenttrace cursor-export.json
+```
+
+See [docs/cursor-import.md](docs/cursor-import.md) for details.
+
 ### TUI Navigation
 
 | Key | Action |
@@ -147,7 +162,7 @@ agenttrace --latest --lang zh    # Chinese (supports zh, en)
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v0.3.6 — AI Agent Session Performance Report
+  AGENTTRACE v0.3.7 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST
@@ -245,7 +260,7 @@ Session                   Turns  Tools   Succ     Cost  Health
 - [ ] VS Code extension
 - [x] OpenCode format support
 - [x] Aider chat history support
-- [ ] Cursor format support
+- [x] Cursor exported JSON support
 
 See [CI Integration](docs/ci-integration.md) for a ready-to-copy GitHub Actions health gate.
 
