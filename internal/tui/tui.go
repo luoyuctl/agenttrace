@@ -419,8 +419,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.filterActive = false
 				m.rebuildFilteredView()
 			case "esc":
-				m.filterActive = false
-				m.filterInput = ""
+				if m.hasAnyFilter() {
+					m.clearFilters()
+					m.commandFeedback = i18n.T("cmd_cleared")
+				} else {
+					m.filterActive = false
+					m.filterInput = ""
+				}
 			case "backspace":
 				if len(m.filterInput) > 0 {
 					m.filterInput = m.filterInput[:len(m.filterInput)-1]
@@ -887,7 +892,8 @@ func (m Model) renderCommandBar() string {
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("39")).
 		Padding(0, 1)
-	return styleForOuterWidth(style, width).Render(fmt.Sprintf(": %s_", m.commandInput))
+	body := truncate(fmt.Sprintf(": %s_", m.commandInput), maxInt(1, width-4))
+	return styleForOuterWidth(style, width).Render(body)
 }
 
 func (m Model) renderListView() string {
@@ -923,8 +929,9 @@ func (m Model) renderListStatusBar(width int) string {
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("39")).
 			Padding(0, 1)
+		body := truncate(fmt.Sprintf("/ %s_", m.filterInput), maxInt(1, width-4))
 		return styleForOuterWidth(style, width).
-			Render(fmt.Sprintf("/ %s_", m.filterInput))
+			Render(body)
 	case m.hasAnyFilter():
 		return dimStyle.Render(truncate(fmt.Sprintf("%s: %s · %d/%d %s",
 			i18n.T("list_filter"),
@@ -1107,12 +1114,25 @@ func (m Model) renderHelp() string {
 	if m.commandFeedback != "" {
 		meta = append(meta, m.commandFeedback)
 	}
-	left := statusStyle.Render(strings.Join(meta, " · "))
-	right := dimStyle.Render(keys)
 	lineW := maxInt(1, width-8)
-	if lipgloss.Width(left)+lipgloss.Width(right)+3 > lineW {
-		right = dimStyle.Render(truncate(keys, maxInt(1, lineW-lipgloss.Width(left)-3)))
+	leftText := strings.Join(meta, " · ")
+	rightText := keys
+	if lipgloss.Width(leftText)+lipgloss.Width(rightText)+3 > lineW {
+		rightBudget := minInt(lipgloss.Width(rightText), maxInt(0, lineW/3))
+		leftBudget := lineW - rightBudget - 3
+		if leftBudget < 12 {
+			leftBudget = maxInt(1, lineW-3)
+			rightBudget = 0
+		}
+		leftText = truncate(leftText, leftBudget)
+		if rightBudget > 0 {
+			rightText = truncate(rightText, rightBudget)
+		} else {
+			rightText = ""
+		}
 	}
+	left := statusStyle.Render(leftText)
+	right := dimStyle.Render(rightText)
 	gap := lineW - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		gap = 1
@@ -1810,6 +1830,15 @@ func (m *Model) sortAndRefresh() {
 			}
 			return m.sessions[i].Metrics.AssistantTurns < m.sessions[j].Metrics.AssistantTurns
 		})
+	case "source":
+		sort.SliceStable(m.sessions, func(i, j int) bool {
+			left := sourceDisplayName(m.sessions[i].Metrics.SourceTool)
+			right := sourceDisplayName(m.sessions[j].Metrics.SourceTool)
+			if m.sortDesc {
+				return left > right
+			}
+			return left < right
+		})
 	case "name":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
 			if m.sortDesc {
@@ -2462,6 +2491,8 @@ func sortFieldLabel(field string) string {
 		return i18n.T("sort_field_cost")
 	case "turns":
 		return i18n.T("sort_field_turns")
+	case "source":
+		return i18n.T("sort_field_source")
 	default:
 		return field
 	}
@@ -2520,7 +2551,10 @@ func anomalyColor(t string) lipgloss.Style {
 }
 
 func truncate(s string, maxLen int) string {
-	if maxLen <= 0 || lipgloss.Width(s) <= maxLen {
+	if maxLen <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= maxLen {
 		return s
 	}
 	if maxLen <= 1 {
@@ -2537,6 +2571,13 @@ func truncate(s string, maxLen int) string {
 		width += rw
 	}
 	return b.String() + "…"
+}
+
+func sourceDisplayName(source string) string {
+	if display, ok := engine.ToolDisplayNames[source]; ok {
+		return display
+	}
+	return source
 }
 
 func truncateLines(s string, maxLen int) string {

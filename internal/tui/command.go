@@ -29,12 +29,12 @@ func (m *Model) runCommand(input string) {
 			m.commandFeedback = i18n.T("cmd_usage_health")
 			return
 		}
-		m.filterHealth = fields[1]
+		m.filterHealth = normalizeHealthFilter(commandValue(fields[1:]))
 		m.filterMode = ""
 		m.filterValue = ""
 		m.view = viewList
 		m.rebuildFilteredView()
-		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_filter_health"), fields[1])
+		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_filter_health"), m.filterHealth)
 	case "source":
 		if len(fields) < 2 {
 			m.commandFeedback = i18n.T("cmd_usage_source")
@@ -60,7 +60,7 @@ func (m *Model) runCommand(input string) {
 			m.commandFeedback = i18n.T("cmd_usage_cost")
 			return
 		}
-		op, value, ok := parseNumericExpression(fields[1])
+		op, value, ok := parseNumericExpression(commandValue(fields[1:]))
 		if !ok {
 			m.commandFeedback = i18n.T("cmd_cost_expect")
 			return
@@ -106,9 +106,41 @@ func (m *Model) runCommand(input string) {
 	}
 }
 
+func commandValue(fields []string) string {
+	if len(fields) == 0 {
+		return ""
+	}
+	if len(fields) >= 2 && isNumericOperator(fields[0]) {
+		return fields[0] + fields[1]
+	}
+	return strings.Join(fields, " ")
+}
+
+func isNumericOperator(s string) bool {
+	switch s {
+	case ">", ">=", "<", "<=", "=":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeHealthFilter(expr string) string {
+	switch strings.ToLower(strings.TrimSpace(expr)) {
+	case "healthy":
+		return "good"
+	case "warning":
+		return "warn"
+	case "critical":
+		return "crit"
+	default:
+		return strings.ToLower(strings.TrimSpace(expr))
+	}
+}
+
 func (m *Model) applySortCommand(field string, desc bool) {
 	switch strings.ToLower(field) {
-	case "cost", "health", "turns", "name":
+	case "cost", "health", "turns", "name", "source":
 		m.sortBy = strings.ToLower(field)
 	default:
 		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_unknown_sort"), field)

@@ -116,7 +116,7 @@ func renderedHeight(s string) int {
 }
 
 func TestViewsRenderWithinTerminalWidth(t *testing.T) {
-	for _, width := range []int{52, 60, 72, 80, 100, 140} {
+	for _, width := range []int{40, 52, 60, 72, 80, 100, 140} {
 		m := resizeForTest(t, sampleModelForTest(), width, 36)
 		views := []view{viewOverview, viewList, viewDetail, viewDiagnostics, viewDiff}
 		for _, v := range views {
@@ -399,6 +399,50 @@ func TestCommandModeFiltersAndSorts(t *testing.T) {
 	}
 }
 
+func TestCommandModeAcceptsSpacedNumericExpressions(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+
+	m.runCommand("cost > 0.5")
+	if got := len(m.table.Rows()); got != 1 {
+		t.Fatalf("expected spaced cost command to match one row, got %d", got)
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "session_beta_with_a_long_name" {
+		t.Fatalf("spaced cost command selected wrong session: idx=%d", idx)
+	}
+
+	m.runCommand("clear")
+	m.runCommand("health >= 80")
+	if got := len(m.table.Rows()); got != 1 {
+		t.Fatalf("expected spaced health command to match one row, got %d", got)
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "session_alpha" {
+		t.Fatalf("spaced health command selected wrong session: idx=%d", idx)
+	}
+
+	m.runCommand("clear")
+	m.runCommand("health CRITICAL")
+	if got := len(m.table.Rows()); got != 1 {
+		t.Fatalf("expected normalized critical command to match one row, got %d", got)
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "gamma" {
+		t.Fatalf("critical command selected wrong session: idx=%d", idx)
+	}
+}
+
+func TestSortCommandSupportsSource(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.runCommand("sort source asc")
+
+	if m.sortBy != "source" || m.sortDesc {
+		t.Fatalf("source sort command not applied: sortBy=%q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if got := len(m.table.Rows()); got != len(m.sessions) {
+		t.Fatalf("source sort lost rows: got %d", got)
+	}
+}
+
 func TestCommandClearResetsAdvancedFilters(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
@@ -411,6 +455,66 @@ func TestCommandClearResetsAdvancedFilters(t *testing.T) {
 	}
 	if got := len(m.table.Rows()); got != len(m.sessions) {
 		t.Fatalf("expected all rows after clear, got %d", got)
+	}
+}
+
+func TestFilterEscClearsExistingFilters(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.filterText = "beta"
+	m.rebuildFilteredView()
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = next.(Model)
+
+	if m.hasAnyFilter() || m.filterActive || m.filterInput != "" {
+		t.Fatalf("expected Esc to clear filter state: active=%v input=%q label=%s", m.filterActive, m.filterInput, m.filterLabel())
+	}
+	if got := len(m.table.Rows()); got != len(m.sessions) {
+		t.Fatalf("expected all rows after Esc clear, got %d", got)
+	}
+}
+
+func TestLongCommandAndFilterBarsFitTerminalWidth(t *testing.T) {
+	long := strings.Repeat("agenttrace-", 30)
+	tests := []struct {
+		name  string
+		setup func(*Model)
+	}{
+		{
+			name: "applied filter",
+			setup: func(m *Model) {
+				m.filterText = long
+				m.rebuildFilteredView()
+			},
+		},
+		{
+			name: "filter input",
+			setup: func(m *Model) {
+				m.filterActive = true
+				m.filterInput = long
+			},
+		},
+		{
+			name: "command input",
+			setup: func(m *Model) {
+				m.commandActive = true
+				m.commandInput = long
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := resizeForTest(t, sampleModelForTest(), 80, 30)
+			m.view = viewList
+			tt.setup(&m)
+			rendered := m.View()
+			if got := maxRenderedWidth(rendered); got > 80 {
+				t.Fatalf("render too wide: got=%d line=%q", got, widestLine(rendered))
+			}
+		})
 	}
 }
 
@@ -605,7 +709,7 @@ func TestEmptyModelRendersAllViews(t *testing.T) {
 }
 
 func TestLoadingRenderWithinTerminalWidth(t *testing.T) {
-	for _, width := range []int{52, 60, 80} {
+	for _, width := range []int{40, 52, 60, 80} {
 		m := resizeForTest(t, New("__missing_test_sessions__"), width, 24)
 		m.loading = true
 		m.loadProgress = 3
@@ -622,7 +726,7 @@ func TestChineseViewsRenderWithinTerminalWidth(t *testing.T) {
 	i18n.SetLang(i18n.ZH)
 	t.Cleanup(func() { i18n.SetLang(prev) })
 
-	for _, width := range []int{52, 60, 80} {
+	for _, width := range []int{40, 52, 60, 80} {
 		m := resizeForTest(t, sampleModelForTest(), width, 36)
 		m.lang = i18n.ZH
 		m.refreshColumns()
