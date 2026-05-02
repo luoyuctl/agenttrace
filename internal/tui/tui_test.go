@@ -427,6 +427,7 @@ func TestListAndDetailClampInvalidToolCounts(t *testing.T) {
 	m.sessions[0].Metrics.ToolCallsTotal = -5
 	m.sessions[0].Metrics.ToolCallsOK = -3
 	m.sessions[0].Metrics.ToolCallsFail = -2
+	m.sessions[0].Metrics.CostEstimated = math.Inf(1)
 	m = resizeForTest(t, m, 160, 36)
 	m.view = viewList
 
@@ -438,11 +439,11 @@ func TestListAndDetailClampInvalidToolCounts(t *testing.T) {
 	m.openDetail()
 	m.view = viewDetail
 	rendered := m.View()
-	if !strings.Contains(rendered, "TOOLS 0/0 N/A") || !strings.Contains(rendered, "0 turns") {
+	if !strings.Contains(rendered, "TOOLS 0/0 N/A") || !strings.Contains(rendered, "0 turns") || !strings.Contains(rendered, "COST $0.0000") {
 		t.Fatalf("detail should clamp invalid tool counts:\n%s", rendered)
 	}
-	if strings.Contains(rendered, "-200%") {
-		t.Fatalf("detail should not render negative success rate:\n%s", rendered)
+	if strings.Contains(rendered, "-200%") || strings.Contains(rendered, "Inf") || strings.Contains(rendered, "NaN") {
+		t.Fatalf("detail should not render invalid metrics:\n%s", rendered)
 	}
 }
 
@@ -658,8 +659,11 @@ func TestOverviewClampsInvalidChartValues(t *testing.T) {
 		m.sessions[i].Metrics.TokensOutput = -1000
 		m.sessions[i].Metrics.TokensCacheR = -1000
 		m.sessions[i].Metrics.GapsSec = []float64{-100, math.NaN(), math.Inf(1)}
+		m.sessions[i].Metrics.CostEstimated = math.NaN()
 	}
 	m.sessions[0].Metrics.GapsSec = append(m.sessions[0].Metrics.GapsSec, 10)
+	m.sessions[1].Metrics.CostEstimated = math.Inf(1)
+	m.sessions[2].Metrics.CostEstimated = -1
 	m.overview = engine.ComputeOverview(m.sessions)
 	m.costSummary = engine.ComputeCostSummary(m.sessions)
 	m = resizeForTest(t, m, 120, 36)
@@ -670,7 +674,7 @@ func TestOverviewClampsInvalidChartValues(t *testing.T) {
 	if got := maxRenderedWidth(rendered); got > 120 {
 		t.Fatalf("invalid metric overview too wide: got=%d line=%q", got, widestLine(rendered))
 	}
-	if strings.Contains(rendered, "NaN") || strings.Contains(rendered, "+Inf") {
+	if strings.Contains(rendered, "NaN") || strings.Contains(rendered, "Inf") {
 		t.Fatalf("overview should not render invalid numbers:\n%s", rendered)
 	}
 	if strings.Contains(rendered, "-2.0K") {
@@ -694,6 +698,24 @@ func TestCommandModeFiltersAndSorts(t *testing.T) {
 	m.runCommand("sort health asc")
 	if m.sortBy != "health" || m.sortDesc {
 		t.Fatalf("sort command not applied: sortBy=%q desc=%v", m.sortBy, m.sortDesc)
+	}
+}
+
+func TestCostFilterUsesSafeDisplayValue(t *testing.T) {
+	m := sampleModelForTest()
+	m.sessions[0].Metrics.CostEstimated = math.Inf(1)
+	m = resizeForTest(t, m, 100, 30)
+	m.view = viewList
+
+	m.runCommand("cost >0.5")
+
+	for _, row := range m.table.Rows() {
+		if row[0] == "session_alpha" {
+			t.Fatalf("invalid infinite cost should not match high-cost filter, rows=%+v", m.table.Rows())
+		}
+	}
+	if got := len(m.table.Rows()); got != 1 {
+		t.Fatalf("expected only real high-cost row, got %d", got)
 	}
 }
 
