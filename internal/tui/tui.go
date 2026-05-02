@@ -253,7 +253,7 @@ func (m *Model) startForceReload() tea.Cmd {
 	return m.startReload()
 }
 
-// appendSession adds one loaded session and appends its row to the table.
+// appendSession 追加一条加载结果，并同步当前筛选后的列表。
 func (m *Model) appendSession(s engine.Session, fromCache bool) {
 	m.sessions = append(m.sessions, s)
 	if !fromCache {
