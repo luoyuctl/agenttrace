@@ -1535,11 +1535,13 @@ func (m Model) renderToolLatency(s engine.Session) string {
 				break
 			}
 			name := truncate(tl.ToolName, 18)
+			avgSec := chartValue(tl.AvgSec)
+			maxSec := chartValue(tl.MaxSec)
 			marker := ""
 			if tl.IsSlow {
 				marker = redStyle.Render(" " + i18n.T("diag_tool_slow_badge"))
 			}
-			lines = append(lines, fmt.Sprintf("  %-18s %5.1fs %5.1fs%s", name, tl.AvgSec, tl.MaxSec, marker))
+			lines = append(lines, fmt.Sprintf("  %-18s %5.1fs %5.1fs%s", name, avgSec, maxSec, marker))
 		}
 		return lipgloss.JoinVertical(lipgloss.Left, lines...)
 	}
@@ -1563,14 +1565,18 @@ func (m Model) renderToolLatency(s engine.Session) string {
 		}
 		timeoutStr := "0"
 		if tl.Timeouts > 0 {
-			timeoutStr = redStyle.Render(fmt.Sprintf("%d", tl.Timeouts))
+			timeoutStr = redStyle.Render(fmt.Sprintf("%d", nonNegativeInt(tl.Timeouts)))
 		}
+		count := nonNegativeInt(tl.Count)
+		avgSec := chartValue(tl.AvgSec)
+		p95Sec := chartValue(tl.P95Sec)
+		maxSec := chartValue(tl.MaxSec)
 		style := lipgloss.NewStyle()
 		if tl.IsSlow {
 			style = style.Foreground(lipgloss.Color("196"))
 		}
 		rows = append(rows, style.Render(fmt.Sprintf("  %-18s %5d %5.1fs %5.1fs %5.1fs %4s%s",
-			tl.ToolName, tl.Count, tl.AvgSec, tl.P95Sec, tl.MaxSec, timeoutStr, slowBadge)))
+			tl.ToolName, count, avgSec, p95Sec, maxSec, timeoutStr, slowBadge)))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
@@ -1604,7 +1610,7 @@ func (m Model) renderContextUtil(s engine.Session) string {
 		content := fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_total"), cyanStyle.Render(tokenCount(cu.EstimatedTotal)))
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_tool_defs"), dimStyle.Render(tokenCount(cu.ToolDefinitions)))
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_history"), dimStyle.Render(tokenCount(cu.ConversationHist)))
-		content += fmt.Sprintf("  %-10s %s %s\n", i18n.T("diag_ctx_available"), style.Render(fmt.Sprintf("%d", cu.AvailableForTask)), bar)
+		content += fmt.Sprintf("  %-10s %s %s\n", i18n.T("diag_ctx_available"), style.Render(fmt.Sprintf("%d", nonNegativeInt(cu.AvailableForTask))), bar)
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_suggestion"), style.Render(truncate(cu.Suggestion, maxInt(8, m.contentWidth()-18))))
 		return content
 	}
@@ -1630,7 +1636,7 @@ func (m Model) renderLargeParams(s engine.Session) string {
 		if lp.Risk == "high" {
 			style = redStyle
 		}
-		kb := float64(lp.ParamSize) / 1024.0
+		kb := float64(nonNegativeInt(lp.ParamSize)) / 1024.0
 		lines = append(lines, style.Render(fmt.Sprintf("• [%s] %s: %.1f KB — %s", riskLabel(lp.Risk), lp.ToolName, kb, lp.Detail)))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
