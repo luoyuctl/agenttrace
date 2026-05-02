@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agentwaste.
-// Pure Go. Supports Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, and OpenClaw formats.
+// Pure Go. Supports 8 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI.
 package engine
 
 import (
@@ -43,6 +43,8 @@ var ToolDisplayNames = map[string]string{
 	"gemini_cli":        "Gemini CLI",
 	"opencode":          "OpenCode",
 	"openclaw":          "OpenClaw",
+	"copilot_cli":       "Copilot CLI",
+	"kimi_cli":          "Kimi CLI",
 	"generic":           "Generic JSON/JSONL",
 }
 
@@ -493,6 +495,13 @@ func DetectFormat(path string) FormatInfo {
 				return fi
 			}
 		}
+		// Copilot CLI OTel JSONL — spans have traceId + spanId
+		if _, hasTrace := firstLineObj["traceId"]; hasTrace {
+			if _, hasSpan := firstLineObj["spanId"]; hasSpan {
+				fi.Format = "copilot_cli"
+				return fi
+			}
+		}
 		// Codex CLI rollout JSONL: top-level "type"="session_meta" with nested "payload"
 		if typ == "session_meta" {
 			if _, hasPayload := firstLineObj["payload"]; hasPayload {
@@ -526,6 +535,30 @@ func detectSingleJSON(doc map[string]interface{}) string {
 
 	if hasSessID && hasMsgs && hasModel && hasPlatform {
 		return "hermes_json"
+	}
+
+	// Kimi CLI: messages + model with Anthropic content blocks, NO usage at top
+	// Must be checked BEFORE Claude Code
+	if hasMsgs && hasModel && !hasUsage {
+		if msgs, ok := doc["messages"].([]interface{}); ok {
+			for _, m := range msgs {
+				if msg, ok := m.(map[string]interface{}); ok {
+					if content, ok := msg["content"]; ok {
+						if _, isArr := content.([]interface{}); isArr {
+							// Check for Kimi-specific markers (no provider, no session_id+platform)
+							if !hasProvider && !(hasSessID && hasPlatform) {
+								return "kimi_cli"
+							}
+						}
+					}
+				}
+			}
+		}
+		// Fallback: if hasMsg + model but no usage and no Anthropic blocks,
+		// it's still likely Kimi-style (OpenAI format with string content)
+		if !hasProvider && !(hasSessID && hasPlatform) {
+			return "kimi_cli"
+		}
 	}
 
 	// Claude Code: messages + model, messages contain Anthropic content blocks
@@ -622,6 +655,10 @@ func Parse(path string) ([]Event, error) {
 		return parseOpenCode(fi.Doc)
 	case "openclaw":
 		return parseOpenClaw(fi.Doc)
+	case "copilot_cli":
+		return parseCopilotCLI(string(fi.Raw))
+	case "kimi_cli":
+		return parseKimiCLI(fi.Doc)
 	default:
 		return parseGeneric(string(fi.Raw))
 	}

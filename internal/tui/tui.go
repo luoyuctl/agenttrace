@@ -149,6 +149,7 @@ type Model struct {
 	fixSuggestions []engine.FixSuggestion
 	toolWarnings   []engine.ToolWarning
 	costAlert      engine.CostAlert
+	wasteReport    engine.WasteReport
 	healthTrend    engine.HealthTrend
 	costSummary    engine.CostSummary
 	stuckPatterns  []engine.StuckPattern
