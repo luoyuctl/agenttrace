@@ -116,6 +116,7 @@ Open PRs:
 - Awesome-AI-Agents: https://github.com/Jenqyang/Awesome-AI-Agents/pull/204
 - Awesome-LLMOps: https://github.com/InftyAI/Awesome-LLMOps/pull/418
 - awesome-ai: https://github.com/hemanthgk10/awesome-ai/pull/7
+- awesome-terminals-ai: https://github.com/BNLNPPS/awesome-terminals-ai/pull/6
 
 Manual-only submission:
 
