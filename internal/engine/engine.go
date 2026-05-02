@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.3.30"
+const Version = "0.3.31"
 
 // Severity constants for anomaly severity (internal, not i18n).
 const (
@@ -2706,13 +2706,17 @@ func AnalyzeHealthTrend(sessions []Session) HealthTrend {
 	for i := startIdx; i < len(trend.Points); i++ {
 		last3Vals = append(last3Vals, fmt.Sprintf("%d", trend.Points[i].Health))
 	}
+	endpoint := strings.Join(last3Vals, "→")
+	if len(trend.Points) >= 2 {
+		endpoint = fmt.Sprintf("%d→%d", trend.Points[0].Health, trend.Points[len(trend.Points)-1].Health)
+	}
 	switch {
-	case trend.Regressing || (trend.Direction == "down" && len(last3Vals) >= 2):
+	case trend.Regressing:
 		trend.Message = fmt.Sprintf(i18n.T("trend_regressing"), strings.Join(last3Vals, "→"))
 	case trend.Direction == "down" && len(last3Vals) >= 2:
-		trend.Message = fmt.Sprintf(i18n.T("trend_regressing"), strings.Join(last3Vals, "→"))
+		trend.Message = fmt.Sprintf(i18n.T("trend_regressing"), endpoint)
 	case trend.Direction == "up" && len(last3Vals) >= 2:
-		trend.Message = fmt.Sprintf(i18n.T("trend_improving"), strings.Join(last3Vals, "→"))
+		trend.Message = fmt.Sprintf(i18n.T("trend_improving"), endpoint)
 	default:
 		trend.Message = fmt.Sprintf(i18n.T("trend_stable_at"), trend.AvgHealth)
 	}
