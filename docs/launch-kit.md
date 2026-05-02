@@ -131,6 +131,7 @@ Open PRs:
 - awesome-ChatGPT-repositories: https://github.com/taishi-i/awesome-ChatGPT-repositories/pull/130
 - awesome-agent-harness: https://github.com/Picrew/awesome-agent-harness/pull/5
 - awesome-cli-apps: https://github.com/agarrharr/awesome-cli-apps/pull/1032
+- awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
 
 Merged listings:
 
