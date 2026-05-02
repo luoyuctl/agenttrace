@@ -133,6 +133,7 @@ Open PRs:
 - awesome-cli-apps: https://github.com/agarrharr/awesome-cli-apps/pull/1032
 - awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
 - command-line-tools: https://github.com/linsa-io/command-line-tools/pull/35
+- awesome-cli-coding-agents: https://github.com/bradAGI/awesome-cli-coding-agents/pull/73
 
 Merged listings:
 
