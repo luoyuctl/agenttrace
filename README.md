@@ -104,6 +104,9 @@ agenttrace --latest -f json
 # Global fleet overview as JSON
 agenttrace --overview -f json -o agenttrace-overview.json
 
+# CI health gate
+agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-rate 15
+
 # Demo JSON for screenshots, CI examples, or first-time evaluation
 agenttrace --demo --overview -f json
 
@@ -235,12 +238,15 @@ Session                   Turns  Tools   Succ     Cost  Health
 - [x] Homebrew distribution
 - [x] npm wrapper prepared
 - [x] GitHub Actions CI and release pipeline
+- [x] CI health gate thresholds
 - [ ] Publish npm package
 - [ ] Historical trend tracking
 - [ ] Web dashboard (React + Charts)
 - [ ] VS Code extension
 - [x] OpenCode format support
 - [ ] Aider / Cursor format support
+
+See [CI Integration](docs/ci-integration.md) for a ready-to-copy GitHub Actions health gate.
 
 ---
 

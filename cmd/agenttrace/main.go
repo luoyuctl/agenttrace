@@ -32,6 +32,9 @@ func main() {
 	version := flag.Bool("version", false, "Show version")
 	demo := flag.Bool("demo", false, "Use built-in demo sessions")
 	doctor := flag.Bool("doctor", false, "Check detected session directories, cache status, and next steps")
+	failUnderHealth := flag.Int("fail-under-health", 0, "Exit non-zero when overview average health is below this score")
+	failOnCritical := flag.Bool("fail-on-critical", false, "Exit non-zero when overview contains critical sessions")
+	maxToolFailRate := flag.Float64("max-tool-fail-rate", -1, "Exit non-zero when overview tool failure rate exceeds this percent")
 	lang := flag.String("lang", "en", "Language for report output: en, zh")
 	flag.Parse()
 
@@ -173,6 +176,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, i18n.T("cli_saved"), *output)
 		}
 		fmt.Print(out)
+		if failures := evaluateOverviewGate(ov, sessions, overviewGate{
+			FailUnderHealth: *failUnderHealth,
+			FailOnCritical:  *failOnCritical,
+			MaxToolFailRate: *maxToolFailRate,
+		}); len(failures) > 0 {
+			for _, failure := range failures {
+				fmt.Fprintf(os.Stderr, i18n.T("gate_failed"), failure)
+			}
+			os.Exit(2)
+		}
 		return
 	}
 
