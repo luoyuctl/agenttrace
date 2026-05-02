@@ -447,6 +447,34 @@ func TestListAndDetailClampInvalidToolCounts(t *testing.T) {
 	}
 }
 
+func TestViewsClampInvalidHealthScores(t *testing.T) {
+	m := sampleModelForTest()
+	m.sessions[0].Health = -20
+	m.sessions[1].Health = 150
+	m.overview = engine.ComputeOverview(m.sessions)
+	m.aggStats = engine.ComputeAggregateStats(m.sessions)
+	m = resizeForTest(t, m, 160, 36)
+	m.view = viewList
+
+	rows := m.table.Rows()
+	if rows[0][8] != "0%" || rows[1][8] != "100%" {
+		t.Fatalf("expected health scores to be clamped in list rows, rows=%+v", rows)
+	}
+
+	m.openDetail()
+	m.view = viewDetail
+	rendered := m.View()
+	if !strings.Contains(rendered, "HEALTH 0/100") || strings.Contains(rendered, "-20%") {
+		t.Fatalf("detail should clamp invalid health score:\n%s", rendered)
+	}
+
+	m.view = viewOverview
+	rendered = m.View()
+	if strings.Contains(rendered, "150%") || strings.Contains(rendered, "-20%") {
+		t.Fatalf("overview should clamp invalid health scores:\n%s", rendered)
+	}
+}
+
 func TestLanguageSwitchKeepsFilteredRows(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.EN)
