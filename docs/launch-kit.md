@@ -119,6 +119,7 @@ Open PRs:
 - awesome-terminals-ai: https://github.com/BNLNPPS/awesome-terminals-ai/pull/6
 - awesome-llmops: https://github.com/KennethanCeyer/awesome-llmops/pull/10
 - awesome-harness-engineering: https://github.com/ai-boost/awesome-harness-engineering/pull/14
+- Scottcjn/awesome-agents: https://github.com/Scottcjn/awesome-agents/pull/12
 
 Manual-only submission:
 
