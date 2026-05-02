@@ -115,6 +115,7 @@ Open PRs:
 - awesome-ai-agents-2026: https://github.com/caramaschiHG/awesome-ai-agents-2026/pull/207
 - Awesome-AI-Agents: https://github.com/Jenqyang/Awesome-AI-Agents/pull/204
 - Awesome-LLMOps: https://github.com/InftyAI/Awesome-LLMOps/pull/418
+- awesome-ai: https://github.com/hemanthgk10/awesome-ai/pull/7
 
 Manual-only submission:
 
