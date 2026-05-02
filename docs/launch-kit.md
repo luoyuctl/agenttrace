@@ -106,6 +106,7 @@ Open PRs:
 - awesome-ai-coding-tools: https://github.com/ai-for-developers/awesome-ai-coding-tools/pull/288
 - awesome-claude-code-toolkit: https://github.com/rohitg00/awesome-claude-code-toolkit/pull/361
 - jqueryscript/awesome-claude-code: https://github.com/jqueryscript/awesome-claude-code/pull/252
+- GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
 
 Manual-only submission:
 
