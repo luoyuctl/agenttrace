@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.3.29"
+const Version = "0.3.30"
 
 // Severity constants for anomaly severity (internal, not i18n).
 const (
@@ -2616,12 +2616,25 @@ func AnalyzeHealthTrend(sessions []Session) HealthTrend {
 		return trend
 	}
 
-	// 取最近 10 个 session
-	n := len(sessions)
+	ordered := append([]Session(nil), sessions...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		ti := parseTS(ordered[i].Metrics.SessionStart)
+		tj := parseTS(ordered[j].Metrics.SessionStart)
+		if !ti.IsZero() && !tj.IsZero() {
+			return ti.Before(tj)
+		}
+		if !ti.IsZero() != !tj.IsZero() {
+			return !ti.IsZero()
+		}
+		return false
+	})
+
+	// 取最近 10 个 session，并按时间从旧到新分析。
+	n := len(ordered)
 	if n > 10 {
 		n = 10
 	}
-	recent := sessions[:n]
+	recent := ordered[len(ordered)-n:]
 
 	// 构建趋势点
 	for _, s := range recent {
@@ -2685,17 +2698,20 @@ func AnalyzeHealthTrend(sessions []Session) HealthTrend {
 	}
 
 	// 构建 Message
-	if trend.Regressing {
-		last3Vals := []string{}
-		startIdx := len(trend.Points) - 3
-		if startIdx < 0 {
-			startIdx = 0
-		}
-		for i := startIdx; i < len(trend.Points); i++ {
-			last3Vals = append(last3Vals, fmt.Sprintf("%d", trend.Points[i].Health))
-		}
+	last3Vals := []string{}
+	startIdx := len(trend.Points) - 3
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	for i := startIdx; i < len(trend.Points); i++ {
+		last3Vals = append(last3Vals, fmt.Sprintf("%d", trend.Points[i].Health))
+	}
+	switch {
+	case trend.Regressing:
 		trend.Message = fmt.Sprintf(i18n.T("trend_regressing"), strings.Join(last3Vals, "→"))
-	} else {
+	case trend.Direction == "up" && len(last3Vals) >= 2:
+		trend.Message = fmt.Sprintf(i18n.T("trend_improving"), strings.Join(last3Vals, "→"))
+	default:
 		trend.Message = fmt.Sprintf(i18n.T("trend_stable_at"), trend.AvgHealth)
 	}
 

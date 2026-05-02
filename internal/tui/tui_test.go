@@ -1742,3 +1742,15 @@ func TestChineseViewsRenderWithinTerminalWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestOverviewRendersHealthTrend(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 140, 40)
+	m.view = viewOverview
+	rendered := m.View()
+	if !strings.Contains(rendered, i18n.T("trend_title")) {
+		t.Fatalf("expected health trend in overview:\n%s", rendered)
+	}
+	if got := maxRenderedWidth(rendered); got > 140 {
+		t.Fatalf("overview render too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+}

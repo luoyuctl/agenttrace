@@ -699,9 +699,9 @@ var translations = map[string]map[Lang]string{
 
 	// ── Health trend ──
 	"trend_title":      {EN: "Health Trend", ZH: "健康趋势"},
-	"trend_regressing": {EN: "📉 Declining: %d→%d→%d", ZH: "📉 持续下降: %d→%d→%d"},
+	"trend_regressing": {EN: "Declining: %s", ZH: "持续下降: %s"},
 	"trend_stable":     {EN: "📊 Stable at %d", ZH: "📊 稳定在 %d"},
-	"trend_improving":  {EN: "📈 Improving: %d→%d→%d", ZH: "📈 持续上升: %d→%d→%d"},
+	"trend_improving":  {EN: "Improving: %s", ZH: "持续上升: %s"},
 
 	// ── Tool warnings ──
 	"tool_warn_title":      {EN: "⚠️ Tool Warnings", ZH: "⚠️ 工具调用警告"},

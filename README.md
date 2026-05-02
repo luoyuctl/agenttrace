@@ -11,7 +11,7 @@
   <a href="https://github.com/luoyuctl/agenttrace/stargazers"><img src="https://img.shields.io/github/stars/luoyuctl/agenttrace?style=social" alt="GitHub stars"></a>
   <img src="https://img.shields.io/badge/go-1.24+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.3.29-2bbc8a.svg" alt="Homebrew">
+  <img src="https://img.shields.io/badge/Homebrew-v0.3.30-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <h3 align="center">💸 Stop burning cash and hours on invisible AI agent waste</h3>
@@ -207,7 +207,7 @@ See [docs/cursor-import.md](docs/cursor-import.md) for details.
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v0.3.29 — AI Agent Session Performance Report
+  AGENTTRACE v0.3.30 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST
@@ -300,7 +300,7 @@ Session                   Turns  Tools   Succ     Cost  Health
 - [x] GitHub Actions CI and release pipeline
 - [x] CI health gate thresholds
 - [ ] Publish npm package
-- [ ] Historical trend tracking
+- [x] Historical trend tracking
 - [ ] Web dashboard (React + Charts)
 - [ ] VS Code extension
 - [x] OpenCode format support

@@ -2395,7 +2395,38 @@ func (m Model) renderHealthPanel(width int) string {
 	content += "\n" + healthMetricLine(i18n.T("health_performance"), health-2, innerW)
 	content += "\n" + healthMetricLine(i18n.T("health_quality"), health, innerW)
 	content += "\n" + healthMetricLine(i18n.T("health_efficiency"), health+1, innerW)
+	if trend := m.renderHealthTrendLine(innerW); trend != "" {
+		content += "\n\n" + dashTitleStyle.Render(i18n.T("trend_title"))
+		content += "\n" + trend
+	}
 	return dashboardPanel(i18n.T("panel_health_score"), "", content, width)
+}
+
+func (m Model) renderHealthTrendLine(width int) string {
+	if len(m.sessions) < 2 {
+		return ""
+	}
+	trend := engine.AnalyzeHealthTrend(m.sessions)
+	if len(trend.Points) == 0 {
+		return dimStyle.Render(truncate(trend.Message, width))
+	}
+	values := make([]float64, 0, len(trend.Points))
+	for _, p := range trend.Points {
+		values = append(values, float64(clampHealth(p.Health)))
+	}
+	sparkW := minInt(24, maxInt(8, width/3))
+	spark := sparkline(values, sparkW)
+	label := i18n.T("trend_stable_label")
+	style := dimStyle
+	if trend.Regressing || trend.Direction == "down" {
+		label = i18n.T("trend_down")
+		style = redStyle
+	} else if trend.Direction == "up" {
+		label = i18n.T("trend_up")
+		style = greenStyle
+	}
+	line := fmt.Sprintf("%s %s %s", style.Render(spark), dimStyle.Render(label), trend.Message)
+	return truncate(line, width)
 }
 
 func healthMetricLine(label string, score int, width int) string {

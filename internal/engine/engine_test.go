@@ -784,8 +784,27 @@ func TestAnalyzeHealthTrend_Stable(t *testing.T) {
 
 func TestAnalyzeHealthTrend_Declining(t *testing.T) {
 	sessions := []Session{{Name: "s1", Health: 90}, {Name: "s2", Health: 70}, {Name: "s3", Health: 50}}
-	if !AnalyzeHealthTrend(sessions).Regressing {
+	trend := AnalyzeHealthTrend(sessions)
+	if !trend.Regressing {
 		t.Error("should regress")
+	}
+	if strings.Contains(trend.Message, "%!") {
+		t.Fatalf("trend message has bad formatting: %q", trend.Message)
+	}
+}
+
+func TestAnalyzeHealthTrendUsesSessionTimeOrder(t *testing.T) {
+	sessions := []Session{
+		{Name: "new", Health: 50, Metrics: Metrics{SessionStart: "2026-01-03T00:00:00Z"}},
+		{Name: "mid", Health: 70, Metrics: Metrics{SessionStart: "2026-01-02T00:00:00Z"}},
+		{Name: "old", Health: 90, Metrics: Metrics{SessionStart: "2026-01-01T00:00:00Z"}},
+	}
+	trend := AnalyzeHealthTrend(sessions)
+	if !trend.Regressing {
+		t.Fatalf("newest-first sessions should still detect decline: %+v", trend)
+	}
+	if trend.Points[0].Name != "old" || trend.Points[2].Name != "new" {
+		t.Fatalf("trend points should be old-to-new, got %+v", trend.Points)
 	}
 }
 
