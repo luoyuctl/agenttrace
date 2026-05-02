@@ -8,7 +8,7 @@ Use this when sharing agenttrace on GitHub, Hacker News, Reddit, V2EX, X, or Pro
 scripts/record-demo.sh
 ```
 
-The script renders [docs/demo.tape](demo.tape) into `assets/agenttrace-demo.gif` with [VHS](https://github.com/charmbracelet/vhs).
+The script renders [docs/demo.tape](demo.tape) into `assets/agenttrace-demo.gif` with [VHS](https://github.com/charmbracelet/vhs). VHS also needs `ttyd` available on `PATH`.
 
 ## Storyline
 
