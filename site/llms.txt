@@ -1,0 +1,44 @@
+# agenttrace
+
+agenttrace is a local-first TUI observability tool for AI coding agent sessions.
+
+Repository: https://github.com/luoyuctl/agenttrace
+Website: https://luoyuctl.github.io/agenttrace/
+Sample report: https://luoyuctl.github.io/agenttrace/demo-report.html
+Latest release: https://github.com/luoyuctl/agenttrace/releases/latest
+License: MIT
+
+## What it does
+
+- Parses local session logs from Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, and Copilot-style traces.
+- Shows token usage, estimated cost, tool success/failure rate, latency, hanging gaps, anomalies, and session health.
+- Provides a Bubble Tea terminal UI with overview, session list, detail, diagnostics, and diff views.
+- Exports JSON, Markdown, and self-contained HTML reports.
+- Supports CI health gates for average health, critical sessions, and tool failure rate.
+- Keeps analysis local and uses an incremental cache to avoid reparsing all sessions on every startup.
+
+## Install
+
+```bash
+curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+agenttrace --demo
+```
+
+```bash
+brew install luoyuctl/tap/agenttrace
+```
+
+## Useful Commands
+
+```bash
+agenttrace
+agenttrace --demo
+agenttrace --doctor
+agenttrace --overview -f json
+agenttrace --overview -f html -o agenttrace-overview.html
+agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-rate 15
+```
+
+## Positioning
+
+agenttrace is useful when developers want to understand where AI coding agents waste money, time, tokens, or tool calls. It is closer to a terminal observability dashboard than a chat client.
