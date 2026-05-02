@@ -124,6 +124,7 @@ Open PRs:
 - awesome-code-agents: https://github.com/sorrycc/awesome-code-agents/pull/20
 - tensorchord/Awesome-LLMOps: https://github.com/tensorchord/Awesome-LLMOps/pull/444
 - awesome-agent-cortex: https://github.com/0xNyk/awesome-agent-cortex/pull/20
+- ARUNAGIRINATHAN-K/awesome-ai-agents: https://github.com/ARUNAGIRINATHAN-K/awesome-ai-agents/pull/27
 
 Merged listings:
 
