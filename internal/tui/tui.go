@@ -367,7 +367,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			contentW = 28
 		}
 		m.table.SetWidth(contentW)
-		m.table.SetHeight(maxInt(6, msg.Height-10))
+		m.table.SetHeight(m.listTableHeight(2))
 		m.adjustColumnWidths(msg.Width)
 
 		if m.detailReady {
@@ -893,14 +893,27 @@ func (m Model) renderCommandBar() string {
 func (m Model) renderListView() string {
 	contentW := m.contentWidth()
 	var sections []string
+	extraLines := 0
 	if filterBar := m.renderListStatusBar(contentW); filterBar != "" {
 		sections = append(sections, filterBar)
+		extraLines += renderedLineCount(filterBar)
 	}
 	if summary := m.renderSelectedSessionSummary(contentW); summary != "" {
 		sections = append(sections, summary)
+		extraLines += renderedLineCount(summary)
 	}
-	sections = append(sections, m.table.View())
+	tableView := m.table
+	tableView.SetHeight(m.listTableHeight(extraLines))
+	sections = append(sections, tableView.View())
 	return m.frameContent(lipgloss.JoinVertical(lipgloss.Left, sections...))
+}
+
+func (m Model) listTableHeight(extraContentLines int) int {
+	if m.height <= 0 {
+		return 20
+	}
+	// 预留头部、Tab、外框和底部帮助栏，避免表格把整屏顶乱。
+	return maxInt(4, m.height-12-extraContentLines)
 }
 
 func (m Model) renderListStatusBar(width int) string {
@@ -2532,6 +2545,13 @@ func truncateLines(s string, maxLen int) string {
 		lines[i] = truncate(line, maxLen)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func renderedLineCount(s string) int {
+	if s == "" {
+		return 0
+	}
+	return len(strings.Split(s, "\n"))
 }
 
 func (m Model) contentWidth() int {

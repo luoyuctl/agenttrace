@@ -345,14 +345,27 @@ func TestWideListRendersStableSingleTable(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 160, 36)
 	m.view = viewList
 	rendered := m.View()
-	if strings.Contains(rendered, "SESSION INSPECTOR") {
-		t.Fatalf("list should not render the old split inspector pane")
+	for _, stale := range []string{"SESSION INSPECTOR", "Enter detail · d diff · w diagnostics"} {
+		if strings.Contains(rendered, stale) {
+			t.Fatalf("list should not render stale split preview fragment %q", stale)
+		}
 	}
 	if !strings.Contains(rendered, "session_alpha") || !strings.Contains(rendered, "issue") {
 		t.Fatalf("expected stable list table with selected summary")
 	}
 	if got := maxRenderedWidth(rendered); got > 160 {
 		t.Fatalf("wide list render too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+}
+
+func TestListViewFitsTerminalHeight(t *testing.T) {
+	for _, height := range []int{24, 30, 62} {
+		m := resizeForTest(t, sampleModelForTest(), 160, height)
+		m.view = viewList
+		rendered := m.View()
+		if got := renderedHeight(rendered); got > height {
+			t.Fatalf("list render too tall: height=%d got=%d", height, got)
+		}
 	}
 }
 

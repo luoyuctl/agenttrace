@@ -284,7 +284,7 @@ func ReportCompare(sessions []Session, model string) string {
 	for _, s := range sessions {
 		m := s.Metrics
 		totalTools := m.ToolCallsOK + m.ToolCallsFail
-		sr := "N/A"
+		sr := i18n.T("not_available")
 		if totalTools > 0 {
 			sr = fmt.Sprintf("%.0f%%", float64(m.ToolCallsOK)/float64(totalTools)*100)
 		}
@@ -321,7 +321,7 @@ func ReportCompareJSON(sessions []Session, model string) string {
 	for _, s := range sessions {
 		m := s.Metrics
 		totalTools := m.ToolCallsOK + m.ToolCallsFail
-		sr := "N/A"
+		sr := i18n.T("not_available")
 		if totalTools > 0 {
 			sr = fmt.Sprintf("%.0f%%", float64(m.ToolCallsOK)/float64(totalTools)*100)
 		}
