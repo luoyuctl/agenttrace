@@ -956,7 +956,7 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 	line := fmt.Sprintf("%s  %s %d%%  %s $%.4f  %s %s  %s %d  %s %d/%d %s  %s %s",
 		truncate(s.Name, 28),
 		i18n.T("health"), s.Health,
-		i18n.T("cost"), met.CostEstimated,
+		i18n.T("cost"), safeAmount(met.CostEstimated),
 		i18n.T("tokens"), compactInt(met.TokensInput+met.TokensOutput),
 		i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
 		i18n.T("tools"), okTools, totalTools, success,
@@ -1176,7 +1176,7 @@ func (m Model) renderQuickSummary() string {
 		healthBadge = badge(i18n.T("health"), fmt.Sprintf("%d/100", s.Health), lipgloss.Color("196"))
 	}
 
-	costBadge := badge(i18n.T("cost"), fmt.Sprintf("$%.4f", met.CostEstimated), lipgloss.Color("39"))
+	costBadge := badge(i18n.T("cost"), money4(met.CostEstimated), lipgloss.Color("39"))
 
 	okTools, _, totalTools, _ := normalizedToolCounts(met)
 	srStr := i18n.T("not_available")
@@ -1203,7 +1203,7 @@ func (m Model) renderQuickSummary() string {
 			i18n.T("health"),
 			s.Health,
 			i18n.T("cost"),
-			met.CostEstimated,
+			safeAmount(met.CostEstimated),
 			i18n.T("tools"),
 			okTools,
 			totalTools,
@@ -1494,7 +1494,7 @@ func (m Model) renderWasteScoreCard(s engine.Session) string {
 			fmt.Sprintf("%s  %s  %s",
 				dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns))),
 				dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("tools"), nonNegativeInt(met.ToolCallsTotal))),
-				dimStyle.Render(fmt.Sprintf("%s $%.4f", i18n.T("cost"), met.CostEstimated))),
+				dimStyle.Render(fmt.Sprintf("%s %s", i18n.T("cost"), money4(met.CostEstimated)))),
 			lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Render(truncate(met.ModelUsed, panelW-4)),
 		)
 		style := lipgloss.NewStyle().
@@ -1513,7 +1513,7 @@ func (m Model) renderWasteScoreCard(s engine.Session) string {
 		lipgloss.NewStyle().Bold(true).Render(status),
 		dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns))),
 		dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("tools"), nonNegativeInt(met.ToolCallsTotal))),
-		dimStyle.Render(fmt.Sprintf("%s $%.4f", i18n.T("cost"), met.CostEstimated)),
+		dimStyle.Render(fmt.Sprintf("%s %s", i18n.T("cost"), money4(met.CostEstimated))),
 		lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Render(met.ModelUsed),
 	))
 }
@@ -1654,9 +1654,9 @@ func (m Model) renderCostSummaryCard() string {
 		return ""
 	}
 	content := fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_total_sessions"), cyanStyle.Render(fmt.Sprintf("%d", cs.TotalSessions)))
-	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_total_burned"), redStyle.Render(fmt.Sprintf("$%.2f", cs.TotalCost)))
-	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_avg_turn"), yellowStyle.Render(fmt.Sprintf("$%.4f", cs.AvgCostPerTurn)))
-	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_costliest"), orangeStyle.Render(fmt.Sprintf("%s $%.2f", cs.CostliestModel, cs.CostliestCost)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_total_burned"), redStyle.Render(money2(cs.TotalCost)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_avg_turn"), yellowStyle.Render(money4(cs.AvgCostPerTurn)))
+	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_cost_costliest"), orangeStyle.Render(fmt.Sprintf("%s %s", cs.CostliestModel, money2(cs.CostliestCost))))
 	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_tokens_total"), fmt.Sprintf("%d / %d", cs.TotalTokensIn, cs.TotalTokensOut))
 	content += fmt.Sprintf("  %-22s %s", i18n.T("diag_cache_total"), fmt.Sprintf("%d / %d", cs.TotalCacheRead, cs.TotalCacheWrite))
 
@@ -1819,9 +1819,9 @@ func (m *Model) sortAndRefresh() {
 	case "cost":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
 			if m.sortDesc {
-				return m.sessions[i].Metrics.CostEstimated > m.sessions[j].Metrics.CostEstimated
+				return safeAmount(m.sessions[i].Metrics.CostEstimated) > safeAmount(m.sessions[j].Metrics.CostEstimated)
 			}
-			return m.sessions[i].Metrics.CostEstimated < m.sessions[j].Metrics.CostEstimated
+			return safeAmount(m.sessions[i].Metrics.CostEstimated) < safeAmount(m.sessions[j].Metrics.CostEstimated)
 		})
 	case "turns":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
@@ -1863,7 +1863,8 @@ func (m *Model) sortColTitle(base, field string) string {
 
 // costColor returns a styled cost string based on amount thresholds.
 func costColor(amount float64) string {
-	s := fmt.Sprintf("$%.4f", amount)
+	amount = safeAmount(amount)
+	s := money4(amount)
 	switch {
 	case amount >= 0.50:
 		return redStyle.Render(s)
@@ -2043,7 +2044,7 @@ func (m Model) renderDashboardHero(width int) string {
 		len(m.sessions),
 		i18n.T("sessions_label"),
 		tokenCountCompact(totalTokens),
-		m.costSummary.TotalCost,
+		safeAmount(m.costSummary.TotalCost),
 		i18n.T("cost"),
 		errRate,
 		i18n.T("metric_errors"),
@@ -2127,7 +2128,7 @@ func (m Model) renderDashboardMetrics(width int) string {
 		}
 		cards := []string{
 			metricCard(i18n.T("metric_tokens"), compactInt(totalTokens), i18n.T("metric_live"), cardW, "82"),
-			metricCard(i18n.T("metric_cost"), fmt.Sprintf("$%.2f", m.costSummary.TotalCost), i18n.T("metric_estimated"), cardW, "82"),
+			metricCard(i18n.T("metric_cost"), money2(m.costSummary.TotalCost), i18n.T("metric_estimated"), cardW, "82"),
 			metricCard(i18n.T("metric_sessions"), fmt.Sprintf("%d", len(m.sessions)), i18n.T("metric_loaded"), cardW, "82"),
 			metricCard(i18n.T("metric_errors"), fmt.Sprintf("%.2f%%", errorRate), fmt.Sprintf(i18n.T("metric_failed"), toolFail), cardW, "82"),
 			metricCard(i18n.T("metric_p95"), fmt.Sprintf("%.2fs", p95), i18n.T("metric_tool_gaps"), cardW, "39"),
@@ -2153,7 +2154,7 @@ func (m Model) renderDashboardMetrics(width int) string {
 
 	cards := []string{
 		metricCard(i18n.T("metric_total_tokens"), compactInt(totalTokens), i18n.T("metric_live"), cardW, "82"),
-		metricCard(i18n.T("metric_total_cost_usd"), fmt.Sprintf("$%.2f", m.costSummary.TotalCost), i18n.T("metric_estimated"), cardW, "82"),
+		metricCard(i18n.T("metric_total_cost_usd"), money2(m.costSummary.TotalCost), i18n.T("metric_estimated"), cardW, "82"),
 		metricCard(i18n.T("metric_sessions"), fmt.Sprintf("%d", len(m.sessions)), i18n.T("metric_loaded"), cardW, "82"),
 		metricCard(i18n.T("metric_error_rate"), fmt.Sprintf("%.2f%%", errorRate), fmt.Sprintf(i18n.T("metric_failed"), toolFail), cardW, "82"),
 		metricCard(i18n.T("metric_p95_latency"), fmt.Sprintf("%.2fs", p95), i18n.T("metric_tool_gaps"), cardW, "39"),
@@ -2477,6 +2478,18 @@ func chartValue(v float64) float64 {
 		return 0
 	}
 	return v
+}
+
+func safeAmount(v float64) float64 {
+	return chartValue(v)
+}
+
+func money2(v float64) string {
+	return fmt.Sprintf("$%.2f", safeAmount(v))
+}
+
+func money4(v float64) string {
+	return fmt.Sprintf("$%.4f", safeAmount(v))
 }
 
 func nonNegativeInt(v int) int {

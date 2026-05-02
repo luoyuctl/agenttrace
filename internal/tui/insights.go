@@ -28,7 +28,7 @@ func buildSessionInsight(s engine.Session, fixes []engine.FixSuggestion, alert e
 
 	ins := sessionInsight{
 		Issue:      i18n.T("insight_no_major_waste"),
-		Impact:     fmt.Sprintf(i18n.T("insight_impact_fmt"), met.CostEstimated, nonNegativeInt(met.AssistantTurns)),
+		Impact:     fmt.Sprintf(i18n.T("insight_impact_fmt"), safeAmount(met.CostEstimated), nonNegativeInt(met.AssistantTurns)),
 		Evidence:   fmt.Sprintf(i18n.T("insight_evidence_fmt"), len(s.Anomalies), success),
 		NextAction: i18n.T("insight_default_next"),
 		Confidence: i18n.T("insight_medium"),
@@ -47,7 +47,7 @@ func buildSessionInsight(s engine.Session, fixes []engine.FixSuggestion, alert e
 	}
 	if s.LoopCost.TotalLoopCost > 0 {
 		ins.Issue = i18n.T("insight_loop_cost")
-		ins.Impact = fmt.Sprintf(i18n.T("insight_loop_impact"), s.LoopCost.TotalLoopCost, met.CostEstimated)
+		ins.Impact = fmt.Sprintf(i18n.T("insight_loop_impact"), safeAmount(s.LoopCost.TotalLoopCost), safeAmount(met.CostEstimated))
 		ins.Evidence = fmt.Sprintf(i18n.T("insight_loop_evidence"), s.LoopCost.RetryEvents, s.LoopCost.LoopGroups)
 		ins.Confidence = i18n.T("insight_high")
 		ins.Color = lipgloss.Color("196")
