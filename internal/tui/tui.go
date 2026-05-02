@@ -514,7 +514,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.view = viewDiff
 			}
 		case "w":
-			if m.view == viewDetail {
+			if (m.view == viewList || m.view == viewDetail) && len(m.filteredIndices) > 0 {
 				m.view = viewDiagnostics
 			}
 
@@ -580,11 +580,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "d":
 			if m.view == viewList {
-				cursor := m.table.Cursor()
-				if cursor >= 0 && len(m.filteredIndices) > cursor+1 {
-					idxA := m.filteredIndices[cursor]
-					idxB := m.filteredIndices[cursor+1]
-					m.diffResult = engine.DiffSessions(m.sessions[idxA], m.sessions[idxB])
+				if m.prepareDiffForCursor() {
 					m.view = viewDiff
 				}
 			} else if m.view == viewDetail {

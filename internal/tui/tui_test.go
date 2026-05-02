@@ -590,6 +590,38 @@ func TestDiffRendersWinnerInsight(t *testing.T) {
 	}
 }
 
+func TestListShortcutOpensDiagnostics(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.table.SetCursor(1)
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("w")})
+	m = next.(Model)
+
+	if m.view != viewDiagnostics {
+		t.Fatalf("expected list w shortcut to open diagnostics, got view=%d", m.view)
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "session_beta_with_a_long_name" {
+		t.Fatalf("diagnostics shortcut changed selected session: idx=%d", idx)
+	}
+}
+
+func TestListDiffShortcutWorksAtLastRow(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.table.SetCursor(len(m.filteredIndices) - 1)
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	m = next.(Model)
+
+	if m.view != viewDiff {
+		t.Fatalf("expected list d shortcut at last row to open diff, got view=%d", m.view)
+	}
+	if len(m.diffResult.Entries) == 0 {
+		t.Fatalf("expected diff entries for last-row neighbor comparison")
+	}
+}
+
 func TestWideDiffUsesFullComparisonLayout(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 160, 36)
 	m.diffResult = engine.DiffSessions(m.sessions[0], m.sessions[1])
