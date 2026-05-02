@@ -57,6 +57,10 @@ Prefer one of these:
 - tiny redacted snippets with secrets removed
 - `agenttrace --doctor -f json` output for discovery/cache issues
 
+## Community
+
+Participation in this project is covered by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Project Taste
 
 agenttrace should stay:

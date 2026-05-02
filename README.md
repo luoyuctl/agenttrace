@@ -326,7 +326,7 @@ Want agenttrace to support another coding agent? Start with [docs/parser-guide.m
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution flow, validation commands, parser expectations, and privacy guidance.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution flow, validation commands, parser expectations, privacy guidance, and the [code of conduct](CODE_OF_CONDUCT.md).
 
 ```bash
 git clone https://github.com/luoyuctl/agenttrace.git
@@ -341,7 +341,7 @@ go build -o agenttrace ./cmd/agenttrace/
 
 ## 📄 License
 
-MIT © 2025 agenttrace contributors
+[MIT](LICENSE) © 2025 agenttrace contributors
 
 ---
 
