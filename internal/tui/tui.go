@@ -793,16 +793,24 @@ func (m Model) renderLoading() string {
 		}, "\n")
 	}
 
+	progress := m.loadProgress
+	if progress < 0 {
+		progress = 0
+	}
+	if progress > m.loadTotal {
+		progress = m.loadTotal
+	}
+
 	filled := 0
 	if m.loadTotal > 0 {
-		filled = m.loadProgress * barWidth / m.loadTotal
+		filled = progress * barWidth / m.loadTotal
 	}
 	bar := "[" + greenStyle.Render(strings.Repeat("█", filled)) +
 		dimStyle.Render(strings.Repeat("░", barWidth-filled)) + "]"
 
 	pct := 0
 	if m.loadTotal > 0 {
-		pct = m.loadProgress * 100 / m.loadTotal
+		pct = progress * 100 / m.loadTotal
 	}
 
 	cacheInfo := ""
@@ -813,7 +821,7 @@ func (m Model) renderLoading() string {
 	lines := []string{
 		boldStyle.Render(i18n.T("loading_sessions")),
 		"",
-		fmt.Sprintf("  %s  %d/%d  %d%%%s", bar, m.loadProgress, m.loadTotal, pct, cacheInfo),
+		fmt.Sprintf("  %s  %d/%d  %d%%%s", bar, progress, m.loadTotal, pct, cacheInfo),
 		"",
 		dimStyle.Render(truncate(i18n.T("loading_parsing_hint"), contentW)),
 	}

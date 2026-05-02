@@ -1310,6 +1310,19 @@ func TestLoadingRenderWithinTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestLoadingRenderClampsProgressPastTotal(t *testing.T) {
+	m := resizeForTest(t, New("__missing_test_sessions__"), 80, 24)
+	m.loading = true
+	m.loadProgress = 3
+	m.loadTotal = 2
+
+	rendered := m.View()
+
+	if !strings.Contains(rendered, "2/2") || !strings.Contains(rendered, "100%") {
+		t.Fatalf("expected clamped loading progress, got:\n%s", rendered)
+	}
+}
+
 func TestChineseViewsRenderWithinTerminalWidth(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.ZH)
