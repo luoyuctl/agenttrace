@@ -197,6 +197,7 @@ See [docs/cursor-import.md](docs/cursor-import.md) for details.
 | `h` / `c` / `t` / `n` | Sort by health / cost / turns / name |
 | `f` / `s` / `/` | Filter by health / source / text |
 | `:` | Command mode |
+| `?` | Open the keyboard shortcut map |
 | `d` / `w` | Open diff / diagnostics |
 | `ctrl+r` | Force reload and rebuild local cache |
 | `q` / `Esc` | Quit / Back |

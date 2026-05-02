@@ -1277,6 +1277,66 @@ func TestCommandHelpShowsOutsideListView(t *testing.T) {
 	}
 }
 
+func TestQuestionMarkOpensAndClosesKeymap(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewOverview
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m = next.(Model)
+
+	rendered := m.View()
+	if !m.helpOpen || !strings.Contains(rendered, "Keyboard Shortcuts") || !strings.Contains(rendered, "cache-aware reloads") {
+		t.Fatalf("expected keymap view, got:\n%s", rendered)
+	}
+	if got := maxRenderedWidth(rendered); got > 100 {
+		t.Fatalf("keymap render too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m = next.(Model)
+	if m.helpOpen {
+		t.Fatalf("second ? should close keymap")
+	}
+}
+
+func TestChineseKeymapTranslatesLabels(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.lang = i18n.ZH
+	m.refreshColumns()
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	m = next.(Model)
+
+	rendered := m.View()
+	for _, want := range []string{"快捷键", "筛选和排序", "强制重建缓存"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("Chinese keymap missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "Keyboard Shortcuts") {
+		t.Fatalf("Chinese keymap leaked English title:\n%s", rendered)
+	}
+}
+
+func TestKeymapFitsSmallTerminal(t *testing.T) {
+	for _, width := range []int{32, 40, 60, 80} {
+		m := resizeForTest(t, sampleModelForTest(), width, 18)
+		m.view = viewList
+		m.helpOpen = true
+		rendered := m.View()
+		if got := maxRenderedWidth(rendered); got > width {
+			t.Fatalf("keymap too wide: width=%d got=%d line=%q", width, got, widestLine(rendered))
+		}
+		if got := renderedHeight(rendered); got != 18 {
+			t.Fatalf("keymap should fit terminal height: width=%d got=%d", width, got)
+		}
+	}
+}
+
 func TestOverviewShortcutsOpenWorkbenchLists(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewOverview

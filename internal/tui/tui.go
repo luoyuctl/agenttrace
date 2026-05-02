@@ -125,6 +125,7 @@ type Model struct {
 	commandActive   bool
 	commandInput    string
 	commandFeedback string
+	helpOpen        bool
 
 	// Sort state
 	sortBy   string // "health", "cost", "turns", "name", "source"
@@ -425,6 +426,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.helpOpen {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			case "esc", "?", "tab":
+				m.helpOpen = false
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -432,6 +442,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case ":":
 			m.commandActive = true
 			m.commandInput = ""
+
+		case "?":
+			m.helpOpen = true
 
 		case "$":
 			if m.view == viewOverview {
@@ -858,29 +871,33 @@ func (m Model) View() string {
 	}
 
 	var content string
-	switch m.view {
-	case viewOverview:
-		content = m.renderOverview()
-	case viewList:
-		if len(m.sessions) == 0 {
-			content = m.frameContent(lipgloss.NewStyle().Padding(1).Render(fmt.Sprintf(i18n.T("empty_sessions_hint"), m.dir, m.dir, m.dir)))
-		} else {
-			content = m.renderListView()
-		}
-	case viewDetail:
-		if m.detailReady {
-			scrollInfo := dimStyle.Render(fmt.Sprintf(" %s: %.0f%% ", i18n.T("scroll_label"), m.viewport.ScrollPercent()*100))
+	if m.helpOpen {
+		content = m.renderKeymapView()
+	} else {
+		switch m.view {
+		case viewOverview:
+			content = m.renderOverview()
+		case viewList:
+			if len(m.sessions) == 0 {
+				content = m.frameContent(lipgloss.NewStyle().Padding(1).Render(fmt.Sprintf(i18n.T("empty_sessions_hint"), m.dir, m.dir, m.dir)))
+			} else {
+				content = m.renderListView()
+			}
+		case viewDetail:
+			if m.detailReady {
+				scrollInfo := dimStyle.Render(fmt.Sprintf(" %s: %.0f%% ", i18n.T("scroll_label"), m.viewport.ScrollPercent()*100))
 
-			summaryBar := m.renderQuickSummary()
-			detailContent := lipgloss.JoinVertical(lipgloss.Left, summaryBar, "", scrollInfo, m.viewport.View())
-			content = m.frameContent(detailContent)
-		} else {
-			content = m.frameContent(dimStyle.Render(m.selectionHint()))
+				summaryBar := m.renderQuickSummary()
+				detailContent := lipgloss.JoinVertical(lipgloss.Left, summaryBar, "", scrollInfo, m.viewport.View())
+				content = m.frameContent(detailContent)
+			} else {
+				content = m.frameContent(dimStyle.Render(m.selectionHint()))
+			}
+		case viewDiagnostics:
+			content = m.renderWaste()
+		case viewDiff:
+			content = m.renderDiff()
 		}
-	case viewDiagnostics:
-		content = m.renderWaste()
-	case viewDiff:
-		content = m.renderDiff()
 	}
 	if m.commandActive {
 		content = lipgloss.JoinVertical(lipgloss.Left, m.renderCommandBar(), content)
@@ -917,6 +934,99 @@ func (m Model) renderListView() string {
 	tableView.SetHeight(m.listTableHeight(extraLines))
 	sections = append(sections, tableView.View())
 	return m.frameContent(lipgloss.JoinVertical(lipgloss.Left, sections...))
+}
+
+type keymapRow struct {
+	key  string
+	desc string
+}
+
+type keymapGroup struct {
+	title string
+	rows  []keymapRow
+}
+
+func (m Model) renderKeymapView() string {
+	contentW := m.frameBodyWidth()
+	if contentW < 20 {
+		contentW = 20
+	}
+	groups := []keymapGroup{
+		{title: i18n.T("keymap_nav"), rows: []keymapRow{
+			{"0-4", i18n.T("keymap_jump")},
+			{"Tab", i18n.T("keymap_next")},
+			{"Esc", i18n.T("keymap_back")},
+			{"↑↓ / jk", i18n.T("keymap_select")},
+			{"Enter", i18n.T("keymap_enter")},
+		}},
+		{title: i18n.T("keymap_actions"), rows: []keymapRow{
+			{"w", i18n.T("keymap_diag")},
+			{"d", i18n.T("keymap_diff")},
+			{"/", i18n.T("keymap_search")},
+			{"?", i18n.T("keymap_help")},
+		}},
+		{title: i18n.T("keymap_filters"), rows: []keymapRow{
+			{"f", i18n.T("keymap_health_filter")},
+			{"s", i18n.T("keymap_source_filter")},
+			{"h/c/t/n", i18n.T("keymap_sort")},
+			{"$", i18n.T("keymap_top_cost")},
+			{"!", i18n.T("keymap_critical")},
+		}},
+		{title: i18n.T("keymap_system"), rows: []keymapRow{
+			{":", i18n.T("keymap_command")},
+			{"r", i18n.T("keymap_reload")},
+			{"ctrl+r", i18n.T("keymap_force_reload")},
+			{"l", i18n.T("keymap_lang")},
+			{"q", i18n.T("keymap_quit")},
+		}},
+	}
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		dashTitleStyle.Render(i18n.T("keymap_title")),
+		dimStyle.Render(truncate(i18n.T("keymap_subtitle"), contentW)),
+		"",
+		renderKeymapGroups(groups, contentW),
+	)
+	return m.frameContent(body)
+}
+
+func renderKeymapGroups(groups []keymapGroup, width int) string {
+	if width < 72 {
+		var rendered []string
+		for _, group := range groups {
+			rendered = append(rendered, renderKeymapGroup(group.title, group.rows, width))
+		}
+		return lipgloss.JoinVertical(lipgloss.Left, rendered...)
+	}
+
+	gap := "    "
+	colW := maxInt(20, (width-lipgloss.Width(gap))/2)
+	var rows []string
+	for i := 0; i < len(groups); i += 2 {
+		left := renderKeymapGroup(groups[i].title, groups[i].rows, colW)
+		right := ""
+		if i+1 < len(groups) {
+			right = renderKeymapGroup(groups[i+1].title, groups[i+1].rows, colW)
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+func renderKeymapGroup(title string, rows []keymapRow, width int) string {
+	keyW := 12
+	if width < 48 {
+		keyW = 8
+	}
+	descW := maxInt(4, width-keyW-5)
+	var lines []string
+	lines = append(lines, boldStyle.Render(title))
+	for _, row := range rows {
+		key := truncate(row.key, keyW)
+		desc := truncate(row.desc, descW)
+		pad := strings.Repeat(" ", maxInt(1, keyW-lipgloss.Width(key)+1))
+		lines = append(lines, cyanStyle.Render(key)+pad+desc)
+	}
+	return lipgloss.NewStyle().Width(width).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func (m Model) listTableHeight(extraContentLines int) int {
@@ -1077,6 +1187,8 @@ func (m Model) renderHelp() string {
 	var keys string
 	if m.commandActive {
 		keys = i18n.T("help_command")
+	} else if m.helpOpen {
+		keys = i18n.T("help_keymap")
 	} else {
 		switch m.view {
 		case viewOverview:
