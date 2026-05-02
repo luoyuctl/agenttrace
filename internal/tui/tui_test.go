@@ -799,6 +799,87 @@ func TestCommandClearResetsAdvancedFilters(t *testing.T) {
 	}
 }
 
+func TestClearCommandFromEmptyDetailReturnsToList(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.filterText = "no-such-session"
+	m.rebuildFilteredView()
+	m.view = viewDetail
+	m.detailReady = false
+
+	m.runCommand("clear")
+
+	if m.view != viewList {
+		t.Fatalf("clear command should return to list from empty detail, got view=%d", m.view)
+	}
+	if m.detailReady {
+		t.Fatalf("empty detail viewport should stay cleared")
+	}
+	if m.hasAnyFilter() {
+		t.Fatalf("expected clear to remove filters, got %s", m.filterLabel())
+	}
+	if got := len(m.table.Rows()); got != len(m.sessions) {
+		t.Fatalf("expected all rows after clear, got %d", got)
+	}
+}
+
+func TestZeroArgCommandsRejectTrailingTokens(t *testing.T) {
+	tests := []struct {
+		command  string
+		feedback string
+		assert   func(*testing.T, Model)
+	}{
+		{
+			command:  "clear now",
+			feedback: i18n.T("cmd_usage_clear"),
+			assert: func(t *testing.T, m Model) {
+				if !m.hasAnyFilter() {
+					t.Fatalf("invalid clear command should keep existing filters")
+				}
+			},
+		},
+		{
+			command:  "help me",
+			feedback: i18n.T("cmd_usage_help"),
+			assert:   func(t *testing.T, m Model) {},
+		},
+		{
+			command:  "anomalies now",
+			feedback: i18n.T("cmd_usage_anomalies"),
+			assert: func(t *testing.T, m Model) {
+				if m.filterAnomaly {
+					t.Fatalf("invalid anomalies command should not enable anomaly filter")
+				}
+			},
+		},
+		{
+			command:  "critical now",
+			feedback: i18n.T("cmd_usage_critical"),
+			assert: func(t *testing.T, m Model) {
+				if m.filterHealth == "crit" {
+					t.Fatalf("invalid critical command should not enable critical filter")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.command, func(t *testing.T) {
+			m := resizeForTest(t, sampleModelForTest(), 100, 30)
+			m.view = viewList
+			m.filterText = "beta"
+			m.rebuildFilteredView()
+
+			m.runCommand(tt.command)
+
+			if m.commandFeedback != tt.feedback {
+				t.Fatalf("expected feedback %q, got %q", tt.feedback, m.commandFeedback)
+			}
+			tt.assert(t, m)
+		})
+	}
+}
+
 func TestFilterEscClearsExistingFilters(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList

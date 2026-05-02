@@ -21,9 +21,18 @@ func (m *Model) runCommand(input string) {
 
 	switch strings.ToLower(fields[0]) {
 	case "clear", "reset":
+		if len(fields) != 1 {
+			m.commandFeedback = i18n.T("cmd_usage_clear")
+			return
+		}
 		m.clearFilters()
+		m.view = viewList
 		m.commandFeedback = i18n.T("cmd_cleared")
 	case "help", "?":
+		if len(fields) != 1 {
+			m.commandFeedback = i18n.T("cmd_usage_help")
+			return
+		}
 		m.commandFeedback = i18n.T("cmd_help")
 	case "health":
 		if len(fields) < 2 {
@@ -77,11 +86,19 @@ func (m *Model) runCommand(input string) {
 		m.rebuildFilteredView()
 		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_filter_cost"), op, value)
 	case "anomalies", "anomaly":
+		if len(fields) != 1 {
+			m.commandFeedback = i18n.T("cmd_usage_anomalies")
+			return
+		}
 		m.filterAnomaly = true
 		m.view = viewList
 		m.rebuildFilteredView()
 		m.commandFeedback = i18n.T("cmd_filter_anomalies")
 	case "critical":
+		if len(fields) != 1 {
+			m.commandFeedback = i18n.T("cmd_usage_critical")
+			return
+		}
 		m.filterHealth = "crit"
 		m.filterMode = ""
 		m.filterValue = ""
