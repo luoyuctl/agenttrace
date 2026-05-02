@@ -6,7 +6,7 @@ set -eu
 
 REPO="luoyuctl/agenttrace"
 BIN="agenttrace"
-INSTALL_DIR=""
+INSTALL_DIR="${AGENTTRACE_INSTALL_DIR:-}"
 
 # — detect platform —
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -23,7 +23,9 @@ case "$OS" in
 esac
 
 # — resolve install directory —
-if [ "$OS" = "darwin" ]; then
+if [ -n "$INSTALL_DIR" ]; then
+  :
+elif [ "$OS" = "darwin" ]; then
   INSTALL_DIR="${HOME}/.local/bin"
 elif [ -w /usr/local/bin ]; then
   INSTALL_DIR="/usr/local/bin"
@@ -35,25 +37,30 @@ fi
 mkdir -p "$INSTALL_DIR"
 DEST="${INSTALL_DIR}/${BIN}"
 
-# — detect latest release —
+# — resolve latest release asset —
 echo "🔍 Fetching latest release..."
-RELEASE_URL=$(curl -sSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep '"browser_download_url"' | grep "${OS}-${ARCH}" | head -1 | cut -d'"' -f4)
-
-if [ -z "$RELEASE_URL" ]; then
-  echo "❌ No binary found for ${OS}/${ARCH}"
-  echo "   Build from source: git clone https://github.com/${REPO}.git && cd agenttrace && go build -ldflags='-s -w' -o agenttrace ./cmd/agenttrace/"
-  exit 1
-fi
+ASSET="${BIN}-${OS}-${ARCH}"
+RELEASE_URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
 
 # — download —
 echo "⬇️  Downloading agenttrace (${OS}/${ARCH})..."
 TMP=$(mktemp)
-curl -sSL -o "$TMP" "$RELEASE_URL"
+if ! curl -fsSL -o "$TMP" "$RELEASE_URL"; then
+  rm -f "$TMP"
+  echo "❌ No binary found for ${OS}/${ARCH}"
+  echo "   Build from source: git clone https://github.com/${REPO}.git && cd agenttrace && go build -ldflags='-s -w' -o agenttrace ./cmd/agenttrace/"
+  exit 1
+fi
 chmod +x "$TMP"
 
 # — size check —
 SIZE=$(wc -c < "$TMP")
 echo "   Binary size: ${SIZE} bytes"
+if [ "$SIZE" -lt 1000000 ]; then
+  rm -f "$TMP"
+  echo "❌ Downloaded file is too small to be the agenttrace binary."
+  exit 1
+fi
 
 # — install —
 mv "$TMP" "$DEST"

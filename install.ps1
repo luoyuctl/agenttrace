@@ -22,11 +22,11 @@ Write-Host "🔍 Fetching latest release..." -ForegroundColor Cyan
 if ($Version -eq "latest") {
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO/releases/latest"
     $Version = $release.tag_name
-    $assets = $release.assets | Where-Object { $_.name -like "*windows-${ARCH}*" }
+    $assets = $release.assets | Where-Object { $_.name -eq "agenttrace-windows-${ARCH}.exe" }
 } else {
     $assets = Invoke-RestMethod -Uri "https://api.github.com/repos/$REPO/releases/tags/$Version" |
         Select-Object -ExpandProperty assets |
-        Where-Object { $_.name -like "*windows-${ARCH}*" }
+        Where-Object { $_.name -eq "agenttrace-windows-${ARCH}.exe" }
 }
 
 if (-not $assets) {
