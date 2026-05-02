@@ -712,7 +712,7 @@ var translations = map[string]map[Lang]string{
 	"view_diff":             {EN: "Diff", ZH: "对比"},
 	"view_unknown":          {EN: "View", ZH: "视图"},
 	"help_loading":          {EN: "Loading sessions... · q: quit", ZH: "正在加载会话... · q: 退出"},
-	"help_overview_modern":  {EN: "$: top cost · !: critical · a: anomalies · 0-4: jump · : command · q: quit", ZH: "$: 高费用 · !: 严重 · a: 异常 · 0-4: 跳转 · : 命令 · q: 退出"},
+	"help_overview_modern":  {EN: "$: top cost · !: critical · a: anomalies · /: search · 0-4: jump · : command · q: quit", ZH: "$: 高费用 · !: 严重 · a: 异常 · /: 搜索 · 0-4: 跳转 · : 命令 · q: 退出"},
 	"help_command":          {EN: "Enter: run · Esc: cancel · examples: :health <80  :cost >0.1  :sort cost desc", ZH: "Enter: 执行 · Esc: 取消 · 示例: :health <80  :cost >0.1  :sort cost desc"},
 	"help_filter_clear":     {EN: "Esc: clear filter", ZH: "Esc: 清除筛选"},
 	"help_force_reload":     {EN: ": command · ctrl+r: force reload", ZH: ": 命令 · ctrl+r: 强制重载"},

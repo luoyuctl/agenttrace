@@ -304,6 +304,27 @@ func TestFilterInputAllowsQCharacter(t *testing.T) {
 	}
 }
 
+func TestOverviewSearchShortcutOpensListFilter(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewOverview
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = next.(Model)
+
+	if m.view != viewList || !m.filterActive || m.filterInput != "" {
+		t.Fatalf("expected overview search to open list filter: view=%d active=%v input=%q", m.view, m.filterActive, m.filterInput)
+	}
+
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("beta")})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+
+	if m.filterText != "beta" || len(m.table.Rows()) != 1 {
+		t.Fatalf("overview search filter not applied: text=%q rows=%d", m.filterText, len(m.table.Rows()))
+	}
+}
+
 func TestFilterBackspaceRemovesWholeRune(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
