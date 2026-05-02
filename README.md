@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml"><img src="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://luoyuctl.github.io/agenttrace/"><img src="https://img.shields.io/badge/site-agenttrace-54ff00.svg" alt="Site"></a>
   <a href="https://github.com/luoyuctl/agenttrace/releases/latest"><img src="https://img.shields.io/github/v/release/luoyuctl/agenttrace?color=00ADD8" alt="Release"></a>
   <a href="https://github.com/luoyuctl/agenttrace/stargazers"><img src="https://img.shields.io/github/stars/luoyuctl/agenttrace?style=social" alt="GitHub stars"></a>
   <img src="https://img.shields.io/badge/go-1.24+-00ADD8.svg" alt="Go">
@@ -20,6 +21,8 @@
 AI coding agents (Claude Code, Gemini CLI, Codex CLI) burn tokens in loops, retry failures silently, and leave you with a surprise bill. You're wasting **money** on dead tokens and **time** on broken sessions — and you can't even see where.
 
 **agenttrace** finds the waste in both — so you stop paying for nothing and start shipping faster.
+
+Site: https://luoyuctl.github.io/agenttrace/
 
 <p align="center">
   <img src="assets/agenttrace-demo.gif" alt="agenttrace TUI demo" width="100%">

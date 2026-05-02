@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>agenttrace - TUI observability for AI coding agents</title>
+    <meta
+      name="description"
+      content="A local TUI for finding token waste, tool loops, failures, latency, anomalies, health regressions, diffs, and CI evidence across AI coding agent sessions."
+    />
+    <meta property="og:title" content="agenttrace" />
+    <meta property="og:description" content="TUI observability for AI coding agent sessions." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="assets/hero-banner.png" />
+    <link rel="icon" href="assets/logo-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="https://github.com/luoyuctl/agenttrace" aria-label="agenttrace on GitHub">
+        <img src="assets/logo-icon.png" alt="" />
+        <span>agenttrace</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#demo">Demo</a>
+        <a href="#install">Install</a>
+        <a href="#ci">CI</a>
+        <a href="https://github.com/luoyuctl/agenttrace/discussions/2">Feedback</a>
+        <a class="nav-cta" href="https://github.com/luoyuctl/agenttrace">Star on GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <img class="hero-bg" src="assets/hero-banner.png" alt="agenttrace dashboard showing AI agent observability metrics" />
+        <div class="hero-shade"></div>
+        <div class="hero-copy">
+          <h1>Find AI agent waste before it ships.</h1>
+          <p>
+            agenttrace turns Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports,
+            Hermes, OpenCode, Kimi, and Copilot-style logs into one fast local TUI.
+          </p>
+          <div class="hero-actions" id="install">
+            <button class="copy-btn" data-copy="curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh">
+              Copy install
+            </button>
+            <a href="https://github.com/luoyuctl/agenttrace/releases/latest">Latest release</a>
+          </div>
+          <pre><code>curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+agenttrace --demo</code></pre>
+        </div>
+      </section>
+
+      <section class="proof-strip" aria-label="What agenttrace catches">
+        <article>
+          <strong>Token bills</strong>
+          <span>Input, output, cache tokens, estimated cost, and top burning sessions.</span>
+        </article>
+        <article>
+          <strong>Tool loops</strong>
+          <span>Repeated calls, retries, long gaps, hanging runs, and tool failures.</span>
+        </article>
+        <article>
+          <strong>Regressions</strong>
+          <span>Health scores, shallow reasoning, redactions, anomalies, and diffs.</span>
+        </article>
+        <article>
+          <strong>CI evidence</strong>
+          <span>JSON and Markdown reports with health and tool failure gates.</span>
+        </article>
+      </section>
+
+      <section class="demo" id="demo">
+        <div class="section-copy">
+          <h2>A terminal workbench for agent sessions.</h2>
+          <p>
+            Sort hot sessions, drill into details, compare nearby runs, and inspect diagnostics
+            without uploading logs to another service.
+          </p>
+        </div>
+        <div class="demo-frame">
+          <img src="assets/agenttrace-demo.gif" alt="Animated agenttrace TUI session list demo" />
+        </div>
+      </section>
+
+      <section class="ops-grid">
+        <article>
+          <span>0 Overview</span>
+          <h3>See the operating picture.</h3>
+          <p>Sessions, tokens, cost, error rate, P95 latency, health score, recent anomalies, and top agents.</p>
+        </article>
+        <article>
+          <span>1 Session List</span>
+          <h3>Find the expensive run.</h3>
+          <p>Sort by health, cost, or turns; filter by source, model, anomaly, text, or health threshold.</p>
+        </article>
+        <article>
+          <span>2 Detail</span>
+          <h3>Explain what went wrong.</h3>
+          <p>Primary issue, impact, evidence, next action, loop analysis, tool warnings, and cost alerts.</p>
+        </article>
+        <article>
+          <span>3 Diag / 4 Diff</span>
+          <h3>Turn symptoms into fixes.</h3>
+          <p>Fingerprint loops, tool latency, context pressure, large params, rare tools, and side-by-side diffs.</p>
+        </article>
+      </section>
+
+      <section class="workflow" id="ci">
+        <div class="section-copy">
+          <h2>Use it locally, then gate it in CI.</h2>
+          <p>
+            The same parser powers the TUI, Markdown reports, JSON output, GitHub artifacts,
+            and threshold-based build failures.
+          </p>
+        </div>
+        <pre><code>agenttrace --overview -f markdown -o agenttrace-overview.md
+agenttrace --overview \
+  --fail-under-health 80 \
+  --fail-on-critical \
+  --max-tool-fail-rate 15</code></pre>
+      </section>
+
+      <section class="formats">
+        <h2>Multi-agent logs, one operational view.</h2>
+        <p>Claude Code · Codex CLI · Gemini CLI · Aider · Cursor exports · Hermes Agent · OpenCode · OpenClaw · Kimi CLI · Copilot-style traces</p>
+      </section>
+    </main>
+
+    <footer>
+      <span>MIT licensed</span>
+      <a href="https://github.com/luoyuctl/agenttrace">GitHub</a>
+      <a href="https://github.com/luoyuctl/agenttrace/blob/master/docs/launch-kit.md">Launch kit</a>
+      <a href="https://github.com/luoyuctl/agenttrace/discussions/2">Feedback</a>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
