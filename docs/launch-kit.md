@@ -134,6 +134,7 @@ Open PRs:
 - awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
 - command-line-tools: https://github.com/linsa-io/command-line-tools/pull/35
 - awesome-cli-coding-agents: https://github.com/bradAGI/awesome-cli-coding-agents/pull/73
+- awesome-gemini-cli: https://github.com/Piebald-AI/awesome-gemini-cli/pull/47
 - awesome-opencode: https://github.com/awesome-opencode/awesome-opencode/pull/334
 - awesome-opensource-ai: https://github.com/alvinreal/awesome-opensource-ai/pull/418
 - awesome-llm-skills: https://github.com/Prat011/awesome-llm-skills/pull/116
