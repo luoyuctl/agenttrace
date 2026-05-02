@@ -6,6 +6,8 @@
   <a href="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml"><img src="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://luoyuctl.github.io/agenttrace/"><img src="https://img.shields.io/badge/site-agenttrace-54ff00.svg" alt="Site"></a>
   <a href="https://github.com/luoyuctl/agenttrace/releases/latest"><img src="https://img.shields.io/github/v/release/luoyuctl/agenttrace?color=00ADD8" alt="Release"></a>
+  <a href="https://pkg.go.dev/github.com/luoyuctl/agenttrace"><img src="https://pkg.go.dev/badge/github.com/luoyuctl/agenttrace.svg" alt="Go Reference"></a>
+  <a href="https://goreportcard.com/report/github.com/luoyuctl/agenttrace"><img src="https://goreportcard.com/badge/github.com/luoyuctl/agenttrace" alt="Go Report Card"></a>
   <a href="https://github.com/luoyuctl/agenttrace/stargazers"><img src="https://img.shields.io/github/stars/luoyuctl/agenttrace?style=social" alt="GitHub stars"></a>
   <img src="https://img.shields.io/badge/go-1.24+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
