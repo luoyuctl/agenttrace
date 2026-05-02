@@ -3,10 +3,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml"><img src="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/luoyuctl/agenttrace/releases/latest"><img src="https://img.shields.io/github/v/release/luoyuctl/agenttrace?color=00ADD8" alt="Release"></a>
+  <a href="https://github.com/luoyuctl/agenttrace/stargazers"><img src="https://img.shields.io/github/stars/luoyuctl/agenttrace?style=social" alt="GitHub stars"></a>
   <img src="https://img.shields.io/badge/go-1.24+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/binary-7.5MB-00ADD8.svg" alt="Binary Size">
-  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
+  <img src="https://img.shields.io/badge/Homebrew-v0.3.4-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <h3 align="center">💸 Stop burning cash and hours on invisible AI agent waste</h3>
@@ -230,8 +232,10 @@ Session                   Turns  Tools   Succ     Cost  Health
 
 - [x] `curl -sL ... | sh` install script
 - [x] Multi-platform prebuilt binaries (linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, windows/arm64)
-- [x] npm / Homebrew distribution
-- [ ] GitHub Action for CI integration
+- [x] Homebrew distribution
+- [x] npm wrapper prepared
+- [x] GitHub Actions CI and release pipeline
+- [ ] Publish npm package
 - [ ] Historical trend tracking
 - [ ] Web dashboard (React + Charts)
 - [ ] VS Code extension
@@ -243,6 +247,17 @@ Session                   Turns  Tools   Succ     Cost  Health
 ## 📣 Launch Kit
 
 Planning to share or collect feedback? See [docs/launch-kit.md](docs/launch-kit.md) for positioning, launch posts, short social copy, target communities, and demo checklist.
+
+---
+
+## 🧩 Add a Parser
+
+Want agenttrace to support another coding agent? Start with [docs/parser-guide.md](docs/parser-guide.md). A good parser PR usually includes:
+
+- a tiny redacted fixture or synthetic sample
+- format detection in `DetectFormat`
+- role, timestamp, model, token usage, tool call, and tool error extraction
+- tests for successful parsing and malformed input
 
 ---
 
@@ -262,12 +277,15 @@ Planning to share or collect feedback? See [docs/launch-kit.md](docs/launch-kit.
 
 ## 🤝 Contributing
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution flow, validation commands, parser expectations, and privacy guidance.
+
 ```bash
 git clone https://github.com/luoyuctl/agenttrace.git
 cd agenttrace
 go test ./...              # verify behavior and rendering constraints
 go build -o agenttrace ./cmd/agenttrace/
 ./agenttrace --latest      # smoke test
+./agenttrace --doctor      # verify local discovery and cache status
 ```
 
 ---
