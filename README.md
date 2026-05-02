@@ -58,17 +58,15 @@ curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh
 iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
 ```
 
-### npm (cross-platform)
-
-```bash
-npm install -g agenttrace
-```
-
 ### Homebrew (macOS / Linux)
 
 ```bash
 brew install luoyuctl/tap/agenttrace
 ```
+
+### npm
+
+The npm wrapper is prepared in `npm/`, but the public package is not published yet. Use the one-liner, Homebrew, or manual build for now.
 
 ### Manual build
 

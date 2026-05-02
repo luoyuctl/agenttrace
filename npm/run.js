@@ -10,8 +10,8 @@ const binDir = path.join(__dirname, '..', '..', '.bin');
 
 // resolve real binary path (priority: project .bin > local install)
 const candidates = [];
-if (process.env.AGENTRACE_BIN) {
-    candidates.push(process.env.AGENTRACE_BIN);
+if (process.env.AGENTTRACE_BIN) {
+    candidates.push(process.env.AGENTTRACE_BIN);
 }
 candidates.push(path.join(binDir, 'agenttrace' + ext));
 
