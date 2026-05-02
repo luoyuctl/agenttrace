@@ -85,6 +85,9 @@ sudo mv agenttrace /usr/local/bin/
 # Launch TUI dashboard (default, no flags)
 agenttrace
 
+# Try the TUI with built-in sample sessions
+agenttrace --demo
+
 # Analyze latest session
 agenttrace --latest
 
@@ -96,6 +99,9 @@ agenttrace --latest -f json
 
 # Global fleet overview as JSON
 agenttrace --overview -f json -o agenttrace-overview.json
+
+# Demo JSON for screenshots, CI examples, or first-time evaluation
+agenttrace --demo --overview -f json
 
 # List all model pricings (900+ from LiteLLM when cached)
 agenttrace --list-models
@@ -131,7 +137,7 @@ agenttrace --latest --lang zh    # Chinese (supports zh, en)
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v0.3.1 — AI Agent Session Performance Report
+  AGENTTRACE v0.3.2 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST

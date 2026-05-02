@@ -45,6 +45,12 @@ curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh
 agenttrace
 ```
 
+No local agent logs yet?
+
+```bash
+agenttrace --demo
+```
+
 The pain point: when an agent gets stuck, retries a tool loop, or silently burns context, the output alone does not tell you what happened. agenttrace gives a quick local view before you dig through raw JSONL logs.
 
 Repo: https://github.com/luoyuctl/agenttrace
@@ -88,6 +94,7 @@ Repo: https://github.com/luoyuctl/agenttrace
 - Show Diagnostics for hanging/tool failures/context usage.
 - Show Diff between two sessions.
 - End with `agenttrace --overview -f json`.
+- For a reproducible recording, use `agenttrace --demo`.
 
 ## Verification Before Sharing
 
@@ -95,7 +102,7 @@ Repo: https://github.com/luoyuctl/agenttrace
 go test ./...
 go build -o /tmp/agenttrace ./cmd/agenttrace
 /tmp/agenttrace --version
-/tmp/agenttrace --overview -f json
+/tmp/agenttrace --demo --overview -f json
 ```
 
 Install smoke:

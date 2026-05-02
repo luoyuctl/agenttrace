@@ -30,6 +30,7 @@ func main() {
 	updatePricing := flag.Bool("update-pricing", false, "Download latest model pricing from LiteLLM")
 	testMatch := flag.Bool("test-match", false, "Test model name fuzzy matching")
 	version := flag.Bool("version", false, "Show version")
+	demo := flag.Bool("demo", false, "Use built-in demo sessions")
 	lang := flag.String("lang", "en", "Language for report output: en, zh")
 	flag.Parse()
 
@@ -86,6 +87,15 @@ func main() {
 	sessionsDir := *dir
 	if sessionsDir == "" {
 		sessionsDir = resolveDefaultDir()
+	}
+	if *demo {
+		demoDir, cleanup, err := writeDemoSessions()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
+			os.Exit(1)
+		}
+		defer cleanup()
+		sessionsDir = demoDir
 	}
 
 	// List models
