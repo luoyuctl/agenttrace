@@ -1160,6 +1160,28 @@ func TestAppendSessionKeepsCacheMetadata(t *testing.T) {
 	}
 }
 
+func TestAppendSessionKeepsFilteredRowsInSync(t *testing.T) {
+	m := resizeForTest(t, New("__missing_test_sessions__"), 100, 30)
+	m.loading = true
+	m.filterText = "match"
+
+	m.appendSession(engine.Session{Name: "skip", Health: 90}, false)
+	if got := len(m.table.Rows()); got != 0 {
+		t.Fatalf("non-matching appended session should stay hidden, got %d rows", got)
+	}
+
+	m.appendSession(engine.Session{Name: "match", Health: 90}, false)
+	if got := len(m.filteredIndices); got != 1 {
+		t.Fatalf("expected one filtered index after matching append, got %d", got)
+	}
+	if got := len(m.table.Rows()); got != 1 {
+		t.Fatalf("expected one visible row after matching append, got %d", got)
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "match" {
+		t.Fatalf("appended filtered row selected wrong session: idx=%d", idx)
+	}
+}
+
 func TestStartReloadHydratesCachedSessionsWithoutQueue(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cached.jsonl")

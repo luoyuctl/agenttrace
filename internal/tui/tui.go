@@ -264,19 +264,12 @@ func (m *Model) appendSession(s engine.Session, fromCache bool) {
 		m.loadedFromCache++
 	}
 
-	m.addSessionRow(s)
-	m.rebuildFilteredIndices()
+	m.rebuildFilteredView()
 
 	if m.unsavedNewCount >= cacheSaveInterval {
 		engine.SaveSessionCache(m.sessionCache)
 		m.unsavedNewCount = 0
 	}
-}
-
-func (m *Model) addSessionRow(s engine.Session) {
-	rows := m.table.Rows()
-	rows = append(rows, m.sessionRow(s))
-	m.table.SetRows(rows)
 }
 
 func (m *Model) finishLoading() {
