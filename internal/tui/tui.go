@@ -282,6 +282,10 @@ func (m *Model) finishLoading() {
 	m.costSummary = engine.ComputeCostSummary(m.sessions)
 	engine.SaveSessionCache(m.sessionCache)
 	m.unsavedNewCount = 0
+	if m.sortBy != "" {
+		m.sortAndRefresh()
+		return
+	}
 	m.rebuildFilteredView()
 }
 

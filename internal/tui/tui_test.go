@@ -260,6 +260,22 @@ func TestFinishLoadingKeepsFilteredTableRows(t *testing.T) {
 	}
 }
 
+func TestFinishLoadingKeepsActiveSort(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.sortBy = "cost"
+	m.sortDesc = true
+
+	m.finishLoading()
+
+	rows := m.table.Rows()
+	if len(rows) == 0 || rows[0][0] != "session_beta_with_a_long_name" {
+		t.Fatalf("finishLoading should keep cost sort row order, rows=%+v", rows)
+	}
+	if cols := m.table.Columns(); len(cols) < 7 || !strings.Contains(cols[6].Title, "▼") {
+		t.Fatalf("cost sort indicator should remain visible, cols=%+v", cols)
+	}
+}
+
 func TestEmptyTextFilterDoesNotRestoreAllRows(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
