@@ -117,7 +117,7 @@ func renderedHeight(s string) int {
 }
 
 func TestViewsRenderWithinTerminalWidth(t *testing.T) {
-	for _, width := range []int{40, 52, 60, 72, 80, 100, 140} {
+	for _, width := range []int{32, 40, 52, 60, 72, 80, 100, 140} {
 		m := resizeForTest(t, sampleModelForTest(), width, 36)
 		views := []view{viewOverview, viewList, viewDetail, viewDiagnostics, viewDiff}
 		for _, v := range views {
@@ -559,6 +559,24 @@ func TestCommandModeAcceptsSpacedNumericExpressions(t *testing.T) {
 	}
 	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "gamma" {
 		t.Fatalf("critical command selected wrong session: idx=%d", idx)
+	}
+}
+
+func TestHealthCommandRejectsUnknownFilter(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.runCommand("health good")
+
+	m.runCommand("health banana")
+
+	if m.filterHealth != "good" {
+		t.Fatalf("invalid health command should keep previous filter, got %q", m.filterHealth)
+	}
+	if got := len(m.table.Rows()); got != 1 {
+		t.Fatalf("invalid health command should keep previous rows, got %d", got)
+	}
+	if m.commandFeedback != i18n.T("cmd_usage_health") {
+		t.Fatalf("expected health usage feedback, got %q", m.commandFeedback)
 	}
 }
 

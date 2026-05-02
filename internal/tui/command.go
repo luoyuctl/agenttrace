@@ -29,7 +29,12 @@ func (m *Model) runCommand(input string) {
 			m.commandFeedback = i18n.T("cmd_usage_health")
 			return
 		}
-		m.filterHealth = normalizeHealthFilter(commandValue(fields[1:]))
+		healthFilter, ok := parseHealthCommandFilter(commandValue(fields[1:]))
+		if !ok {
+			m.commandFeedback = i18n.T("cmd_usage_health")
+			return
+		}
+		m.filterHealth = healthFilter
 		m.filterMode = ""
 		m.filterValue = ""
 		m.view = viewList
@@ -143,6 +148,17 @@ func normalizeHealthFilter(expr string) string {
 		return "crit"
 	default:
 		return strings.ToLower(strings.TrimSpace(expr))
+	}
+}
+
+func parseHealthCommandFilter(expr string) (string, bool) {
+	healthFilter := normalizeHealthFilter(expr)
+	switch healthFilter {
+	case "good", "warn", "crit":
+		return healthFilter, true
+	default:
+		_, _, ok := parseNumericExpression(healthFilter)
+		return healthFilter, ok
 	}
 }
 

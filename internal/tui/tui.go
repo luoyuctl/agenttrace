@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/luoyuctl/agenttrace/internal/engine"
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
@@ -969,9 +970,6 @@ func (m Model) renderAppHeader() string {
 	if width <= 0 {
 		width = 80
 	}
-	if width < 40 {
-		width = 40
-	}
 	if width < 72 {
 		raw := fmt.Sprintf("agenttrace v%s  %d %s", engine.Version, len(m.sessions), i18n.T("sessions_label"))
 		line := lipgloss.JoinHorizontal(lipgloss.Left,
@@ -984,7 +982,7 @@ func (m Model) renderAppHeader() string {
 		if lipgloss.Width(raw) > width {
 			line = brandStyle.Render("agenttrace") + " " + dimStyle.Render(fmt.Sprintf("v%s", engine.Version))
 		}
-		return lipgloss.JoinVertical(lipgloss.Left, line, dimStyle.Render(strings.Repeat("-", width)))
+		return lipgloss.JoinVertical(lipgloss.Left, truncate(line, width), dimStyle.Render(strings.Repeat("-", width)))
 	}
 	brand := titleStyle.Render("agenttrace")
 	version := dimStyle.Render(fmt.Sprintf("v%s", engine.Version))
@@ -2549,17 +2547,7 @@ func truncate(s string, maxLen int) string {
 	if maxLen <= 1 {
 		return ""
 	}
-	var b strings.Builder
-	width := 0
-	for _, r := range s {
-		rw := lipgloss.Width(string(r))
-		if width+rw > maxLen-1 {
-			break
-		}
-		b.WriteRune(r)
-		width += rw
-	}
-	return b.String() + "…"
+	return ansi.Truncate(s, maxLen, "…")
 }
 
 func dropLastRune(s string) string {
@@ -2602,7 +2590,9 @@ func (m Model) fitTerminalFrame(s string) string {
 	width := maxInt(1, m.width)
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
-		if w := lipgloss.Width(line); w < width {
+		if w := lipgloss.Width(line); w > width {
+			lines[i] = ansi.Truncate(line, width, "")
+		} else if w < width {
 			lines[i] = line + strings.Repeat(" ", width-w)
 		}
 	}
