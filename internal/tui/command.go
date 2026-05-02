@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -123,7 +124,7 @@ func commandValue(fields []string) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	if len(fields) >= 2 && isNumericOperator(fields[0]) {
+	if len(fields) == 2 && isNumericOperator(fields[0]) {
 		return fields[0] + fields[1]
 	}
 	return strings.Join(fields, " ")
@@ -199,11 +200,15 @@ func parseNumericExpression(expr string) (string, float64, bool) {
 	for _, op := range []string{">=", "<=", ">", "<", "="} {
 		if strings.HasPrefix(expr, op) {
 			value, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(expr, op)), 64)
-			return op, value, err == nil
+			return op, value, err == nil && isFiniteNumber(value)
 		}
 	}
 	value, err := strconv.ParseFloat(expr, 64)
-	return "=", value, err == nil
+	return "=", value, err == nil && isFiniteNumber(value)
+}
+
+func isFiniteNumber(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func matchFloatExpression(value float64, op string, target float64) bool {

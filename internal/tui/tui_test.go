@@ -139,6 +139,30 @@ func TestViewsRenderWithinTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestViewsFitVerySmallTerminalBounds(t *testing.T) {
+	for _, width := range []int{1, 2, 3, 5, 8, 13, 21, 31, 39} {
+		for _, height := range []int{1, 2, 3, 5, 8, 12} {
+			m := resizeForTest(t, sampleModelForTest(), width, height)
+			for _, v := range []view{viewOverview, viewList, viewDetail, viewDiagnostics, viewDiff} {
+				m.view = v
+				if v == viewDetail || v == viewDiagnostics {
+					m.openDetail()
+				}
+				if v == viewDiff {
+					m.diffResult = engine.DiffSessions(m.sessions[0], m.sessions[1])
+				}
+				rendered := m.View()
+				if got := maxRenderedWidth(rendered); got > width {
+					t.Fatalf("tiny render too wide: width=%d height=%d view=%d got=%d line=%q", width, height, v, got, widestLine(rendered))
+				}
+				if got := renderedHeight(rendered); got > height {
+					t.Fatalf("tiny render too tall: width=%d height=%d view=%d got=%d", width, height, v, got)
+				}
+			}
+		}
+	}
+}
+
 func TestAppHeaderDoesNotWrapStatusBadge(t *testing.T) {
 	for _, width := range []int{72, 80, 96, 100} {
 		m := resizeForTest(t, sampleModelForTest(), width, 24)
@@ -241,6 +265,7 @@ func TestEmptyTextFilterDoesNotRestoreAllRows(t *testing.T) {
 	m.view = viewList
 	m.filterText = "no-such-session"
 	m.rebuildFilteredView()
+	m.table.SetCursor(0)
 
 	if got := len(m.table.Rows()); got != 0 {
 		t.Fatalf("expected no visible rows, got %d", got)
@@ -606,6 +631,52 @@ func TestHealthCommandRejectsUnknownFilter(t *testing.T) {
 	}
 	if got := len(m.table.Rows()); got != 1 {
 		t.Fatalf("invalid health command should keep previous rows, got %d", got)
+	}
+	if m.commandFeedback != i18n.T("cmd_usage_health") {
+		t.Fatalf("expected health usage feedback, got %q", m.commandFeedback)
+	}
+}
+
+func TestNumericCommandsRejectNonFiniteValues(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.runCommand("cost >0.5")
+
+	m.runCommand("cost NaN")
+	if m.filterCostOp != ">" || m.filterCostValue != 0.5 {
+		t.Fatalf("invalid cost value should keep previous filter: op=%q value=%v", m.filterCostOp, m.filterCostValue)
+	}
+	if m.commandFeedback != i18n.T("cmd_cost_expect") {
+		t.Fatalf("expected cost usage feedback, got %q", m.commandFeedback)
+	}
+
+	m.runCommand("health good")
+	m.runCommand("health Inf")
+	if m.filterHealth != "good" {
+		t.Fatalf("invalid health value should keep previous filter, got %q", m.filterHealth)
+	}
+	if m.commandFeedback != i18n.T("cmd_usage_health") {
+		t.Fatalf("expected health usage feedback, got %q", m.commandFeedback)
+	}
+}
+
+func TestNumericCommandsRejectTrailingTokens(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.runCommand("cost >0.5")
+
+	m.runCommand("cost > 0.2 extra")
+	if m.filterCostOp != ">" || m.filterCostValue != 0.5 {
+		t.Fatalf("invalid cost command should keep previous filter: op=%q value=%v", m.filterCostOp, m.filterCostValue)
+	}
+	if m.commandFeedback != i18n.T("cmd_cost_expect") {
+		t.Fatalf("expected cost usage feedback, got %q", m.commandFeedback)
+	}
+
+	m.runCommand("health good")
+	m.runCommand("health > 80 extra")
+	if m.filterHealth != "good" {
+		t.Fatalf("invalid health command should keep previous filter, got %q", m.filterHealth)
 	}
 	if m.commandFeedback != i18n.T("cmd_usage_health") {
 		t.Fatalf("expected health usage feedback, got %q", m.commandFeedback)

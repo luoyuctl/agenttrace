@@ -1777,14 +1777,12 @@ func (m *Model) findSessionIndex() int {
 		return -1
 	}
 	cursor := m.table.Cursor()
-	// When a filter is active, map through filteredIndices
-	if len(m.filteredIndices) > 0 {
+	if m.hasAnyFilter() || len(m.filteredIndices) > 0 {
 		if cursor >= 0 && cursor < len(m.filteredIndices) {
 			return m.filteredIndices[cursor]
 		}
 		return -1
 	}
-	// No filter active: use cursor directly
 	if cursor >= 0 && cursor < len(m.sessions) {
 		return cursor
 	}
