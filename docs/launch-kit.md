@@ -127,6 +127,7 @@ Open PRs:
 - ARUNAGIRINATHAN-K/awesome-ai-agents: https://github.com/ARUNAGIRINATHAN-K/awesome-ai-agents/pull/27
 - awesome-cli-tui-software: https://github.com/lgaggini/awesome-cli-tui-software/pull/3
 - LangGPT/awesome-claude-code: https://github.com/LangGPT/awesome-claude-code/pull/58
+- awesome-mac: https://github.com/jaywcjlove/awesome-mac/pull/2026
 
 Merged listings:
 
