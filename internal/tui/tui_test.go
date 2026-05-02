@@ -204,6 +204,38 @@ func TestTextFilterKeepsRowsAndSelectionInSync(t *testing.T) {
 	}
 }
 
+func TestTextFilterPreservesVisibleSelection(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.table.SetCursor(1)
+
+	m.runCommand("session")
+
+	if got := len(m.table.Rows()); got != 2 {
+		t.Fatalf("expected two matching rows, got %d", got)
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "session_beta_with_a_long_name" {
+		t.Fatalf("filter should preserve visible selected session, idx=%d", idx)
+	}
+}
+
+func TestFinishLoadingKeepsFilteredTableRows(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.filterText = "beta"
+	m.finishLoading()
+
+	if got := len(m.filteredIndices); got != 1 {
+		t.Fatalf("expected one filtered index after finishLoading, got %d", got)
+	}
+	if got := len(m.table.Rows()); got != 1 {
+		t.Fatalf("finishLoading should keep table rows filtered, got %d", got)
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "session_beta_with_a_long_name" {
+		t.Fatalf("filtered table selected wrong session after finishLoading: idx=%d", idx)
+	}
+}
+
 func TestEmptyTextFilterDoesNotRestoreAllRows(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
@@ -953,7 +985,7 @@ func TestEmptyModelRendersAllViews(t *testing.T) {
 }
 
 func TestLoadingRenderWithinTerminalWidth(t *testing.T) {
-	for _, width := range []int{40, 52, 60, 80} {
+	for _, width := range []int{32, 40, 52, 60, 80} {
 		m := resizeForTest(t, New("__missing_test_sessions__"), width, 24)
 		m.loading = true
 		m.loadProgress = 3
@@ -970,7 +1002,7 @@ func TestChineseViewsRenderWithinTerminalWidth(t *testing.T) {
 	i18n.SetLang(i18n.ZH)
 	t.Cleanup(func() { i18n.SetLang(prev) })
 
-	for _, width := range []int{40, 52, 60, 80} {
+	for _, width := range []int{32, 40, 52, 60, 80} {
 		m := resizeForTest(t, sampleModelForTest(), width, 36)
 		m.lang = i18n.ZH
 		m.refreshColumns()

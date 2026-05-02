@@ -289,8 +289,7 @@ func (m *Model) finishLoading() {
 	m.costSummary = engine.ComputeCostSummary(m.sessions)
 	engine.SaveSessionCache(m.sessionCache)
 	m.unsavedNewCount = 0
-	m.refreshTable()
-	m.rebuildFilteredIndices()
+	m.rebuildFilteredView()
 }
 
 func loadNextCmd(files []string, cache engine.SessionCache, idx int) tea.Cmd {
@@ -2838,6 +2837,7 @@ func (m *Model) hasAnyFilter() bool {
 }
 
 func (m *Model) rebuildFilteredView() {
+	selected := m.selectedSessionKey()
 	m.rebuildFilteredIndices()
 	var rows []table.Row
 	for _, idx := range m.filteredIndices {
@@ -2845,6 +2845,7 @@ func (m *Model) rebuildFilteredView() {
 	}
 	m.table.SetRows(rows)
 	m.table.SetCursor(0)
+	m.restoreSelection(selected)
 }
 
 func (m *Model) selectedSessionKey() string {
