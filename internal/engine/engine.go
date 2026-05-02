@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agenttrace.
-// Pure Go. Supports 8 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI.
+// Pure Go. Supports 9 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Aider.
 package engine
 
 import (
@@ -51,6 +51,7 @@ var ToolDisplayNames = map[string]string{
 	"openclaw":          "OpenClaw",
 	"copilot_cli":       "Copilot CLI",
 	"kimi_cli":          "Kimi CLI",
+	"aider":             "Aider",
 	"generic":           "Generic JSON/JSONL",
 }
 
@@ -441,6 +442,11 @@ func DetectFormat(path string) FormatInfo {
 	if content == "" {
 		return fi
 	}
+	if isAiderHistoryFile(path, content) {
+		fi.Raw = data
+		fi.Format = "aider_chat_history"
+		return fi
+	}
 
 	// Try as single JSON blob first
 	if content[0] == '{' || content[0] == '[' {
@@ -665,6 +671,8 @@ func Parse(path string) ([]Event, error) {
 		return parseCopilotCLI(string(fi.Raw))
 	case "kimi_cli":
 		return parseKimiCLI(fi.Doc)
+	case "aider_chat_history":
+		return parseAiderChatHistory(string(fi.Raw))
 	default:
 		return parseGeneric(string(fi.Raw))
 	}
@@ -1842,11 +1850,7 @@ func LoadAll(dir string) []Session {
 			continue
 		}
 		name := e.Name()
-		if !strings.HasSuffix(name, ".jsonl") && !strings.HasSuffix(name, ".json") {
-			continue
-		}
-		// Skip non-session files
-		if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
+		if !isSessionFileName(name) {
 			continue
 		}
 		path := filepath.Join(dir, name)
@@ -1884,10 +1888,7 @@ func FindSessionFiles(dir string) []string {
 			continue
 		}
 		name := e.Name()
-		if !strings.HasSuffix(name, ".jsonl") && !strings.HasSuffix(name, ".json") {
-			continue
-		}
-		if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
+		if !isSessionFileName(name) {
 			continue
 		}
 		info, err := e.Info()
@@ -1930,6 +1931,16 @@ func sortFilesByModTime(paths []string) []string {
 	return out
 }
 
+func isSessionFileName(name string) bool {
+	if name == aiderHistoryFile {
+		return true
+	}
+	if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
+		return false
+	}
+	return strings.HasSuffix(name, ".jsonl") || strings.HasSuffix(name, ".json")
+}
+
 // KnownSessionDirs returns the well-known agent session directory candidates.
 func KnownSessionDirs() []KnownSessionDir {
 	home, _ := os.UserHomeDir()
@@ -1948,9 +1959,16 @@ func KnownSessionDirs() []KnownSessionDir {
 // DiscoverSessionDirs returns all well-known agent session directories found on this machine.
 func DiscoverSessionDirs() []string {
 	var dirs []string
+	seen := make(map[string]bool)
 	for _, candidate := range KnownSessionDirs() {
-		if dirExists(candidate.Path) {
+		if dirExists(candidate.Path) && !seen[candidate.Path] {
 			dirs = append(dirs, candidate.Path)
+			seen[candidate.Path] = true
+		}
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if _, err := os.Stat(filepath.Join(cwd, aiderHistoryFile)); err == nil && !seen[cwd] {
+			dirs = append(dirs, cwd)
 		}
 	}
 
@@ -1991,10 +2009,7 @@ func collectSessionFiles(dir string) []string {
 				continue
 			}
 			name := e.Name()
-			if !strings.HasSuffix(name, ".jsonl") && !strings.HasSuffix(name, ".json") {
-				continue
-			}
-			if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
+			if !isSessionFileName(name) {
 				continue
 			}
 			info, err := e.Info()

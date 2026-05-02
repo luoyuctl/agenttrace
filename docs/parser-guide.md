@@ -57,6 +57,8 @@ go build -o /tmp/agenttrace ./cmd/agenttrace
 
 If you add a new default session directory, make sure `agenttrace --doctor` reports it clearly.
 
+For local-first tools like Aider, the default history may live in the current repository (`.aider.chat.history.md`) rather than a global session directory. In that case, support explicit `-d <repo>` and only add auto-discovery when a clear marker file exists.
+
 ## Privacy Notes
 
 Do not commit real agent logs unless they are fully synthetic or carefully redacted. Session logs often include prompts, source code, file paths, tool arguments, and secrets.

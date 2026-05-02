@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -198,10 +197,7 @@ func collectSessionFilesCached(dir string, depth, maxDepth int, cache SessionCac
 			continue
 		}
 		name := e.Name()
-		if !strings.HasSuffix(name, ".jsonl") && !strings.HasSuffix(name, ".json") {
-			continue
-		}
-		if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
+		if !isSessionFileName(name) {
 			continue
 		}
 		files = append(files, path)

@@ -161,6 +161,60 @@ func TestDetectFormat_GeminiAndOpenClaw(t *testing.T) {
 	}
 }
 
+func TestParseAiderChatHistory(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".aider.chat.history.md")
+	raw := `
+# aider chat started at 2026-05-02 10:00:00
+
+> aider --model gpt-4.1
+
+#### Add a CI health gate
+
+Implemented the gate with focused tests.
+
+> Tokens: 1.2k sent, 300 cache write, 400 cache hit, 345 received. Cost: $0.004 message, $0.004 session.
+
+#### Run tests
+
+All tests pass.
+`
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectFormat(path).Format; got != "aider_chat_history" {
+		t.Fatalf("aider format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "gpt-4.1")
+	if m.SourceTool != "aider" || m.UserMessages != 2 || m.AssistantTurns != 2 {
+		t.Fatalf("bad aider metrics: %+v", m)
+	}
+	if m.ModelUsed != "gpt-4.1" || m.TokensInput != 1200 || m.TokensCacheW != 300 || m.TokensCacheR != 400 || m.TokensOutput != 345 {
+		t.Fatalf("bad aider usage/model: %+v", m)
+	}
+}
+
+func TestFindSessionFilesIncludesAiderHistory(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".aider.chat.history.md")
+	if err := os.WriteFile(path, []byte("# aider chat started at 2026-05-02 10:00:00\n\n#### hi\n\nhello\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	files := FindSessionFiles(dir)
+	if len(files) != 1 || files[0] != path {
+		t.Fatalf("expected aider history file, got %v", files)
+	}
+	cache := SessionCache{Entries: map[string]CacheEntry{}, Dirs: map[string]DirCacheEntry{}}
+	files = FindSessionFilesCached(dir, cache)
+	if len(files) != 1 || files[0] != path {
+		t.Fatalf("expected cached aider history file, got %v", files)
+	}
+}
+
 func TestDetectLargeParams_UsesToolArguments(t *testing.T) {
 	arg := strings.Repeat("x", 10001)
 	events := []Event{{

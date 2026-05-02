@@ -38,7 +38,7 @@ AI agents now behave like tiny build systems: they plan, call tools, retry, hang
 | ⚡ **Persistent Cache** | Incremental session cache avoids a full disk parse on every startup |
 | 🩺 **Doctor Mode** | `--doctor` checks detected agent dirs, cache health, and next steps |
 | ⌨️ **Command Mode** | `:health <80`, `:cost >0.1`, `:sort cost desc`, `:anomalies` |
-| 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Codex CLI / Gemini CLI / OpenCode / OpenClaw — all parsed seamlessly |
+| 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Codex CLI / Gemini CLI / OpenCode / OpenClaw / Aider — all parsed seamlessly |
 | 💸 **Cost & Time Waste** | How much 💰 you burned + ⏱️ time lost to loops, retries, failures |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |
@@ -244,7 +244,8 @@ Session                   Turns  Tools   Succ     Cost  Health
 - [ ] Web dashboard (React + Charts)
 - [ ] VS Code extension
 - [x] OpenCode format support
-- [ ] Aider / Cursor format support
+- [x] Aider chat history support
+- [ ] Cursor format support
 
 See [CI Integration](docs/ci-integration.md) for a ready-to-copy GitHub Actions health gate.
 
