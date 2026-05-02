@@ -360,16 +360,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		contentW := msg.Width - 14
-		if contentW < 28 {
-			contentW = 28
-		}
-		m.table.SetWidth(contentW)
-		m.table.SetHeight(m.listTableHeight(2))
 		m.adjustColumnWidths(msg.Width)
+		m.table.SetWidth(m.frameBodyWidth())
+		m.table.SetHeight(m.listTableHeight(2))
 
 		if m.detailReady {
-			m.viewport.Width = contentW
+			m.viewport.Width = m.detailViewportWidth()
 			m.viewport.Height = m.detailViewportHeight()
 			m.refreshDetailViewport()
 		}
@@ -628,13 +624,9 @@ func (m *Model) openDetail() {
 	idx := m.findSessionIndex()
 	if idx >= 0 && idx < len(m.sessions) {
 		s := m.sessions[idx]
-		vw := m.width - 14
-		if vw < 40 {
-			vw = 40
-		}
 
 		m.prepareDetailState(s)
-		m.viewport = viewport.New(vw, m.detailViewportHeight())
+		m.viewport = viewport.New(m.detailViewportWidth(), m.detailViewportHeight())
 		m.viewport.SetContent(m.renderDetailViewportContent(s))
 		m.detailReady = true
 	}
@@ -669,11 +661,15 @@ func (m Model) detailViewportHeight() int {
 	if m.height <= 0 {
 		return 12
 	}
-	fixedChrome := 26
+	fixedChrome := 15
 	if m.width > 0 && m.width < 100 {
-		fixedChrome = 30
+		fixedChrome = 16
 	}
-	return maxInt(3, m.height-fixedChrome)
+	return maxInt(4, m.height-fixedChrome)
+}
+
+func (m Model) detailViewportWidth() int {
+	return maxInt(8, m.frameBodyWidth())
 }
 
 func (m Model) renderDetailViewportContent(s engine.Session) string {
@@ -891,7 +887,7 @@ func (m Model) renderCommandBar() string {
 }
 
 func (m Model) renderListView() string {
-	contentW := m.contentWidth()
+	contentW := m.frameBodyWidth()
 	var sections []string
 	extraLines := 0
 	if filterBar := m.renderListStatusBar(contentW); filterBar != "" {
@@ -1201,19 +1197,30 @@ func (m Model) renderQuickSummary() string {
 
 	modelBadge := badge(i18n.T("model_header"), met.ModelUsed, lipgloss.Color("99"))
 	if m.width > 0 && m.width < 100 {
-		summary := fmt.Sprintf("%s %d/100 · %s $%.4f · %s %d/%d %s · %s %d · %s",
+		lineW := m.frameBodyWidth()
+		issue := i18n.T("list_no_major_anomaly")
+		if len(s.Anomalies) > 0 {
+			issue = anomalyTypeLabel(s.Anomalies[0].Type)
+		}
+		line1 := fmt.Sprintf("%s %d/100  %s %s  %s %d/%d %s",
 			i18n.T("health"),
 			health,
 			i18n.T("cost"),
-			safeAmount(met.CostEstimated),
+			money4(met.CostEstimated),
 			i18n.T("tools"),
 			okTools,
 			totalTools,
-			srStr,
+			srStr)
+		line2 := fmt.Sprintf("%s %d  %s %s  %s",
 			i18n.T("diff_field_anomalies"),
 			len(s.Anomalies),
+			i18n.T("list_issue"),
+			issue,
 			met.ModelUsed)
-		return truncate(summary, maxInt(20, m.contentWidth()-4))
+		return lipgloss.JoinVertical(lipgloss.Left,
+			truncate(line1, lineW),
+			dimStyle.Render(truncate(line2, lineW)),
+		)
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
@@ -1260,7 +1267,7 @@ func (m Model) renderFixSuggestions() string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42")).Render(i18n.T("fix_title"))
 	var lines []string
 	lines = append(lines, title)
-	cardW := maxInt(20, m.contentWidth()-6)
+	cardW := maxInt(20, m.detailViewportWidth())
 	for _, fs := range m.fixSuggestions {
 		msg := fmt.Sprintf("• [%s] %s -> %s", fs.Title, fs.Description, fs.Action)
 		style := lipgloss.NewStyle().
@@ -1280,7 +1287,7 @@ func (m Model) renderToolWarnings() string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220")).Render(i18n.T("tool_warn_title"))
 	var lines []string
 	lines = append(lines, title)
-	cardW := maxInt(20, m.contentWidth()-6)
+	cardW := maxInt(20, m.detailViewportWidth())
 	for _, tw := range m.toolWarnings {
 		msg := fmt.Sprintf("! [%s] %s (x%d)", tw.Pattern, tw.Detail, tw.Count)
 		style := lipgloss.NewStyle().
@@ -1311,8 +1318,8 @@ func (m Model) renderCostAlert() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Padding(0, 1)
-	lines = append(lines, styleForOuterWidth(style, maxInt(20, m.contentWidth()-6)).
-		Render(truncate(msg, maxInt(8, m.contentWidth()-10))))
+	lines = append(lines, styleForOuterWidth(style, maxInt(20, m.detailViewportWidth())).
+		Render(truncate(msg, maxInt(8, m.detailViewportWidth()-4))))
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
@@ -1326,13 +1333,10 @@ func (m Model) renderWaste() string {
 		return m.frameContent(dimStyle.Render(m.selectionHint()))
 	}
 	s := m.sessions[idx]
-	panelW := m.contentWidth() - 8
-	if panelW < 40 {
-		panelW = 40
-	}
+	panelW := m.frameBodyWidth()
 	cardW := panelW
-	if m.contentWidth() >= 118 {
-		cardW = (m.contentWidth() - 12) / 2
+	if panelW >= 118 {
+		cardW = (panelW - 12) / 2
 	}
 
 	pCard := func(color, title string, content string) string {
@@ -1363,7 +1367,7 @@ func (m Model) renderWaste() string {
 		pCard("208", i18n.T("diag_large_params"), m.renderLargeParams(s)),
 		pCard("42", i18n.T("diag_unused_tools"), m.renderUnusedTools(s)),
 	}
-	if m.contentWidth() >= 118 {
+	if panelW >= 118 {
 		var rows []string
 		for i := 0; i < len(cards); i += 2 {
 			left := cards[i]
@@ -1484,10 +1488,7 @@ func (m Model) renderWasteScoreCard(s engine.Session) string {
 	if hasIssues {
 		status = i18n.T("diag_issues_found")
 	}
-	panelW := m.contentWidth() - 6
-	if panelW < 40 {
-		panelW = 40
-	}
+	panelW := m.frameBodyWidth()
 	if m.width > 0 && m.width < 100 {
 		content := lipgloss.JoinVertical(lipgloss.Left,
 			fmt.Sprintf("%s  %s",
@@ -1524,7 +1525,7 @@ func (m Model) renderToolLatency(s engine.Session) string {
 	if len(s.ToolLatencies) == 0 {
 		return dimStyle.Render(i18n.T("diag_no_latency"))
 	}
-	if m.contentWidth() < 70 {
+	if m.frameBodyWidth() < 70 {
 		var lines []string
 		lines = append(lines, dimStyle.Render(fmt.Sprintf("  %-18s %5s %5s",
 			i18n.T("diag_tool_lat_col_name"),
@@ -1593,8 +1594,8 @@ func (m Model) renderContextUtil(s engine.Session) string {
 		style = greenStyle
 	}
 	barWidth := 30
-	if m.contentWidth() < 70 {
-		barWidth = maxInt(8, m.contentWidth()-34)
+	if m.frameBodyWidth() < 70 {
+		barWidth = maxInt(8, m.frameBodyWidth()-34)
 	}
 	utilPct := cu.UtilizationPct
 	if !isFiniteNumber(utilPct) || utilPct < 0 {
@@ -1606,12 +1607,12 @@ func (m Model) renderContextUtil(s engine.Session) string {
 	bar := "[" + lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(strings.Repeat("█", filled)) +
 		lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(strings.Repeat("░", barWidth-filled)) + "]"
 
-	if m.contentWidth() < 70 {
+	if m.frameBodyWidth() < 70 {
 		content := fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_total"), cyanStyle.Render(tokenCount(cu.EstimatedTotal)))
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_tool_defs"), dimStyle.Render(tokenCount(cu.ToolDefinitions)))
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_history"), dimStyle.Render(tokenCount(cu.ConversationHist)))
 		content += fmt.Sprintf("  %-10s %s %s\n", i18n.T("diag_ctx_available"), style.Render(fmt.Sprintf("%d", nonNegativeInt(cu.AvailableForTask))), bar)
-		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_suggestion"), style.Render(truncate(cu.Suggestion, maxInt(8, m.contentWidth()-18))))
+		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_suggestion"), style.Render(truncate(cu.Suggestion, maxInt(8, m.frameBodyWidth()-18))))
 		return content
 	}
 
@@ -1691,7 +1692,7 @@ func (m Model) renderDiff() string {
 		}
 		return m.frameContent(dimStyle.Render(hint))
 	}
-	contentW := m.contentWidth()
+	contentW := m.frameBodyWidth()
 
 	winner, explanation := buildDiffInsight(dr)
 	winStyle := greenStyle
@@ -1989,6 +1990,10 @@ func (m Model) renderOverview() string {
 		contentW = 20
 	}
 
+	if m.height > 0 && m.height <= 26 && contentW < 100 {
+		return lipgloss.NewStyle().Width(innerW).Render(m.renderCompactOverview(contentW))
+	}
+
 	hero := m.renderDashboardHero(contentW)
 	controls := m.renderDashboardControls(contentW)
 	metrics := m.renderDashboardMetrics(contentW)
@@ -2029,6 +2034,137 @@ func (m Model) renderOverview() string {
 
 	page := lipgloss.JoinVertical(lipgloss.Left, hero, controls, metrics, body)
 	return lipgloss.NewStyle().Width(innerW).Render(page)
+}
+
+func (m Model) renderCompactOverview(width int) string {
+	sections := []string{
+		m.renderDashboardHero(width),
+		dimStyle.Render(truncate(i18n.T("dash_controls_short"), width)),
+		m.renderCompactMetricStrip(width),
+		"",
+		m.renderCompactFocus(width),
+		"",
+		m.renderCompactRecent(width),
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m Model) renderCompactMetricStrip(width int) string {
+	totalTokens := m.costSummary.TotalTokensIn + m.costSummary.TotalTokensOut
+	toolTotal, toolFail := aggregateToolCounts(m.sessions)
+	errorRate := 0.0
+	if toolTotal > 0 {
+		errorRate = float64(toolFail) / float64(toolTotal) * 100
+	}
+	health := clampHealth(int(m.aggStats.AvgHealth))
+	if len(m.sessions) == 0 {
+		health = 0
+	}
+	items := []string{
+		fmt.Sprintf("%s %s", i18n.T("metric_tokens"), brandStyle.Render(compactInt(totalTokens))),
+		fmt.Sprintf("%s %s", i18n.T("metric_cost"), greenStyle.Render(money2(m.costSummary.TotalCost))),
+		fmt.Sprintf("%s %s", i18n.T("metric_health"), healthColor(health).Render(fmt.Sprintf("%d%%", health))),
+		fmt.Sprintf("%s %s", i18n.T("metric_errors"), anomalyRateStyle(errorRate).Render(fmt.Sprintf("%.1f%%", errorRate))),
+	}
+	line := strings.Join(items, "  ")
+	if lipgloss.Width(line) <= width {
+		return line
+	}
+	return lipgloss.JoinVertical(lipgloss.Left,
+		truncate(strings.Join(items[:2], "  "), width),
+		truncate(strings.Join(items[2:], "  "), width),
+	)
+}
+
+func (m Model) renderCompactFocus(width int) string {
+	title := dashTitleStyle.Render(i18n.T("compact_focus"))
+	if len(m.sessions) == 0 {
+		return lipgloss.JoinVertical(lipgloss.Left, title, dimStyle.Render(i18n.T("no_data")))
+	}
+	rows := topRiskSessions(m.sessions, minInt(3, len(m.sessions)))
+	nameW := maxInt(10, width-31)
+	var lines []string
+	lines = append(lines, title)
+	for _, s := range rows {
+		health := clampHealth(s.Health)
+		issue := i18n.T("list_no_major_anomaly")
+		if len(s.Anomalies) > 0 {
+			issue = anomalyTypeLabel(s.Anomalies[0].Type)
+		}
+		line := fmt.Sprintf("%s %-*s %4d%% %8s  %s",
+			healthColor(health).Render("●"),
+			nameW,
+			truncate(s.Name, nameW),
+			health,
+			money4(s.Metrics.CostEstimated),
+			issue,
+		)
+		lines = append(lines, truncate(line, width))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func (m Model) renderCompactRecent(width int) string {
+	title := dashTitleStyle.Render(i18n.T("compact_recent"))
+	if len(m.sessions) == 0 {
+		return lipgloss.JoinVertical(lipgloss.Left, title, dimStyle.Render(i18n.T("panel_no_recent")))
+	}
+	nameW := maxInt(10, width-28)
+	var lines []string
+	lines = append(lines, title)
+	for i := 0; i < minInt(3, len(m.sessions)); i++ {
+		s := m.sessions[i]
+		health := clampHealth(s.Health)
+		line := fmt.Sprintf("%s %-*s %7s %4d%%",
+			healthColor(health).Render("●"),
+			nameW,
+			truncate(s.Name, nameW),
+			compactInt(s.Metrics.TokensInput+s.Metrics.TokensOutput),
+			health,
+		)
+		lines = append(lines, truncate(line, width))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
+func topRiskSessions(sessions []engine.Session, limit int) []engine.Session {
+	rows := append([]engine.Session(nil), sessions...)
+	sort.SliceStable(rows, func(i, j int) bool {
+		leftHealth := clampHealth(rows[i].Health)
+		rightHealth := clampHealth(rows[j].Health)
+		if leftHealth != rightHealth {
+			return leftHealth < rightHealth
+		}
+		return safeAmount(rows[i].Metrics.CostEstimated) > safeAmount(rows[j].Metrics.CostEstimated)
+	})
+	if limit < len(rows) {
+		rows = rows[:limit]
+	}
+	return rows
+}
+
+func healthColor(health int) lipgloss.Style {
+	health = clampHealth(health)
+	switch {
+	case health >= 80:
+		return greenStyle
+	case health >= 50:
+		return orangeStyle
+	default:
+		return redStyle
+	}
+}
+
+func anomalyRateStyle(rate float64) lipgloss.Style {
+	rate = chartValue(rate)
+	switch {
+	case rate >= 40:
+		return redStyle
+	case rate >= 10:
+		return orangeStyle
+	default:
+		return greenStyle
+	}
 }
 
 func (m Model) renderDashboardHero(width int) string {
@@ -2776,6 +2912,11 @@ func (m Model) contentWidth() int {
 		return 40
 	}
 	return w
+}
+
+func (m Model) frameBodyWidth() int {
+	frameW, _ := baseStyle.GetFrameSize()
+	return maxInt(1, m.contentWidth()-frameW)
 }
 
 func (m Model) frameContent(content string) string {

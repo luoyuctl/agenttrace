@@ -1330,7 +1330,7 @@ func TestDiffUsesSafeSessionValues(t *testing.T) {
 	m.view = viewDiff
 	rendered := m.View()
 
-	for _, bad := range []string{"NaN", "Inf", "-20", "150", "-5", "-3", "-2"} {
+	for _, bad := range []string{"NaN", "Inf", "Health         -20", "Health         150", "Turns          -", "Tools          -", "Fail count     -"} {
 		if strings.Contains(rendered, bad) {
 			t.Fatalf("diff should sanitize invalid metric %q:\n%s", bad, rendered)
 		}

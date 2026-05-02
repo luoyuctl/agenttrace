@@ -97,6 +97,19 @@ Sample report: https://luoyuctl.github.io/agenttrace/demo-report.html
 - GitHub topics: `ai-agents`, `tui`, `observability`, `developer-tools`, `cost-tracking`, `aider`, `claude-code`, `codex-cli`
 - Product Hunt: after a GIF demo and first external feedback
 
+## Directory Submissions
+
+Open PRs:
+
+- awesome-tuis: https://github.com/rothgar/awesome-tuis/pull/658
+- awesome-codex-cli: https://github.com/RoggeOhta/awesome-codex-cli/pull/23
+- awesome-ai-coding-tools: https://github.com/ai-for-developers/awesome-ai-coding-tools/pull/288
+- awesome-claude-code-toolkit: https://github.com/rohitg00/awesome-claude-code-toolkit/pull/361
+
+Manual-only submission:
+
+- awesome-claude-code: submit via the GitHub issue form, because the repo asks contributors not to create automated issues or PRs. Suggested category: Tooling / Usage Monitors.
+
 ## Demo Checklist
 
 - Render `assets/agenttrace-demo.gif` with `scripts/record-demo.sh` when VHS is available.

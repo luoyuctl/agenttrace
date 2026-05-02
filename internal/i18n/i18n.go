@@ -818,6 +818,8 @@ var translations = map[string]map[Lang]string{
 	"panel_no_anomalies":      {EN: "No anomalies detected", ZH: "未检测到异常"},
 	"panel_no_agent_data":     {EN: "No agent data", ZH: "暂无 Agent 数据"},
 	"panel_no_recent":         {EN: "No recent sessions", ZH: "暂无最近会话"},
+	"compact_focus":           {EN: "FOCUS", ZH: "关注"},
+	"compact_recent":          {EN: "RECENT", ZH: "最近"},
 	"legend_input":            {EN: "● Input", ZH: "● 输入"},
 	"legend_output":           {EN: "● Output", ZH: "● 输出"},
 	"legend_cache":            {EN: "● Cache", ZH: "● 缓存"},

@@ -71,7 +71,7 @@ func (m Model) renderDiagnosticSummary() string {
 	}
 	s := m.sessions[idx]
 	ins := buildSessionInsight(s, m.fixSuggestions, m.costAlert)
-	cardW := minInt(maxInt(20, m.contentWidth()-6), 140)
+	cardW := minInt(maxInt(20, m.detailViewportWidth()), 140)
 	bodyW := maxInt(8, cardW-4)
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(ins.Color).Render(i18n.T("insight_primary_issue")) + truncate(ins.Issue, bodyW-15),
