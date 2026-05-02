@@ -214,6 +214,24 @@ func TestSortPreservesSelectedSession(t *testing.T) {
 	}
 }
 
+func TestTurnSortUsesDisplayedNonNegativeValue(t *testing.T) {
+	m := sampleModelForTest()
+	m.sessions[0].Metrics.AssistantTurns = -10
+	m.sessions[1].Metrics.AssistantTurns = 0
+	m.sessions[2].Metrics.AssistantTurns = 2
+	m = resizeForTest(t, m, 100, 30)
+	m.view = viewList
+	m.sortBy = "turns"
+	m.sortDesc = false
+
+	m.sortAndRefresh()
+
+	rows := m.table.Rows()
+	if rows[0][0] != "session_alpha" || rows[1][0] != "session_beta_with_a_long_name" {
+		t.Fatalf("negative turns should sort as displayed zero value, rows=%+v", rows)
+	}
+}
+
 func TestTextFilterKeepsRowsAndSelectionInSync(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList

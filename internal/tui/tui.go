@@ -1828,9 +1828,9 @@ func (m *Model) sortAndRefresh() {
 	case "turns":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
 			if m.sortDesc {
-				return m.sessions[i].Metrics.AssistantTurns > m.sessions[j].Metrics.AssistantTurns
+				return nonNegativeInt(m.sessions[i].Metrics.AssistantTurns) > nonNegativeInt(m.sessions[j].Metrics.AssistantTurns)
 			}
-			return m.sessions[i].Metrics.AssistantTurns < m.sessions[j].Metrics.AssistantTurns
+			return nonNegativeInt(m.sessions[i].Metrics.AssistantTurns) < nonNegativeInt(m.sessions[j].Metrics.AssistantTurns)
 		})
 	case "source":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
