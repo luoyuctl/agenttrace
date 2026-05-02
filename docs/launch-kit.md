@@ -1,6 +1,6 @@
 # agenttrace Launch Kit
 
-agenttrace is a terminal observability dashboard for AI coding agent sessions. It helps developers see where Claude Code, Codex CLI, Gemini CLI, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, and Copilot-style logs waste time, tokens, and tool calls.
+agenttrace is a terminal observability dashboard for AI coding agent sessions. It helps developers see where Claude Code, Codex CLI, Gemini CLI, Aider, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, and Copilot-style logs waste time, tokens, and tool calls.
 
 ## Positioning
 
@@ -28,7 +28,7 @@ Body:
 
 I built agenttrace, a single-binary TUI for inspecting AI coding agent sessions locally.
 
-It parses logs from Claude Code, Codex CLI, Gemini CLI, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, and Copilot-style traces, then shows:
+It parses logs from Claude Code, Codex CLI, Gemini CLI, Aider, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, and Copilot-style traces, then shows:
 
 - token and cost burn
 - tool success/failure rate
@@ -36,13 +36,20 @@ It parses logs from Claude Code, Codex CLI, Gemini CLI, Hermes Agent, OpenCode, 
 - anomaly detection
 - per-session health score
 - detail diagnostics and session diffs
-- JSON output for CI or dashboards
+- JSON output for dashboards
+- CI health gates for average health, critical sessions, and tool failure rate
 
 Install:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
 agenttrace
+```
+
+Or:
+
+```bash
+brew install luoyuctl/tap/agenttrace
 ```
 
 No local agent logs yet?
@@ -63,7 +70,7 @@ AI coding agents now need observability too.
 
 I built agenttrace: a fast terminal dashboard for local agent sessions.
 
-It shows token cost, latency, tool failures, anomalies, health score, details, diffs, and JSON output across Claude Code, Codex CLI, Gemini CLI, Hermes, OpenCode, Kimi, and more.
+It shows token cost, latency, tool failures, anomalies, health score, details, diffs, JSON output, and CI health gates across Claude Code, Codex CLI, Gemini CLI, Aider, Hermes, OpenCode, Kimi, and more.
 
 https://github.com/luoyuctl/agenttrace
 
@@ -73,7 +80,7 @@ I made a TUI tool for people using AI coding agents daily. It scans local sessio
 
 The goal is not another chat UI. It is closer to `htop`/`lazygit` for AI agent runs: fast local inspection, filtering, diagnostics, and exportable JSON.
 
-Would love feedback from anyone using Claude Code, Codex CLI, Gemini CLI, Hermes Agent, OpenCode, Kimi CLI, or similar tools.
+Would love feedback from anyone using Claude Code, Codex CLI, Gemini CLI, Aider, Hermes Agent, OpenCode, Kimi CLI, or similar tools.
 
 Repo: https://github.com/luoyuctl/agenttrace
 
@@ -83,7 +90,7 @@ Repo: https://github.com/luoyuctl/agenttrace
 - Reddit: r/commandline, r/golang, r/LocalLLaMA, r/ClaudeAI, r/ChatGPTCoding
 - V2EX: 分享创造 / 程序员
 - X / Threads: AI engineering and developer tooling
-- GitHub topics: `ai-agents`, `tui`, `observability`, `developer-tools`, `cost-tracking`
+- GitHub topics: `ai-agents`, `tui`, `observability`, `developer-tools`, `cost-tracking`, `aider`, `claude-code`, `codex-cli`
 - Product Hunt: after a GIF demo and first external feedback
 
 ## Demo Checklist
@@ -94,6 +101,7 @@ Repo: https://github.com/luoyuctl/agenttrace
 - Show Diagnostics for hanging/tool failures/context usage.
 - Show Diff between two sessions.
 - End with `agenttrace --overview -f json`.
+- Show CI gate output with `agenttrace --overview --fail-under-health 80 --fail-on-critical`.
 - For a reproducible recording, use `agenttrace --demo`.
 
 ## Verification Before Sharing
