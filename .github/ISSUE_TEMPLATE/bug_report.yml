@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a parsing, TUI, install, or analysis bug.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve agenttrace. Please include enough detail to reproduce the issue without sharing private session content.
+  - type: input
+    id: version
+    attributes:
+      label: agenttrace version
+      description: Run `agenttrace --version`.
+      placeholder: "agenttrace v0.3.4"
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Session source
+      options:
+        - Claude Code
+        - Codex CLI
+        - Gemini CLI
+        - Hermes Agent
+        - OpenCode
+        - OpenClaw
+        - Copilot CLI
+        - Kimi CLI
+        - Generic JSON/JSONL
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor output
+      description: Run `agenttrace --doctor` or `agenttrace --doctor -f json`. Redact paths if needed.
+      render: text
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Minimal redacted sample
+      description: A tiny JSON/JSONL snippet is ideal. Do not paste secrets, prompts, API keys, or private source code.
+      render: json

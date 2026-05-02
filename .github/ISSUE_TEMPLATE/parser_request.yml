@@ -1,0 +1,36 @@
+name: Parser request
+description: Request support for a new AI agent session format.
+title: "parser: "
+labels: ["parser", "enhancement"]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Agent or tool name
+      placeholder: "Example: Cursor Agent, Aider, Goose, ..."
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Default session location
+      description: Where does the tool store sessions locally?
+      placeholder: "~/.example/sessions"
+  - type: textarea
+    id: sample
+    attributes:
+      label: Minimal redacted sample
+      description: Include 3-10 representative records if possible. Remove secrets, prompts, and private source code.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: fields
+    attributes:
+      label: Useful fields
+      description: Which fields map to role, timestamp, model, token usage, tool calls, tool errors, or cost?
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything special about the format, rollover behavior, compression, or privacy concerns?

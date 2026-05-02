@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest a new parser, metric, TUI workflow, or integration.
+title: "feature: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What agent observability pain should this solve?
+      placeholder: "I cannot tell when..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful version of the feature.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - TUI
+        - Parser
+        - Cost/pricing
+        - Cache/performance
+        - Diagnostics/anomalies
+        - Install/distribution
+        - JSON/automation
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples or references
+      description: Links, screenshots, redacted session snippets, or tools with a similar behavior.
