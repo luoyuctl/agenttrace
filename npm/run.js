@@ -32,10 +32,9 @@ for (const c of candidates) {
 }
 
 if (!binary) {
-    console.error('❌ agenttrace binary not found. Install it:');
-    console.error('   npm install -g agenttrace');
+    console.error('agenttrace binary not found. Install it with one of the current channels:');
     console.error('   brew install luoyuctl/tap/agenttrace');
-    console.error('   curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh');
+    console.error('   curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh');
     process.exit(1);
 }
 
