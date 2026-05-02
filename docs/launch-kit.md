@@ -105,10 +105,12 @@ Open PRs:
 - awesome-codex-cli: https://github.com/RoggeOhta/awesome-codex-cli/pull/23
 - awesome-ai-coding-tools: https://github.com/ai-for-developers/awesome-ai-coding-tools/pull/288
 - awesome-claude-code-toolkit: https://github.com/rohitg00/awesome-claude-code-toolkit/pull/361
+- jqueryscript/awesome-claude-code: https://github.com/jqueryscript/awesome-claude-code/pull/252
 
 Manual-only submission:
 
-- awesome-claude-code: submit via the GitHub issue form, because the repo asks contributors not to create automated issues or PRs. Suggested category: Tooling / Usage Monitors.
+- hesreallyhim/awesome-claude-code: submit via the GitHub issue form, because the repo asks contributors not to create automated issues or PRs. Suggested category: Tooling / Usage Monitors.
+- awesome-claude-skills: skip automated PRs unless submitted manually by a human; its contribution guide asks that PRs are not AI-assisted and generally expects social proof.
 
 ## Demo Checklist
 
