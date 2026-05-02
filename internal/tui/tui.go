@@ -374,9 +374,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.detailReady {
 			m.viewport.Width = contentW
 			m.viewport.Height = m.detailViewportHeight()
-			if idx := m.findSessionIndex(); idx >= 0 && idx < len(m.sessions) {
-				m.viewport.SetContent(m.renderDetailViewportContent(m.sessions[idx]))
-			}
+			m.refreshDetailViewport()
 		}
 
 	case tea.KeyMsg:
@@ -494,6 +492,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			i18n.SetLang(m.lang)
 			m.refreshColumns()
+			m.refreshDetailViewport()
 
 		case "0":
 			m.view = viewOverview
@@ -662,16 +661,31 @@ func (m *Model) openDetail() {
 			vw = 40
 		}
 
-		m.fixSuggestions = engine.GenerateFixes(s.Metrics, s.Anomalies)
-		m.costAlert = engine.PredictCostAnomaly(m.sessions, s)
-
-		m.loopResult = s.LoopResultData
-		m.toolWarnings = s.ToolWarnings
-
-		m.viewport = viewport.New(vw, m.detailViewportHeight())
-		m.viewport.SetContent(m.renderDetailViewportContent(s))
-		m.detailReady = true
+			m.prepareDetailState(s)
+			m.viewport = viewport.New(vw, m.detailViewportHeight())
+			m.viewport.SetContent(m.renderDetailViewportContent(s))
+			m.detailReady = true
+		}
 	}
+
+func (m *Model) prepareDetailState(s engine.Session) {
+	m.fixSuggestions = engine.GenerateFixes(s.Metrics, s.Anomalies)
+	m.costAlert = engine.PredictCostAnomaly(m.sessions, s)
+	m.loopResult = s.LoopResultData
+	m.toolWarnings = s.ToolWarnings
+}
+
+func (m *Model) refreshDetailViewport() {
+	if !m.detailReady {
+		return
+	}
+	if idx := m.findSessionIndex(); idx >= 0 && idx < len(m.sessions) {
+		s := m.sessions[idx]
+		m.prepareDetailState(s)
+		m.viewport.SetContent(m.renderDetailViewportContent(s))
+		return
+	}
+	m.detailReady = false
 }
 
 func (m Model) detailViewportHeight() int {

@@ -347,6 +347,55 @@ func TestLanguageSwitchKeepsFilteredRows(t *testing.T) {
 	}
 }
 
+func TestLanguageSwitchRefreshesDetailViewport(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 120, 80)
+	m.lang = i18n.EN
+	m.view = viewList
+	m.openDetail()
+	m.view = viewDetail
+	if !strings.Contains(m.View(), "Money wasted") {
+		t.Fatalf("expected English detail content before language switch")
+	}
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	m = next.(Model)
+
+	rendered := m.View()
+	if !strings.Contains(rendered, "烧掉的钱") {
+		t.Fatalf("expected detail viewport to rerender in Chinese:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Money wasted") {
+		t.Fatalf("detail viewport kept stale English content:\n%s", rendered)
+	}
+}
+
+func TestDetailRefreshUpdatesSessionDiagnostics(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 80)
+	m.sessions[1].LoopResultData = engine.LoopResult{
+		HasLoop:  true,
+		LoopType: "tool_loop",
+		Turns:    7,
+		LoopCost: 0.25,
+	}
+	m.view = viewList
+	m.table.SetCursor(0)
+	m.openDetail()
+	if m.loopResult.HasLoop {
+		t.Fatalf("test setup should start with a non-loop session")
+	}
+
+	m.table.SetCursor(1)
+	m.refreshDetailViewport()
+
+	if !m.loopResult.HasLoop || m.loopResult.LoopType != "tool_loop" {
+		t.Fatalf("detail refresh kept stale diagnostics: %+v", m.loopResult)
+	}
+}
+
 func TestChineseListUsesTranslatedLabels(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.ZH)
