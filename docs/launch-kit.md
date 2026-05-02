@@ -130,6 +130,7 @@ Open PRs:
 - awesome-mac: https://github.com/jaywcjlove/awesome-mac/pull/2026
 - awesome-ChatGPT-repositories: https://github.com/taishi-i/awesome-ChatGPT-repositories/pull/130
 - awesome-agent-harness: https://github.com/Picrew/awesome-agent-harness/pull/5
+- awesome-cli-apps: https://github.com/agarrharr/awesome-cli-apps/pull/1032
 
 Merged listings:
 
