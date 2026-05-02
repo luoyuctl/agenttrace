@@ -883,7 +883,7 @@ func (m Model) View() string {
 
 	help := m.renderHelp()
 
-	return m.fitTerminalFrame(strings.Join([]string{header, tabs, content, help}, "\n"))
+	return m.fitTerminalFrameWithFooter(strings.Join([]string{header, tabs, content}, "\n"), help)
 }
 
 func (m Model) renderCommandBar() string {
@@ -2608,7 +2608,12 @@ func (m Model) fitTerminalFrame(s string) string {
 	}
 	if m.height > 0 {
 		if len(lines) > m.height {
-			lines = lines[:m.height]
+			if m.height == 1 {
+				lines = lines[len(lines)-1:]
+			} else {
+				// 内容过高时保留底部状态栏，避免用户看不到关键操作提示。
+				lines = append(lines[:m.height-1], lines[len(lines)-1])
+			}
 		}
 		blank := strings.Repeat(" ", width)
 		for len(lines) < m.height {
@@ -2616,6 +2621,19 @@ func (m Model) fitTerminalFrame(s string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) fitTerminalFrameWithFooter(body, footer string) string {
+	if m.height <= 0 {
+		return m.fitTerminalFrame(strings.Join([]string{body, footer}, "\n"))
+	}
+	bodyLines := strings.Split(body, "\n")
+	footerLines := strings.Split(footer, "\n")
+	bodyBudget := maxInt(0, m.height-len(footerLines))
+	if len(bodyLines) > bodyBudget {
+		bodyLines = bodyLines[:bodyBudget]
+	}
+	return m.fitTerminalFrame(strings.Join(append(bodyLines, footerLines...), "\n"))
 }
 
 func (m Model) contentWidth() int {

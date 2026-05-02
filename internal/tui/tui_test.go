@@ -380,6 +380,19 @@ func TestListViewFitsTerminalHeight(t *testing.T) {
 	}
 }
 
+func TestFooterRemainsVisibleWhenOverviewIsTall(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 80, 24)
+	m.view = viewOverview
+
+	rendered := m.View()
+	if !strings.Contains(rendered, "Overview") || !strings.Contains(rendered, "$: top cost") {
+		t.Fatalf("expected footer help to remain visible in clipped overview:\n%s", rendered)
+	}
+	if got := renderedHeight(rendered); got != 24 {
+		t.Fatalf("expected render to fill terminal height, got %d", got)
+	}
+}
+
 func TestCommandModeFiltersAndSorts(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
