@@ -2168,6 +2168,7 @@ func (m Model) renderOverview() string {
 
 	hero := m.renderDashboardHero(contentW)
 	controls := m.renderDashboardControls(contentW)
+	actionHint := m.renderOverviewActionHint(contentW)
 	metrics := m.renderDashboardMetrics(contentW)
 
 	var body string
@@ -2204,7 +2205,7 @@ func (m Model) renderOverview() string {
 		)
 	}
 
-	page := lipgloss.JoinVertical(lipgloss.Left, hero, controls, metrics, body)
+	page := lipgloss.JoinVertical(lipgloss.Left, hero, controls, actionHint, metrics, body)
 	return lipgloss.NewStyle().Width(innerW).Render(page)
 }
 
@@ -2212,6 +2213,7 @@ func (m Model) renderCompactOverview(width int) string {
 	sections := []string{
 		m.renderDashboardHero(width),
 		dimStyle.Render(truncate(i18n.T("dash_controls_short"), width)),
+		m.renderOverviewActionHint(width),
 		m.renderCompactMetricStrip(width),
 		"",
 		m.renderCompactFocus(width),
@@ -2426,6 +2428,30 @@ func dashControl(label string) string {
 		Padding(0, 1).
 		MarginLeft(1).
 		Render(label)
+}
+
+func (m Model) renderOverviewActionHint(width int) string {
+	if width <= 0 {
+		return ""
+	}
+	msg := m.overviewActionMessage()
+	line := fmt.Sprintf("%s: %s", brandStyle.Render(i18n.T("overview_action_prefix")), msg)
+	return lipgloss.NewStyle().Width(width).Padding(0, 0, 1, 0).Render(truncate(line, width))
+}
+
+func (m Model) overviewActionMessage() string {
+	switch {
+	case len(m.sessions) == 0:
+		return i18n.T("overview_action_empty")
+	case m.overview.Critical > 0:
+		return fmt.Sprintf(i18n.T("overview_action_critical"), m.overview.Critical)
+	case len(m.overview.AnomaliesTop) > 0:
+		return i18n.T("overview_action_anomalies")
+	case safeAmount(m.costSummary.TotalCost) >= 0.10:
+		return i18n.T("overview_action_cost")
+	default:
+		return i18n.T("overview_action_search")
+	}
 }
 
 func (m Model) renderDashboardMetrics(width int) string {

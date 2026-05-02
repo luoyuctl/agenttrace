@@ -762,7 +762,7 @@ func TestCompactOverviewUsesScanFriendlySmallViewport(t *testing.T) {
 
 	rendered := m.View()
 
-	for _, want := range []string{"FOCUS", "RECENT", "TOKEN", "HEALTH"} {
+	for _, want := range []string{"Next", "FOCUS", "RECENT", "TOKEN", "HEALTH"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("compact overview missing %q:\n%s", want, rendered)
 		}
@@ -775,6 +775,40 @@ func TestCompactOverviewUsesScanFriendlySmallViewport(t *testing.T) {
 	}
 	if got := renderedHeight(rendered); got != 24 {
 		t.Fatalf("compact overview should fill terminal height, got=%d", got)
+	}
+}
+
+func TestOverviewShowsActionHint(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	if !strings.Contains(rendered, "Next") || !strings.Contains(rendered, "press !") {
+		t.Fatalf("overview should guide the next triage action:\n%s", rendered)
+	}
+	if got := maxRenderedWidth(rendered); got > 120 {
+		t.Fatalf("overview action hint too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+}
+
+func TestChineseOverviewShowsTranslatedActionHint(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.lang = i18n.ZH
+	m.refreshColumns()
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	if !strings.Contains(rendered, "下一步") || !strings.Contains(rendered, "按 ! 查看") {
+		t.Fatalf("Chinese overview should guide the next triage action:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Next") {
+		t.Fatalf("Chinese overview leaked English action label:\n%s", rendered)
 	}
 }
 
