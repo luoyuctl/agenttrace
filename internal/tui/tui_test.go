@@ -1640,6 +1640,38 @@ func TestStartLoadMessageKeepsReloadedModelState(t *testing.T) {
 	}
 }
 
+func TestFooterShowsCacheStatusAfterLoad(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.loadTotal = 3
+	m.loadedFromCache = 2
+
+	rendered := m.View()
+
+	if !strings.Contains(rendered, "cache 2/3") {
+		t.Fatalf("footer should expose cache hit status:\n%s", rendered)
+	}
+}
+
+func TestChineseFooterShowsCacheStatus(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.lang = i18n.ZH
+	m.refreshColumns()
+	m.view = viewList
+	m.loadTotal = 3
+	m.loadedFromCache = 5
+
+	rendered := m.View()
+
+	if !strings.Contains(rendered, "缓存 3/3") {
+		t.Fatalf("footer should expose translated clamped cache status:\n%s", rendered)
+	}
+}
+
 func TestStartReloadDoesNotHydrateStaleCachedSessions(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "stale.jsonl")

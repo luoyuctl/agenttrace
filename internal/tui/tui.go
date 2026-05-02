@@ -1117,6 +1117,9 @@ func (m Model) renderHelp() string {
 	if m.hasAnyFilter() {
 		meta = append(meta, i18n.T("list_filter")+" "+m.filterLabel())
 	}
+	if cache := m.cacheStatusLabel(); cache != "" {
+		meta = append(meta, cache)
+	}
 	if m.commandFeedback != "" {
 		meta = append(meta, m.commandFeedback)
 	}
@@ -1144,6 +1147,20 @@ func (m Model) renderHelp() string {
 		gap = 1
 	}
 	return helpStyle.Width(maxInt(1, width-4)).Render(" " + left + strings.Repeat(" ", gap) + right + " ")
+}
+
+func (m Model) cacheStatusLabel() string {
+	if m.loadTotal <= 0 {
+		return ""
+	}
+	cached := m.loadedFromCache
+	if cached < 0 {
+		cached = 0
+	}
+	if cached > m.loadTotal {
+		cached = m.loadTotal
+	}
+	return fmt.Sprintf(i18n.T("cache_status"), cached, m.loadTotal)
 }
 
 func (m Model) viewName() string {
