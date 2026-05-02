@@ -139,6 +139,7 @@ Open PRs:
 - awesome-llm-skills: https://github.com/Prat011/awesome-llm-skills/pull/116
 - awesome-codex-plugins: https://github.com/hashgraph-online/awesome-codex-plugins/pull/65
 - awesome-copilot-agents: https://github.com/Code-and-Sorts/awesome-copilot-agents/pull/53
+- github/awesome-copilot: https://github.com/github/awesome-copilot/pull/1595
 - awesome-agent-skills: https://github.com/heilcheng/awesome-agent-skills/pull/216
 - awesome-skills: https://github.com/gmh5225/awesome-skills/pull/14
 - charm-in-the-wild: https://github.com/charm-and-friends/charm-in-the-wild/pull/88
