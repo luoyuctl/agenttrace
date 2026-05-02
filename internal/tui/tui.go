@@ -1335,8 +1335,9 @@ func (m Model) renderWaste() string {
 	s := m.sessions[idx]
 	panelW := m.frameBodyWidth()
 	cardW := panelW
-	if panelW >= 118 {
-		cardW = (panelW - 12) / 2
+	twoColumn := panelW >= 92
+	if twoColumn {
+		cardW = (panelW - 2) / 2
 	}
 
 	pCard := func(color, title string, content string) string {
@@ -1367,7 +1368,7 @@ func (m Model) renderWaste() string {
 		pCard("208", i18n.T("diag_large_params"), m.renderLargeParams(s)),
 		pCard("42", i18n.T("diag_unused_tools"), m.renderUnusedTools(s)),
 	}
-	if panelW >= 118 {
+	if twoColumn {
 		var rows []string
 		for i := 0; i < len(cards); i += 2 {
 			left := cards[i]

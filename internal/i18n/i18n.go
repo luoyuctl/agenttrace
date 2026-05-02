@@ -601,8 +601,8 @@ var translations = map[string]map[Lang]string{
 
 	// ── v0.2 Community Diagnostics ──
 	"diag_loop_fingerprint": {
-		EN: "🔍 LOOP FINGERPRINT DETECTION",
-		ZH: "🔍 指纹级死循环检测",
+		EN: "LOOP FINGERPRINT DETECTION",
+		ZH: "指纹级死循环检测",
 	},
 	"diag_loop_critical": {
 		EN: "CRITICAL: '%s' returned identical result %dx — likely dead loop",
@@ -617,8 +617,8 @@ var translations = map[string]map[Lang]string{
 		ZH: "未检测到指纹级循环 — Agent 正常推进中",
 	},
 	"diag_tool_latency": {
-		EN: "⏱️  PER-TOOL LATENCY RANKING",
-		ZH: "⏱️  工具延迟排名",
+		EN: "PER-TOOL LATENCY RANKING",
+		ZH: "工具延迟排名",
 	},
 	"diag_tool_lat_col_name":    {EN: "Tool", ZH: "工具"},
 	"diag_tool_lat_col_count":   {EN: "Calls", ZH: "调用"},
@@ -628,8 +628,8 @@ var translations = map[string]map[Lang]string{
 	"diag_tool_lat_col_timeout": {EN: "T/O", ZH: "超时"},
 	"diag_tool_slow_badge":      {EN: "SLOW", ZH: "慢"},
 	"diag_context_util": {
-		EN: "📐 CONTEXT WINDOW UTILIZATION",
-		ZH: "📐 上下文窗口利用率",
+		EN: "CONTEXT WINDOW UTILIZATION",
+		ZH: "上下文窗口利用率",
 	},
 	"diag_ctx_total":      {EN: "Est. Context Window", ZH: "预估上下文窗口"},
 	"diag_ctx_tool_defs":  {EN: "Tool Definitions", ZH: "工具定义"},
@@ -638,16 +638,16 @@ var translations = map[string]map[Lang]string{
 	"diag_ctx_available":  {EN: "Available for Task", ZH: "任务可用空间"},
 	"diag_ctx_suggestion": {EN: "Recommendation", ZH: "建议"},
 	"diag_large_params": {
-		EN: "📦 LARGE PARAMETER CALLS",
-		ZH: "📦 大参数调用检测",
+		EN: "LARGE PARAMETER CALLS",
+		ZH: "大参数调用检测",
 	},
 	"diag_large_params_none": {
 		EN: "No oversized calls detected",
 		ZH: "未检测到大参数调用",
 	},
 	"diag_unused_tools": {
-		EN: "🔧 RARE TOOL USAGE",
-		ZH: "🔧 低频工具使用",
+		EN: "RARE TOOL USAGE",
+		ZH: "低频工具使用",
 	},
 	"diag_unused_none": {
 		EN: "No rarely used tools detected in this session",
