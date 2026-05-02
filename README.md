@@ -229,6 +229,12 @@ Session                   Turns  Tools   Succ     Cost  Health
 
 ---
 
+## 📣 Launch Kit
+
+Planning to share or collect feedback? See [docs/launch-kit.md](docs/launch-kit.md) for positioning, launch posts, short social copy, target communities, and demo checklist.
+
+---
+
 ## 🏗️ Architecture
 
 ```
