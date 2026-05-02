@@ -645,6 +645,12 @@ func TestOverviewClampsInvalidChartValues(t *testing.T) {
 	if got := maxRenderedWidth(rendered); got > 120 {
 		t.Fatalf("invalid metric overview too wide: got=%d line=%q", got, widestLine(rendered))
 	}
+	if strings.Contains(rendered, "NaN") || strings.Contains(rendered, "+Inf") {
+		t.Fatalf("overview should not render invalid numbers:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "-2.0K") {
+		t.Fatalf("overview should clamp negative token display:\n%s", rendered)
+	}
 }
 
 func TestCommandModeFiltersAndSorts(t *testing.T) {

@@ -2337,8 +2337,8 @@ func dashboardPanel(title, aside, content string, width int) string {
 
 func aggregateToolCounts(sessions []engine.Session) (total, failed int) {
 	for _, s := range sessions {
-		total += s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
-		failed += s.Metrics.ToolCallsFail
+		total += nonNegativeInt(s.Metrics.ToolCallsOK) + nonNegativeInt(s.Metrics.ToolCallsFail)
+		failed += nonNegativeInt(s.Metrics.ToolCallsFail)
 	}
 	return total, failed
 }
@@ -2346,7 +2346,9 @@ func aggregateToolCounts(sessions []engine.Session) (total, failed int) {
 func aggregateP95Latency(sessions []engine.Session) float64 {
 	var vals []float64
 	for _, s := range sessions {
-		vals = append(vals, s.Metrics.GapsSec...)
+		for _, gap := range s.Metrics.GapsSec {
+			vals = append(vals, chartValue(gap))
+		}
 	}
 	if len(vals) == 0 {
 		return 0
@@ -2485,6 +2487,7 @@ func nonNegativeInt(v int) int {
 }
 
 func compactInt(v int) string {
+	v = nonNegativeInt(v)
 	switch {
 	case v >= 1000000:
 		return fmt.Sprintf("%.1fM", float64(v)/1000000)
