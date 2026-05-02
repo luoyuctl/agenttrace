@@ -465,9 +465,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case viewDetail:
 				m.view = viewDiagnostics
 			case viewDiagnostics:
-				if m.prepareDiffForCursor() {
-					m.view = viewDiff
-				}
+				m.openDiff()
 			case viewDiff:
 				m.view = viewOverview
 			}
@@ -506,9 +504,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "3":
 			m.view = viewDiagnostics
 		case "4":
-			if m.prepareDiffForCursor() {
-				m.view = viewDiff
-			}
+			m.openDiff()
 		case "w":
 			if (m.view == viewList || m.view == viewDetail) && len(m.filteredIndices) > 0 {
 				m.view = viewDiagnostics
@@ -560,13 +556,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "d":
 			if m.view == viewList {
-				if m.prepareDiffForCursor() {
-					m.view = viewDiff
-				}
+				m.openDiff()
 			} else if m.view == viewDetail {
-				if m.prepareDiffForCursor() {
-					m.view = viewDiff
-				}
+				m.openDiff()
 			}
 
 		// Sort keys (list view)
@@ -648,6 +640,11 @@ func (m *Model) openDetail() {
 		m.viewport.SetContent(m.renderDetailViewportContent(s))
 		m.detailReady = true
 	}
+}
+
+func (m *Model) openDiff() {
+	m.prepareDiffForCursor()
+	m.view = viewDiff
 }
 
 func (m *Model) prepareDetailState(s engine.Session) {

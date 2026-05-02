@@ -1012,6 +1012,41 @@ func TestDiffEmptyStateExplainsSingleVisibleSession(t *testing.T) {
 	}
 }
 
+func TestDiffShortcutsOpenEmptyStateWhenSingleVisibleSession(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		view view
+		key  tea.KeyMsg
+	}{
+		{name: "list d", view: viewList, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")}},
+		{name: "detail d", view: viewDetail, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")}},
+		{name: "numeric 4", view: viewList, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")}},
+		{name: "diagnostics tab", view: viewDiagnostics, key: tea.KeyMsg{Type: tea.KeyTab}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := resizeForTest(t, sampleModelForTest(), 100, 30)
+			m.view = viewList
+			m.filterText = "beta"
+			m.rebuildFilteredView()
+			m.view = tt.view
+			if tt.view == viewDetail {
+				m.openDetail()
+			}
+
+			next, _ := m.Update(tt.key)
+			m = next.(Model)
+
+			if m.view != viewDiff {
+				t.Fatalf("expected diff empty state view, got %d", m.view)
+			}
+			rendered := m.View()
+			if !strings.Contains(rendered, strings.TrimSpace(i18n.T("diff_need_two"))) {
+				t.Fatalf("expected diff empty state hint, got:\n%s", rendered)
+			}
+		})
+	}
+}
+
 func TestWideDiffUsesFullComparisonLayout(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 160, 36)
 	m.diffResult = engine.DiffSessions(m.sessions[0], m.sessions[1])
