@@ -712,6 +712,45 @@ func TestSortCommandRejectsUnknownDirection(t *testing.T) {
 	}
 }
 
+func TestSortAndTopCommandsRejectTrailingTokens(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.sortBy = "name"
+	m.sortDesc = false
+
+	m.runCommand("sort cost asc extra")
+	if m.sortBy != "name" || m.sortDesc {
+		t.Fatalf("invalid sort command should keep previous sort: sortBy=%q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if m.commandFeedback != i18n.T("cmd_usage_sort") {
+		t.Fatalf("expected sort usage feedback, got %q", m.commandFeedback)
+	}
+
+	m.runCommand("top cost extra")
+	if m.sortBy != "name" || m.sortDesc {
+		t.Fatalf("invalid top command should keep previous sort: sortBy=%q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if m.commandFeedback != i18n.T("cmd_usage_top") {
+		t.Fatalf("expected top usage feedback, got %q", m.commandFeedback)
+	}
+}
+
+func TestTopCommandRejectsNameField(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.sortBy = "cost"
+	m.sortDesc = true
+
+	m.runCommand("top name")
+
+	if m.sortBy != "cost" || !m.sortDesc {
+		t.Fatalf("invalid top field should keep previous sort: sortBy=%q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if m.commandFeedback != i18n.T("cmd_usage_top") {
+		t.Fatalf("expected top usage feedback, got %q", m.commandFeedback)
+	}
+}
+
 func TestSourceShortcutRecoversFromUnknownSourceFilter(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
@@ -905,6 +944,29 @@ func TestListDiffShortcutWorksAtLastRow(t *testing.T) {
 	}
 	if len(m.diffResult.Entries) == 0 {
 		t.Fatalf("expected diff entries for last-row neighbor comparison")
+	}
+}
+
+func TestDetailDiffShortcutUsesFilteredNeighbor(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 30)
+	m.view = viewList
+	m.filterSource = "cli"
+	m.rebuildFilteredView()
+	if got := len(m.filteredIndices); got != 2 {
+		t.Fatalf("expected setup to keep alpha and gamma, got %d", got)
+	}
+	m.table.SetCursor(1)
+	m.openDetail()
+	m.view = viewDetail
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	m = next.(Model)
+
+	if m.view != viewDiff {
+		t.Fatalf("expected detail d shortcut to open diff, got view=%d", m.view)
+	}
+	if m.diffResult.SessionA != "session_alpha" || m.diffResult.SessionB != "gamma" {
+		t.Fatalf("detail diff should use filtered neighbors, got %q -> %q", m.diffResult.SessionA, m.diffResult.SessionB)
 	}
 }
 

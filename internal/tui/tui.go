@@ -564,9 +564,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.view = viewDiff
 				}
 			} else if m.view == viewDetail {
-				idx := m.findSessionIndex()
-				if idx > 0 {
-					m.diffResult = engine.DiffSessions(m.sessions[idx-1], m.sessions[idx])
+				if m.prepareDiffForCursor() {
 					m.view = viewDiff
 				}
 			}

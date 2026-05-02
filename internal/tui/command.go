@@ -89,13 +89,17 @@ func (m *Model) runCommand(input string) {
 		m.rebuildFilteredView()
 		m.commandFeedback = i18n.T("cmd_filter_critical")
 	case "top":
-		if len(fields) < 2 {
+		if len(fields) != 2 {
+			m.commandFeedback = i18n.T("cmd_usage_top")
+			return
+		}
+		if !isTopSortField(fields[1]) {
 			m.commandFeedback = i18n.T("cmd_usage_top")
 			return
 		}
 		m.applySortCommand(fields[1], true)
 	case "sort":
-		if len(fields) < 2 {
+		if len(fields) < 2 || len(fields) > 3 {
 			m.commandFeedback = i18n.T("cmd_usage_sort")
 			return
 		}
@@ -160,6 +164,15 @@ func parseHealthCommandFilter(expr string) (string, bool) {
 	default:
 		_, _, ok := parseNumericExpression(healthFilter)
 		return healthFilter, ok
+	}
+}
+
+func isTopSortField(field string) bool {
+	switch strings.ToLower(field) {
+	case "cost", "health", "turns", "source":
+		return true
+	default:
+		return false
 	}
 }
 

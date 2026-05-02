@@ -243,12 +243,12 @@ var translations = map[string]map[Lang]string{
 		ZH: "0-4: 跳转 · Tab: 列表 · q: 退出",
 	},
 	"help_list": {
-		EN: "↑↓:sel Enter:detail 0-4:jump h/c/t:sort /:filt f:health s:source d:diff w:diag Tab:next q:quit",
-		ZH: "↑↓:选择 Enter:详情 0-4:跳转 h/c/t:排序 /:筛选 f:健康 s:来源 d:对比 w:诊断 Tab:下页 q:退出",
+		EN: "↑↓:sel Enter:detail 0-4:jump h/c/t/n:sort /:filt f:health s:source d:diff w:diag Tab:next q:quit",
+		ZH: "↑↓:选择 Enter:详情 0-4:跳转 h/c/t/n:排序 /:筛选 f:健康 s:来源 d:对比 w:诊断 Tab:下页 q:退出",
 	},
 	"help_detail": {
-		EN: "Esc: back · d: diff prev · w: diag · Tab: next · q: quit",
-		ZH: "Esc: 返回 · d: 对比上一 · w: 诊断 · Tab: 下一个 · q: 退出",
+		EN: "Esc: back · d: diff neighbor · w: diag · Tab: next · q: quit",
+		ZH: "Esc: 返回 · d: 对比相邻 · w: 诊断 · Tab: 下一个 · q: 退出",
 	},
 	"help_compare": {
 		EN: "h: sort health · 0-4: jump · Tab: overview · q: quit",
