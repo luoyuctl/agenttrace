@@ -706,6 +706,68 @@ func TestFooterRemainsVisibleWhenOverviewIsTall(t *testing.T) {
 	}
 }
 
+func TestCompactOverviewUsesScanFriendlySmallViewport(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 80, 24)
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	for _, want := range []string{"FOCUS", "RECENT", "TOKEN", "HEALTH"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("compact overview missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "TOKEN USAGE") {
+		t.Fatalf("compact overview should avoid tall dashboard panels:\n%s", rendered)
+	}
+	if got := maxRenderedWidth(rendered); got > 80 {
+		t.Fatalf("compact overview too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+	if got := renderedHeight(rendered); got != 24 {
+		t.Fatalf("compact overview should fill terminal height, got=%d", got)
+	}
+}
+
+func TestChineseCompactOverviewTranslatesRuntimeLabels(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 80, 24)
+	m.view = viewOverview
+
+	rendered := m.View()
+	for _, want := range []string{"关注", "最近", "健康"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("compact overview missing translated label %q:\n%s", want, rendered)
+		}
+	}
+	for _, unwanted := range []string{"FOCUS", "RECENT"} {
+		if strings.Contains(rendered, unwanted) {
+			t.Fatalf("compact overview leaked English label %q:\n%s", unwanted, rendered)
+		}
+	}
+}
+
+func TestDetailViewportUsesFrameBodyWidth(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 80, 24)
+	m.view = viewList
+	m.openDetail()
+
+	if m.viewport.Width != m.frameBodyWidth() {
+		t.Fatalf("detail viewport width=%d, want frame body width=%d", m.viewport.Width, m.frameBodyWidth())
+	}
+	if m.viewport.Height < 6 {
+		t.Fatalf("detail viewport should leave usable space in 80x24, got height=%d", m.viewport.Height)
+	}
+	content := m.renderDetailViewportContent(m.sessions[0])
+	for i, line := range strings.Split(content, "\n") {
+		if got := lipgloss.Width(line); got > m.viewport.Width {
+			t.Fatalf("detail content line %d exceeds viewport: got=%d want<=%d line=%q", i, got, m.viewport.Width, line)
+		}
+	}
+}
+
 func TestOverviewHandlesZeroTokenAgents(t *testing.T) {
 	m := sampleModelForTest()
 	for i := range m.sessions {
