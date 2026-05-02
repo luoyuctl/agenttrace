@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.3.36"
+const Version = "0.3.37"
 
 // Severity constants for anomaly severity (internal, not i18n).
 const (
