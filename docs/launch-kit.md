@@ -108,6 +108,7 @@ Open PRs:
 - jqueryscript/awesome-claude-code: https://github.com/jqueryscript/awesome-claude-code/pull/252
 - GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
 - awesome-go-cli: https://github.com/mantcz/awesome-go-cli/pull/4
+- awesome-observability: https://github.com/adriannovegil/awesome-observability/pull/63
 
 Manual-only submission:
 
