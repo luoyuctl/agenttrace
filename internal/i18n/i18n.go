@@ -1,4 +1,4 @@
-// Package i18n provides bilingual (English/Chinese) translation support for agentwaste.
+// Package i18n provides bilingual (English/Chinese) translation support for agenttrace.
 package i18n
 
 // Lang represents a language code.
@@ -17,12 +17,12 @@ var Current Lang = "en"
 var translations = map[string]map[Lang]string{
 	// ── Report title ──
 	"title": {
-		EN: "AGENTWASTE v%s — AI Agent Session Performance Report",
-		ZH: "AGENTWASTE v%s — AI 代理会话性能报告",
+		EN: "AGENTTRACE v%s — AI Agent Session Performance Report",
+		ZH: "AGENTTRACE v%s — AI 代理会话性能报告",
 	},
 	"compare_title": {
-		EN: "AGENTWASTE — Multi-Session Comparison",
-		ZH: "AGENTWASTE — 多会话对比",
+		EN: "AGENTTRACE — Multi-Session Comparison",
+		ZH: "AGENTTRACE — 多会话对比",
 	},
 
 	// ── Section headers ──
@@ -204,9 +204,9 @@ var translations = map[string]map[Lang]string{
 	},
 
 	// ── TUI views ──
-	"agentwaste_title": {
-		EN: "💸 AGENTWASTE v%s",
-		ZH: "💸 AGENTWASTE v%s",
+	"agenttrace_title": {
+		EN: "💸 AGENTTRACE v%s",
+		ZH: "💸 AGENTTRACE v%s",
 	},
 	"sessions_count": {
 		EN: " %d sessions ",
@@ -249,8 +249,8 @@ var translations = map[string]map[Lang]string{
 
 	// ── CLI / main ──
 	"supported_models": {
-		EN: "agentwaste v%s — Supported Models",
-		ZH: "agentwaste v%s — 支持模型",
+		EN: "agenttrace v%s — Supported Models",
+		ZH: "agenttrace v%s — 支持模型",
 	},
 	"model_header": {
 		EN: "Model",
@@ -332,8 +332,8 @@ var translations = map[string]map[Lang]string{
 
 	// ── Empty state ──
 	"empty_sessions_hint": {
-		EN: " No AI agent sessions found.\n\n Try: agentwaste --latest -d %s\n      agentwaste --compare -d %s\n\n Place session JSON/JSONL files in %s ",
-		ZH: " 未找到 AI 代理会话。\n\n 尝试: agentwaste --latest -d %s\n       agentwaste --compare -d %s\n\n 将会话 JSON/JSONL 文件放在 %s ",
+		EN: " No AI agent sessions found.\n\n Try: agenttrace --latest -d %s\n      agenttrace --compare -d %s\n\n Place session JSON/JSONL files in %s ",
+		ZH: " 未找到 AI 代理会话。\n\n 尝试: agenttrace --latest -d %s\n       agenttrace --compare -d %s\n\n 将会话 JSON/JSONL 文件放在 %s ",
 	},
 	"lang_label": {
 		EN: "EN",
@@ -792,69 +792,69 @@ var translations = map[string]map[Lang]string{
 	"health_efficiency":       {EN: "Efficiency", ZH: "效率"},
 
 	// ── Waste analysis ──
-	"waste_analysis_title":    {EN: "AGENTWASTE v%s - Waste Analysis", ZH: "AGENTWASTE v%s - 浪费分析"},
-	"waste_score":             {EN: "Score: %d/100 (%s)", ZH: "评分: %d/100 (%s)"},
-	"waste_wasted":            {EN: "Wasted: $%.4f", ZH: "浪费: $%.4f"},
-	"waste_cache_header":      {EN: "-- Cache --", ZH: "-- 缓存 --"},
-	"waste_cache_detail":      {EN: "%s (%.0f%% hit, %d read / %d input)", ZH: "%s (%.0f%% 命中, %d 读 / %d 输入)"},
-	"waste_cache_waste":       {EN: "Cache waste: $%.4f", ZH: "缓存浪费: $%.4f"},
-	"waste_bloat_header":      {EN: "-- Tool Bloat --", ZH: "-- 工具膨胀 --"},
-	"waste_bloat_detail":      {EN: "%s (%.1f tools/turn)", ZH: "%s (%.1f 工具/轮)"},
-	"waste_bloat_redundant":   {EN: "*redundant", ZH: "*冗余"},
-	"waste_stuck_header":      {EN: "-- Stuck --", ZH: "-- 卡顿 --"},
-	"waste_stuck_none":        {EN: "none", ZH: "无"},
-	"waste_actions_header":    {EN: "-- Actions --", ZH: "-- 建议措施 --"},
-	"waste_level_green":       {EN: "LOW", ZH: "低浪费"},
-	"waste_level_yellow":      {EN: "MODERATE", ZH: "中度浪费"},
-	"waste_level_orange":      {EN: "HIGH", ZH: "高浪费"},
-	"waste_level_red":         {EN: "SEVERE", ZH: "严重浪费"},
-	"waste_summary_green":     {EN: "efficient session - no significant waste", ZH: "高效会话 - 无明显浪费"},
-	"waste_summary_yellow":    {EN: "minor waste - cache %.0f%% hit, room for optimization", ZH: "轻微浪费 - 缓存命中率 %.0f%%，有优化空间"},
-	"waste_summary_orange":    {EN: "wasting $%.2f: loops %.0f%%, tools %.1f/turn", ZH: "浪费 $%.2f: 循环 %.0f%%，工具 %.1f/轮"},
-	"waste_summary_red":       {EN: "severe waste $%.2f: loops %.0f%%, %d stuck, no cache", ZH: "严重浪费 $%.2f: 循环 %.0f%%，%d 卡顿，无缓存"},
-	"waste_action_top_tool":   {EN: "top tool %q called %dx - reduce or batch", ZH: "常用工具 %q 调用 %d 次 - 减少或批量处理"},
-	"waste_action_loop":       {EN: "loop waste $%.2f (%.0f%%) - add max retries limit", ZH: "循环浪费 $%.2f (%.0f%%) - 添加最大重试限制"},
-	"waste_action_optimal":    {EN: "session running optimally", ZH: "会话运行正常"},
+	"waste_analysis_title":  {EN: "AGENTTRACE v%s - Waste Analysis", ZH: "AGENTTRACE v%s - 浪费分析"},
+	"waste_score":           {EN: "Score: %d/100 (%s)", ZH: "评分: %d/100 (%s)"},
+	"waste_wasted":          {EN: "Wasted: $%.4f", ZH: "浪费: $%.4f"},
+	"waste_cache_header":    {EN: "-- Cache --", ZH: "-- 缓存 --"},
+	"waste_cache_detail":    {EN: "%s (%.0f%% hit, %d read / %d input)", ZH: "%s (%.0f%% 命中, %d 读 / %d 输入)"},
+	"waste_cache_waste":     {EN: "Cache waste: $%.4f", ZH: "缓存浪费: $%.4f"},
+	"waste_bloat_header":    {EN: "-- Tool Bloat --", ZH: "-- 工具膨胀 --"},
+	"waste_bloat_detail":    {EN: "%s (%.1f tools/turn)", ZH: "%s (%.1f 工具/轮)"},
+	"waste_bloat_redundant": {EN: "*redundant", ZH: "*冗余"},
+	"waste_stuck_header":    {EN: "-- Stuck --", ZH: "-- 卡顿 --"},
+	"waste_stuck_none":      {EN: "none", ZH: "无"},
+	"waste_actions_header":  {EN: "-- Actions --", ZH: "-- 建议措施 --"},
+	"waste_level_green":     {EN: "LOW", ZH: "低浪费"},
+	"waste_level_yellow":    {EN: "MODERATE", ZH: "中度浪费"},
+	"waste_level_orange":    {EN: "HIGH", ZH: "高浪费"},
+	"waste_level_red":       {EN: "SEVERE", ZH: "严重浪费"},
+	"waste_summary_green":   {EN: "efficient session - no significant waste", ZH: "高效会话 - 无明显浪费"},
+	"waste_summary_yellow":  {EN: "minor waste - cache %.0f%% hit, room for optimization", ZH: "轻微浪费 - 缓存命中率 %.0f%%，有优化空间"},
+	"waste_summary_orange":  {EN: "wasting $%.2f: loops %.0f%%, tools %.1f/turn", ZH: "浪费 $%.2f: 循环 %.0f%%，工具 %.1f/轮"},
+	"waste_summary_red":     {EN: "severe waste $%.2f: loops %.0f%%, %d stuck, no cache", ZH: "严重浪费 $%.2f: 循环 %.0f%%，%d 卡顿，无缓存"},
+	"waste_action_top_tool": {EN: "top tool %q called %dx - reduce or batch", ZH: "常用工具 %q 调用 %d 次 - 减少或批量处理"},
+	"waste_action_loop":     {EN: "loop waste $%.2f (%.0f%%) - add max retries limit", ZH: "循环浪费 $%.2f (%.0f%%) - 添加最大重试限制"},
+	"waste_action_optimal":  {EN: "session running optimally", ZH: "会话运行正常"},
 
 	// ── Cache efficiency ratings ──
-	"cache_rating_excellent":    {EN: "excellent", ZH: "优秀"},
-	"cache_rating_good":         {EN: "good", ZH: "良好"},
-	"cache_rating_poor":         {EN: "poor", ZH: "较差"},
-	"cache_rating_none":         {EN: "none", ZH: "未启用"},
+	"cache_rating_excellent":     {EN: "excellent", ZH: "优秀"},
+	"cache_rating_good":          {EN: "good", ZH: "良好"},
+	"cache_rating_poor":          {EN: "poor", ZH: "较差"},
+	"cache_rating_none":          {EN: "none", ZH: "未启用"},
 	"cache_suggestion_excellent": {EN: "cache utilization excellent - keep current prompt structure", ZH: "缓存利用率优秀 - 保持当前 prompt 结构"},
 	"cache_suggestion_good":      {EN: "moderate cache hit - place static system instructions at prompt prefix", ZH: "缓存命中率中等 - 将静态系统指令放在 prompt 前缀"},
 	"cache_suggestion_poor":      {EN: "low cache hit rate - enable prompt caching with static prefix content", ZH: "缓存命中率低 - 启用 prompt 缓存并使用静态前缀内容"},
 	"cache_suggestion_none":      {EN: "caching not enabled - enable Anthropic prompt caching to save up to 90%% on input cost", ZH: "未启用缓存 - 启用 Anthropic prompt 缓存可节省最多 90%% 输入成本"},
 
 	// ── Tool bloat levels ──
-	"bloat_level_severe":       {EN: "severe", ZH: "严重"},
-	"bloat_level_high":         {EN: "high", ZH: "高"},
-	"bloat_level_medium":       {EN: "medium", ZH: "中等"},
-	"bloat_level_low":          {EN: "low", ZH: "低"},
-	"bloat_suggestion_severe":  {EN: "severe tool bloat: limit max tool calls per turn or split into smaller tasks", ZH: "严重工具膨胀: 限制每轮最大工具调用次数或拆分为小任务"},
-	"bloat_suggestion_high":    {EN: "too many tool calls: check if simple tasks use over-complex agent orchestration", ZH: "工具调用过多: 检查简单任务是否使用了过于复杂的代理编排"},
-	"bloat_suggestion_medium":  {EN: "moderate tool usage: watch for unnecessary tool call patterns", ZH: "工具使用适中: 注意不必要的工具调用模式"},
-	"bloat_suggestion_low":     {EN: "tool usage is lean", ZH: "工具使用精简"},
+	"bloat_level_severe":      {EN: "severe", ZH: "严重"},
+	"bloat_level_high":        {EN: "high", ZH: "高"},
+	"bloat_level_medium":      {EN: "medium", ZH: "中等"},
+	"bloat_level_low":         {EN: "low", ZH: "低"},
+	"bloat_suggestion_severe": {EN: "severe tool bloat: limit max tool calls per turn or split into smaller tasks", ZH: "严重工具膨胀: 限制每轮最大工具调用次数或拆分为小任务"},
+	"bloat_suggestion_high":   {EN: "too many tool calls: check if simple tasks use over-complex agent orchestration", ZH: "工具调用过多: 检查简单任务是否使用了过于复杂的代理编排"},
+	"bloat_suggestion_medium": {EN: "moderate tool usage: watch for unnecessary tool call patterns", ZH: "工具使用适中: 注意不必要的工具调用模式"},
+	"bloat_suggestion_low":    {EN: "tool usage is lean", ZH: "工具使用精简"},
 
 	// ── GenerateFixes (per anomaly type, Title / Description / Action) ──
-	"fix_hanging_title":          {EN: "Add Tool Timeout Protection", ZH: "添加工具超时保护"},
-	"fix_hanging_desc":           {EN: "Detected %d gaps >60s, max=%.0fs", ZH: "检测到 %d 个间隔 >60s, 最长=%.0fs"},
-	"fix_hanging_action":         {EN: "Add timeout to tool calls and limit retry attempts", ZH: "为工具调用添加 timeout 并限制重试次数"},
-	"fix_tool_fail_critical_title":   {EN: "Check Tool Schema", ZH: "检查工具 Schema"},
-	"fix_tool_fail_critical_desc":    {EN: "Tool failure rate %.0f%% (%d/%d)", ZH: "工具失败率 %.0f%% (%d/%d)"},
-	"fix_tool_fail_critical_action":  {EN: "Validate tool parameter formats, ensure LLM passes correct argument types", ZH: "验证工具参数格式，确保 LLM 传入正确类型的参数"},
-	"fix_tool_fail_warning_title":    {EN: "Improve Tool Descriptions", ZH: "优化工具描述"},
-	"fix_tool_fail_warning_desc":     {EN: "Tool failure rate %.0f%% (%d/%d)", ZH: "工具失败率 %.0f%% (%d/%d)"},
-	"fix_tool_fail_warning_action":   {EN: "Provide more precise parameter examples and constraints in tool descriptions", ZH: "在 tool description 中提供更精确的参数示例和约束"},
-	"fix_shallow_title":          {EN: "Increase Reasoning Depth", ZH: "增加推理深度"},
-	"fix_shallow_desc":           {EN: "Average reasoning only %.0f chars", ZH: "平均推理仅 %.0f 字符"},
-	"fix_shallow_action":         {EN: "Add 'Think step by step' to system prompt or increase max_tokens", ZH: "在 system prompt 中添加 '请一步步思考' 或增加 max_tokens"},
-	"fix_redact_title":           {EN: "Check Redaction Config", ZH: "检查脱敏配置"},
-	"fix_redact_desc":            {EN: "Found %d redacted thinking blocks", ZH: "发现 %d 个思维块被脱敏"},
-	"fix_redact_action":          {EN: "Reasoning content is redacted, check the redact setting in hermes config", ZH: "推理内容被脱敏，检查 hermes config 中的 redact 设置"},
-	"fix_no_tools_title":         {EN: "Enable Tool Calling", ZH: "启用工具调用"},
-	"fix_no_tools_desc":          {EN: "%d turns with zero tool calls", ZH: "共 %d 轮对话，零工具调用"},
-	"fix_no_tools_action":        {EN: "Currently in chat-only mode, consider configuring tools for the agent", ZH: "当前为纯对话模式，考虑为 agent 配置工具以提升效率"},
+	"fix_hanging_title":             {EN: "Add Tool Timeout Protection", ZH: "添加工具超时保护"},
+	"fix_hanging_desc":              {EN: "Detected %d gaps >60s, max=%.0fs", ZH: "检测到 %d 个间隔 >60s, 最长=%.0fs"},
+	"fix_hanging_action":            {EN: "Add timeout to tool calls and limit retry attempts", ZH: "为工具调用添加 timeout 并限制重试次数"},
+	"fix_tool_fail_critical_title":  {EN: "Check Tool Schema", ZH: "检查工具 Schema"},
+	"fix_tool_fail_critical_desc":   {EN: "Tool failure rate %.0f%% (%d/%d)", ZH: "工具失败率 %.0f%% (%d/%d)"},
+	"fix_tool_fail_critical_action": {EN: "Validate tool parameter formats, ensure LLM passes correct argument types", ZH: "验证工具参数格式，确保 LLM 传入正确类型的参数"},
+	"fix_tool_fail_warning_title":   {EN: "Improve Tool Descriptions", ZH: "优化工具描述"},
+	"fix_tool_fail_warning_desc":    {EN: "Tool failure rate %.0f%% (%d/%d)", ZH: "工具失败率 %.0f%% (%d/%d)"},
+	"fix_tool_fail_warning_action":  {EN: "Provide more precise parameter examples and constraints in tool descriptions", ZH: "在 tool description 中提供更精确的参数示例和约束"},
+	"fix_shallow_title":             {EN: "Increase Reasoning Depth", ZH: "增加推理深度"},
+	"fix_shallow_desc":              {EN: "Average reasoning only %.0f chars", ZH: "平均推理仅 %.0f 字符"},
+	"fix_shallow_action":            {EN: "Add 'Think step by step' to system prompt or increase max_tokens", ZH: "在 system prompt 中添加 '请一步步思考' 或增加 max_tokens"},
+	"fix_redact_title":              {EN: "Check Redaction Config", ZH: "检查脱敏配置"},
+	"fix_redact_desc":               {EN: "Found %d redacted thinking blocks", ZH: "发现 %d 个思维块被脱敏"},
+	"fix_redact_action":             {EN: "Reasoning content is redacted, check the redact setting in hermes config", ZH: "推理内容被脱敏，检查 hermes config 中的 redact 设置"},
+	"fix_no_tools_title":            {EN: "Enable Tool Calling", ZH: "启用工具调用"},
+	"fix_no_tools_desc":             {EN: "%d turns with zero tool calls", ZH: "共 %d 轮对话，零工具调用"},
+	"fix_no_tools_action":           {EN: "Currently in chat-only mode, consider configuring tools for the agent", ZH: "当前为纯对话模式，考虑为 agent 配置工具以提升效率"},
 
 	// ── Tool pattern validation details ──
 	"tool_warn_dead_loop_detail":  {EN: "Tool '%s' called %dx consecutively — possible dead loop", ZH: "工具 '%s' 连续调用 %d 次，可能存在死循环"},
@@ -868,8 +868,8 @@ var translations = map[string]map[Lang]string{
 	"cost_alert_info":             {EN: "Cost/turn $%.4f, within normal range (avg $%.4f)", ZH: "单轮成本 $%.4f，在正常范围内 (平均 $%.4f)"},
 
 	// ── Health trend ──
-	"trend_no_data":           {EN: "No session data available", ZH: "无可用会话数据"},
-	"trend_stable_at":         {EN: "Health score stable at %.0f", ZH: "健康分稳定在 %.0f"},
+	"trend_no_data":   {EN: "No session data available", ZH: "无可用会话数据"},
+	"trend_stable_at": {EN: "Health score stable at %.0f", ZH: "健康分稳定在 %.0f"},
 
 	// ── Prompt impact ──
 	"prompt_impact_no_data":            {EN: "Not enough data to determine trend", ZH: "无足够数据判断趋势"},
@@ -900,20 +900,20 @@ var translations = map[string]map[Lang]string{
 	"diag_ctx_suggestion_good":     {EN: "plenty of context headroom", ZH: "上下文空间充足"},
 
 	// ── Diff summary ──
-	"diff_summary_session_vs":    {EN: "Session %s vs %s", ZH: "会话 %s vs %s"},
-	"diff_summary_health_up":     {EN: "health +%d", ZH: "健康 +%d"},
-	"diff_summary_health_down":   {EN: "health %d", ZH: "健康 %d"},
-	"diff_summary_health_same":   {EN: "health unchanged", ZH: "健康不变"},
-	"diff_summary_cost_up":       {EN: "cost +$%.4f", ZH: "费用 +$%.4f"},
-	"diff_summary_cost_down":     {EN: "cost -$%.4f", ZH: "费用 -$%.4f"},
+	"diff_summary_session_vs":  {EN: "Session %s vs %s", ZH: "会话 %s vs %s"},
+	"diff_summary_health_up":   {EN: "health +%d", ZH: "健康 +%d"},
+	"diff_summary_health_down": {EN: "health %d", ZH: "健康 %d"},
+	"diff_summary_health_same": {EN: "health unchanged", ZH: "健康不变"},
+	"diff_summary_cost_up":     {EN: "cost +$%.4f", ZH: "费用 +$%.4f"},
+	"diff_summary_cost_down":   {EN: "cost -$%.4f", ZH: "费用 -$%.4f"},
 
 	// ── Loop cost section (CLI) ──
-	"loop_section_title":       {EN: "LOOP COST", ZH: "循环成本"},
-	"loop_tool_loop_cost":      {EN: "Tool Loop Cost:    $%9.4f  (%d groups)", ZH: "工具循环成本:    $%9.4f  (%d 组)"},
-	"loop_retry_cost":          {EN: "Retry Cost:        $%9.4f  (%d events)", ZH: "重试成本:        $%9.4f  (%d 次)"},
-	"loop_format_retry_cost":   {EN: "Format Retry Cost: $%9.4f", ZH: "格式重试成本:    $%9.4f"},
-	"loop_total_waste":         {EN: "Total Loop Waste:  $%9.4f", ZH: "循环总浪费:      $%9.4f"},
-	"loop_retry_events":        {EN: "Retry Events:       %d", ZH: "重试事件:          %d"},
+	"loop_section_title":     {EN: "LOOP COST", ZH: "循环成本"},
+	"loop_tool_loop_cost":    {EN: "Tool Loop Cost:    $%9.4f  (%d groups)", ZH: "工具循环成本:    $%9.4f  (%d 组)"},
+	"loop_retry_cost":        {EN: "Retry Cost:        $%9.4f  (%d events)", ZH: "重试成本:        $%9.4f  (%d 次)"},
+	"loop_format_retry_cost": {EN: "Format Retry Cost: $%9.4f", ZH: "格式重试成本:    $%9.4f"},
+	"loop_total_waste":       {EN: "Total Loop Waste:  $%9.4f", ZH: "循环总浪费:      $%9.4f"},
+	"loop_retry_events":      {EN: "Retry Events:       %d", ZH: "重试事件:          %d"},
 
 	// ── Duration units ──
 	"duration_seconds": {EN: "%.0fs", ZH: "%.0f秒"},
@@ -926,46 +926,46 @@ var translations = map[string]map[Lang]string{
 	"pricing_save_warning":    {EN: "Warning: failed to save pricing cache: %v\n", ZH: "警告: 保存定价缓存失败: %v\n"},
 
 	// ── Impact labels (for prompt impact) ──
-	"impact_positive":          {EN: "positive", ZH: "正面"},
-	"impact_negative":          {EN: "negative", ZH: "负面"},
-	"impact_neutral":           {EN: "neutral", ZH: "中性"},
-	"impact_positive_cost":     {EN: "positive (higher cost)", ZH: "正面 (费用较高)"},
-	"impact_negative_cost":     {EN: "negative (lower cost)", ZH: "负面 (费用较低)"},
+	"impact_positive":      {EN: "positive", ZH: "正面"},
+	"impact_negative":      {EN: "negative", ZH: "负面"},
+	"impact_neutral":       {EN: "neutral", ZH: "中性"},
+	"impact_positive_cost": {EN: "positive (higher cost)", ZH: "正面 (费用较高)"},
+	"impact_negative_cost": {EN: "negative (lower cost)", ZH: "负面 (费用较低)"},
 
 	// ── Prompt change before/after ──
 	"prompt_change_before_after": {EN: "health=%d cost=$%.4f", ZH: "健康=%d 费用=$%.4f"},
 
 	// ── Trend direction ──
-	"trend_up":     {EN: "up", ZH: "上升"},
-	"trend_down":   {EN: "down", ZH: "下降"},
+	"trend_up":           {EN: "up", ZH: "上升"},
+	"trend_down":         {EN: "down", ZH: "下降"},
 	"trend_stable_label": {EN: "stable", ZH: "稳定"},
 
 	// ── Waste level emoji labels ──
 	"waste_level_label": {EN: "%s %s", ZH: "%s %s"},
 
 	// ── CLI / main.go ──
-	"cli_version":              {EN: "agentwaste v%s\n", ZH: "agentwaste v%s\n"},
-	"cli_downloading_pricing":  {EN: "Downloading latest model pricing from LiteLLM...\n", ZH: "正在从 LiteLLM 下载最新模型定价...\n"},
-	"cli_error":                {EN: "Error: %v\n", ZH: "错误: %v\n"},
-	"cli_loaded_pricing":       {EN: "Loaded %d model pricings.\n", ZH: "已加载 %d 个模型定价。\n"},
-	"cli_cache_saved":          {EN: "Cache saved to %s\n", ZH: "缓存已保存至 %s\n"},
-	"cli_saved":                {EN: "Saved: %s\n", ZH: "已保存: %s\n"},
-	"cli_no_session_files":     {EN: "No session files found.\n", ZH: "未找到会话文件。\n"},
-	"cli_error_loading":        {EN: "Error loading %s: %v\n", ZH: "加载 %s 时出错: %v\n"},
-	"cli_retry_events":         {EN: "Retry Events:       %d", ZH: "重试事件:          %d"},
-	"waste_title":          {EN: "WASTE ANALYSIS", ZH: "浪费分析"},
-	"waste_score_label":    {EN: "Waste Score", ZH: "浪费评分"},
-	"waste_wasted_label":   {EN: "Wasted", ZH: "浪费金额"},
-	"waste_cache_label":    {EN: "Cache", ZH: "缓存"},
-	"waste_bloat_label":    {EN: "Tool Bloat", ZH: "工具膨胀"},
-	"waste_stuck_label":    {EN: "Stuck", ZH: "卡死"},
-	"waste_actions_label":  {EN: "Actions", ZH: "优化建议"},
-	"waste_none":           {EN: "none", ZH: "无"},
-	"tab_waste":            {EN: "W Waste", ZH: "W 浪费"},
-	"waste_col_score":      {EN: "SCORE", ZH: "评分"},
-	"waste_col_level":      {EN: "LEVEL", ZH: "等级"},
-	"waste_col_action":     {EN: "TOP ACTION", ZH: "首要建议"},
-	"help_waste":           {EN: "w: waste · Tab: switch · q: quit", ZH: "w: 浪费 · Tab: 切换 · q: 退出"},
+	"cli_version":             {EN: "agenttrace v%s\n", ZH: "agenttrace v%s\n"},
+	"cli_downloading_pricing": {EN: "Downloading latest model pricing from LiteLLM...\n", ZH: "正在从 LiteLLM 下载最新模型定价...\n"},
+	"cli_error":               {EN: "Error: %v\n", ZH: "错误: %v\n"},
+	"cli_loaded_pricing":      {EN: "Loaded %d model pricings.\n", ZH: "已加载 %d 个模型定价。\n"},
+	"cli_cache_saved":         {EN: "Cache saved to %s\n", ZH: "缓存已保存至 %s\n"},
+	"cli_saved":               {EN: "Saved: %s\n", ZH: "已保存: %s\n"},
+	"cli_no_session_files":    {EN: "No session files found.\n", ZH: "未找到会话文件。\n"},
+	"cli_error_loading":       {EN: "Error loading %s: %v\n", ZH: "加载 %s 时出错: %v\n"},
+	"cli_retry_events":        {EN: "Retry Events:       %d", ZH: "重试事件:          %d"},
+	"waste_title":             {EN: "WASTE ANALYSIS", ZH: "浪费分析"},
+	"waste_score_label":       {EN: "Waste Score", ZH: "浪费评分"},
+	"waste_wasted_label":      {EN: "Wasted", ZH: "浪费金额"},
+	"waste_cache_label":       {EN: "Cache", ZH: "缓存"},
+	"waste_bloat_label":       {EN: "Tool Bloat", ZH: "工具膨胀"},
+	"waste_stuck_label":       {EN: "Stuck", ZH: "卡死"},
+	"waste_actions_label":     {EN: "Actions", ZH: "优化建议"},
+	"waste_none":              {EN: "none", ZH: "无"},
+	"tab_waste":               {EN: "W Waste", ZH: "W 浪费"},
+	"waste_col_score":         {EN: "SCORE", ZH: "评分"},
+	"waste_col_level":         {EN: "LEVEL", ZH: "等级"},
+	"waste_col_action":        {EN: "TOP ACTION", ZH: "首要建议"},
+	"help_waste":              {EN: "w: waste · Tab: switch · q: quit", ZH: "w: 浪费 · Tab: 切换 · q: 退出"},
 }
 
 // T returns the translation for key in the current language.

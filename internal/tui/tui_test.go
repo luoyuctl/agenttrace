@@ -9,8 +9,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/luoyuctl/agentwaste/internal/engine"
-	"github.com/luoyuctl/agentwaste/internal/i18n"
+	"github.com/luoyuctl/agenttrace/internal/engine"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 func sampleModelForTest() Model {

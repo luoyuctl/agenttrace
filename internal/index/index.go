@@ -1,4 +1,4 @@
-// Package index provides a JSON-based caching layer for agentwaste sessions.
+// Package index provides a JSON-based caching layer for agenttrace sessions.
 // It uses file mtime+size for change detection and only re-parses new/modified files,
 // eliminating the startup latency of re-parsing all JSON session files from scratch.
 package index
@@ -12,16 +12,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/luoyuctl/agentwaste/internal/engine"
+	"github.com/luoyuctl/agenttrace/internal/engine"
 )
 
-// DefaultPath returns the default index file path (~/.cache/agentwaste/index.json).
+// DefaultPath returns the default index file path (~/.cache/agenttrace/index.json).
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".cache/agentwaste/index.json"
+		return ".cache/agenttrace/index.json"
 	}
-	return filepath.Join(home, ".cache", "agentwaste", "index.json")
+	return filepath.Join(home, ".cache", "agenttrace", "index.json")
 }
 
 // ── Index Structures ──
@@ -52,8 +52,8 @@ type Index struct {
 
 	// In-memory cache (not serialized) — holds full Session objects for files
 	// whose mtime+size haven't changed. Populated lazily.
-	mu            sync.RWMutex
-	sessionCache  map[string]*engine.Session // keyed by file path
+	mu           sync.RWMutex
+	sessionCache map[string]*engine.Session // keyed by file path
 }
 
 // New creates an empty Index that will be saved to the given path.

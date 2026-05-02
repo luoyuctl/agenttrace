@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luoyuctl/agentwaste/internal/i18n"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 func mustJSON(v interface{}) string {
@@ -308,6 +308,72 @@ func TestAnalyze(t *testing.T) {
 	}
 	if m.CostEstimated < 0 {
 		t.Error("cost should be >=0")
+	}
+}
+
+func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
+	sessions := []Session{
+		{
+			Name:   "good",
+			Health: 90,
+			Metrics: Metrics{
+				SourceTool:    "claude_code_jsonl",
+				ModelUsed:     "claude-sonnet-4",
+				TokensInput:   100,
+				TokensOutput:  50,
+				ToolCallsOK:   9,
+				ToolCallsFail: 1,
+				CostEstimated: 0.25,
+			},
+		},
+		{
+			Name:      "bad",
+			Health:    40,
+			Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
+			Metrics: Metrics{
+				SourceTool:    "codex_cli",
+				ModelUsed:     "gpt-5.1",
+				TokensInput:   200,
+				TokensOutput:  100,
+				ToolCallsFail: 2,
+				CostEstimated: 0.75,
+			},
+		},
+	}
+
+	var payload struct {
+		Version string `json:"version"`
+		Summary struct {
+			TotalSessions int     `json:"total_sessions"`
+			Critical      int     `json:"critical"`
+			TotalCost     float64 `json:"total_cost"`
+			TotalTokens   int     `json:"total_tokens"`
+			ToolFailRate  float64 `json:"tool_fail_rate"`
+		} `json:"summary"`
+		ByAgent []struct {
+			Name     string  `json:"name"`
+			Sessions int     `json:"sessions"`
+			Cost     float64 `json:"cost"`
+		} `json:"by_agent"`
+		RecentSessions []struct {
+			Name      string `json:"name"`
+			Health    int    `json:"health"`
+			Anomalies int    `json:"anomalies"`
+		} `json:"recent_sessions"`
+		Anomalies []AnomalyTop `json:"anomalies"`
+	}
+	if err := json.Unmarshal([]byte(ReportOverviewJSON(ComputeOverview(sessions), sessions)), &payload); err != nil {
+		t.Fatalf("invalid overview json: %v", err)
+	}
+	if payload.Version != Version || payload.Summary.TotalSessions != 2 || payload.Summary.Critical != 1 {
+		t.Fatalf("bad summary: %+v", payload.Summary)
+	}
+	if payload.Summary.TotalCost != 1 || payload.Summary.TotalTokens != 450 || payload.Summary.ToolFailRate != 25 {
+		t.Fatalf("missing operational totals: %+v", payload.Summary)
+	}
+	if len(payload.ByAgent) != 2 || len(payload.RecentSessions) != 2 || len(payload.Anomalies) != 1 {
+		t.Fatalf("missing overview sections: agents=%d recent=%d anomalies=%d",
+			len(payload.ByAgent), len(payload.RecentSessions), len(payload.Anomalies))
 	}
 }
 

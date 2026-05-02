@@ -1,8 +1,8 @@
-module github.com/luoyuctl/agentwaste
+module github.com/luoyuctl/agenttrace
 
 go 1.24.2
 
-// agentwaste v0.2.0 — Go single-binary, supports 5 agent formats
+// agenttrace v0.3.0 — Go single-binary, supports multi-agent session observability
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0

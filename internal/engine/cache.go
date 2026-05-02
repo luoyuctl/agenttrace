@@ -14,7 +14,7 @@ import (
 // Caches full Session structs keyed by absolute file path.
 // mtime + size are used as cache keys — session files are write-once
 // so this is sufficient. Stored as a single JSON file under
-// the OS cache directory (~/Library/Caches/agentwaste/sessions.json).
+// the OS cache directory (~/Library/Caches/agenttrace/sessions.json).
 
 // SessionCache holds all cached session entries.
 type SessionCache struct {
@@ -42,7 +42,7 @@ func sessionCachePath() string {
 	if dir == "" {
 		dir = os.TempDir()
 	}
-	dir = filepath.Join(dir, "agentwaste")
+	dir = filepath.Join(dir, "agenttrace")
 	os.MkdirAll(dir, 0755)
 	return filepath.Join(dir, "sessions.json")
 }

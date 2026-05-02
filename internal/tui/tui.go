@@ -1,4 +1,4 @@
-// Package tui provides the Bubble Tea interactive terminal UI for agentwaste.
+// Package tui provides the Bubble Tea interactive terminal UI for agenttrace.
 // btop-style modern dashboard with four views: Overview, Session List, Detail, Diagnostics, Diff.
 package tui
 
@@ -12,8 +12,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/luoyuctl/agentwaste/internal/engine"
-	"github.com/luoyuctl/agentwaste/internal/i18n"
+	"github.com/luoyuctl/agenttrace/internal/engine"
+	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
 // ── Styles ──

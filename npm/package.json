@@ -1,10 +1,10 @@
 {
-  "name": "agentwaste",
-  "version": "0.0.4",
-  "description": "AI Agent Session Analyzer — find hanging, token waste, thinking redaction & quality regressions",
+  "name": "agenttrace",
+  "version": "0.3.0",
+  "description": "High-signal TUI observability for AI coding agent sessions, cost, tools, latency, and anomalies",
   "main": "install.js",
   "bin": {
-    "agentwaste": "run.js"
+    "agenttrace": "run.js"
   },
   "files": [
     "install.js",
@@ -16,7 +16,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/luoyuctl/agentwaste.git"
+    "url": "git+https://github.com/luoyuctl/agenttrace.git"
   },
   "keywords": [
     "ai",

@@ -1,11 +1,11 @@
 #!/bin/sh
 set -eu
 
-# agentwaste — single binary install (Go + Bubble Tea)
-# Usage: curl -sL https://raw.githubusercontent.com/luoyuctl/agentwaste/master/install.sh | sh
+# agenttrace — single binary install (Go + Bubble Tea)
+# Usage: curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
 
-REPO="luoyuctl/agentwaste"
-BIN="agentwaste"
+REPO="luoyuctl/agenttrace"
+BIN="agenttrace"
 INSTALL_DIR=""
 
 # — detect platform —
@@ -41,12 +41,12 @@ RELEASE_URL=$(curl -sSL "https://api.github.com/repos/${REPO}/releases/latest" 2
 
 if [ -z "$RELEASE_URL" ]; then
   echo "❌ No binary found for ${OS}/${ARCH}"
-  echo "   Build from source: git clone https://github.com/${REPO}.git && cd agentwaste/go && go build -ldflags='-s -w' -o agentwaste ./cmd/agentwaste/"
+  echo "   Build from source: git clone https://github.com/${REPO}.git && cd agenttrace && go build -ldflags='-s -w' -o agenttrace ./cmd/agenttrace/"
   exit 1
 fi
 
 # — download —
-echo "⬇️  Downloading agentwaste (${OS}/${ARCH})..."
+echo "⬇️  Downloading agenttrace (${OS}/${ARCH})..."
 TMP=$(mktemp)
 curl -sSL -o "$TMP" "$RELEASE_URL"
 chmod +x "$TMP"
@@ -70,6 +70,6 @@ fi
 
 # — quick test —
 echo ""
-echo "🎉 agentwaste installed! Try:"
-echo "   agentwaste --latest"
-echo "   agentwaste            # launch TUI"
+echo "🎉 agenttrace installed! Try:"
+echo "   agenttrace --latest"
+echo "   agenttrace            # launch TUI"
