@@ -117,6 +117,7 @@ Open PRs:
 - Awesome-LLMOps: https://github.com/InftyAI/Awesome-LLMOps/pull/418
 - awesome-ai: https://github.com/hemanthgk10/awesome-ai/pull/7
 - awesome-terminals-ai: https://github.com/BNLNPPS/awesome-terminals-ai/pull/6
+- awesome-llmops: https://github.com/KennethanCeyer/awesome-llmops/pull/10
 
 Manual-only submission:
 
