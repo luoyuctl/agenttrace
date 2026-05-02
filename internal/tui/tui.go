@@ -708,10 +708,10 @@ func (m *Model) refreshTable() {
 
 func (m *Model) sessionRow(s engine.Session) table.Row {
 	met := s.Metrics
-	totalTools := met.ToolCallsOK + met.ToolCallsFail
+	okTools, failTools, totalTools, totalToolCalls := normalizedToolCounts(met)
 	sr := i18n.T("not_available")
 	if totalTools > 0 {
-		sr = fmt.Sprintf("%.0f", float64(met.ToolCallsOK)/float64(totalTools)*100)
+		sr = fmt.Sprintf("%.0f", float64(okTools)/float64(totalTools)*100)
 	}
 
 	sourceDisplay := met.SourceTool
@@ -722,8 +722,8 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 	healthRaw := fmt.Sprintf("%d%%", s.Health)
 	healthCol := healthRaw
 
-	failStr := fmt.Sprintf("%d", met.ToolCallsFail)
-	if met.ToolCallsFail > 0 {
+	failStr := fmt.Sprintf("%d", failTools)
+	if failTools > 0 {
 		failStr = redStyle.Render(failStr)
 	} else {
 		failStr = dimStyle.Render(failStr)
@@ -743,8 +743,8 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 		return table.Row{
 			s.Name,
 			sourceDisplay,
-			fmt.Sprintf("%d", met.AssistantTurns),
-			fmt.Sprintf("%d", met.ToolCallsTotal),
+			fmt.Sprintf("%d", nonNegativeInt(met.AssistantTurns)),
+			fmt.Sprintf("%d", totalToolCalls),
 			failStr,
 			costColor(met.CostEstimated),
 			tokensStr,
@@ -755,8 +755,8 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 	return table.Row{
 		s.Name,
 		sourceDisplay,
-		fmt.Sprintf("%d", met.AssistantTurns),
-		fmt.Sprintf("%d", met.ToolCallsTotal),
+		fmt.Sprintf("%d", nonNegativeInt(met.AssistantTurns)),
+		fmt.Sprintf("%d", totalToolCalls),
 		sr,
 		failStr,
 		costColor(met.CostEstimated),
@@ -943,10 +943,10 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 	}
 	s := m.sessions[idx]
 	met := s.Metrics
-	totalTools := met.ToolCallsOK + met.ToolCallsFail
+	okTools, _, totalTools, _ := normalizedToolCounts(met)
 	success := i18n.T("not_available")
 	if totalTools > 0 {
-		success = fmt.Sprintf("%.0f%%", float64(met.ToolCallsOK)/float64(totalTools)*100)
+		success = fmt.Sprintf("%.0f%%", float64(okTools)/float64(totalTools)*100)
 	}
 
 	issue := i18n.T("list_no_major_anomaly")
@@ -958,8 +958,8 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 		i18n.T("health"), s.Health,
 		i18n.T("cost"), met.CostEstimated,
 		i18n.T("tokens"), compactInt(met.TokensInput+met.TokensOutput),
-		i18n.T("turns_header"), met.AssistantTurns,
-		i18n.T("tools"), met.ToolCallsOK, totalTools, success,
+		i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
+		i18n.T("tools"), okTools, totalTools, success,
 		i18n.T("list_issue"), issue,
 	)
 	return dimStyle.Render(truncate(line, width))
@@ -1178,19 +1178,19 @@ func (m Model) renderQuickSummary() string {
 
 	costBadge := badge(i18n.T("cost"), fmt.Sprintf("$%.4f", met.CostEstimated), lipgloss.Color("39"))
 
-	totalTools := met.ToolCallsOK + met.ToolCallsFail
+	okTools, _, totalTools, _ := normalizedToolCounts(met)
 	srStr := i18n.T("not_available")
 	if totalTools > 0 {
-		srStr = fmt.Sprintf("%.0f%%", float64(met.ToolCallsOK)/float64(totalTools)*100)
+		srStr = fmt.Sprintf("%.0f%%", float64(okTools)/float64(totalTools)*100)
 	}
 	toolColor := lipgloss.Color("42")
-	if totalTools > 0 && float64(met.ToolCallsOK)/float64(totalTools) < 0.85 {
+	if totalTools > 0 && float64(okTools)/float64(totalTools) < 0.85 {
 		toolColor = lipgloss.Color("220")
 	}
-	if totalTools > 0 && float64(met.ToolCallsOK)/float64(totalTools) < 0.70 {
+	if totalTools > 0 && float64(okTools)/float64(totalTools) < 0.70 {
 		toolColor = lipgloss.Color("196")
 	}
-	toolBadge := badge(i18n.T("tools"), fmt.Sprintf("%d/%d %s", met.ToolCallsOK, totalTools, srStr), toolColor)
+	toolBadge := badge(i18n.T("tools"), fmt.Sprintf("%d/%d %s", okTools, totalTools, srStr), toolColor)
 
 	anomBadge := badge(i18n.T("diff_field_anomalies"), fmt.Sprintf("%d", len(s.Anomalies)), lipgloss.Color("42"))
 	if len(s.Anomalies) > 0 {
@@ -1205,7 +1205,7 @@ func (m Model) renderQuickSummary() string {
 			i18n.T("cost"),
 			met.CostEstimated,
 			i18n.T("tools"),
-			met.ToolCallsOK,
+			okTools,
 			totalTools,
 			srStr,
 			i18n.T("diff_field_anomalies"),
@@ -1492,8 +1492,8 @@ func (m Model) renderWasteScoreCard(s engine.Session) string {
 				scoreStyle.Render(fmt.Sprintf(i18n.T("diag_score"), score)),
 				lipgloss.NewStyle().Bold(true).Render(status)),
 			fmt.Sprintf("%s  %s  %s",
-				dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("turns_header"), met.AssistantTurns)),
-				dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("tools"), met.ToolCallsTotal)),
+				dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns))),
+				dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("tools"), nonNegativeInt(met.ToolCallsTotal))),
 				dimStyle.Render(fmt.Sprintf("%s $%.4f", i18n.T("cost"), met.CostEstimated))),
 			lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Render(truncate(met.ModelUsed, panelW-4)),
 		)
@@ -1511,8 +1511,8 @@ func (m Model) renderWasteScoreCard(s engine.Session) string {
 	return styleForOuterWidth(style, panelW).Render(fmt.Sprintf("%s  %s  ·  %s  ·  %s  ·  %s  ·  %s",
 		scoreStyle.Render(fmt.Sprintf(i18n.T("diag_score"), score)),
 		lipgloss.NewStyle().Bold(true).Render(status),
-		dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("turns_header"), met.AssistantTurns)),
-		dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("tools"), met.ToolCallsTotal)),
+		dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns))),
+		dimStyle.Render(fmt.Sprintf("%s %d", i18n.T("tools"), nonNegativeInt(met.ToolCallsTotal))),
 		dimStyle.Render(fmt.Sprintf("%s $%.4f", i18n.T("cost"), met.CostEstimated)),
 		lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Render(met.ModelUsed),
 	))
@@ -2484,6 +2484,17 @@ func nonNegativeInt(v int) int {
 		return 0
 	}
 	return v
+}
+
+func normalizedToolCounts(m engine.Metrics) (ok, fail, observed, total int) {
+	ok = nonNegativeInt(m.ToolCallsOK)
+	fail = nonNegativeInt(m.ToolCallsFail)
+	observed = ok + fail
+	total = nonNegativeInt(m.ToolCallsTotal)
+	if total < observed {
+		total = observed
+	}
+	return ok, fail, observed, total
 }
 
 func compactInt(v int) string {
