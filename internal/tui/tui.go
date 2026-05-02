@@ -729,8 +729,11 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 	}
 
 	health := clampHealth(s.Health)
-	healthRaw := fmt.Sprintf("%d%%", health)
-	healthCol := healthRaw
+	healthWidth := 9
+	if cols := m.table.Columns(); len(cols) > 0 {
+		healthWidth = cols[len(cols)-1].Width
+	}
+	healthCol := healthCell(health, healthWidth)
 
 	failStr := fmt.Sprintf("%d", failTools)
 	if failTools > 0 {
@@ -2062,6 +2065,25 @@ func costColor(amount float64) string {
 	default:
 		return greenStyle.Render(s)
 	}
+}
+
+func healthCell(health int, width int) string {
+	health = clampHealth(health)
+	score := fmt.Sprintf("%3d%%", health)
+	if width < 7 {
+		return fmt.Sprintf("%d%%", health)
+	}
+	barW := maxInt(1, width-5)
+	filled := health * barW / 100
+	if health > 0 && filled == 0 {
+		filled = 1
+	}
+	if filled > barW {
+		filled = barW
+	}
+	bar := healthColor(health).Render(strings.Repeat("█", filled)) +
+		dimStyle.Render(strings.Repeat("░", barW-filled))
+	return score + " " + bar
 }
 
 // refreshColumns rebuilds column titles after a language switch.

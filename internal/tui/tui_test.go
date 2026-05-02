@@ -537,8 +537,13 @@ func TestViewsClampInvalidHealthScores(t *testing.T) {
 	m.view = viewList
 
 	rows := m.table.Rows()
-	if rows[0][8] != "0%" || rows[1][8] != "100%" {
+	if !strings.Contains(rows[0][8], "0%") || !strings.Contains(rows[1][8], "100%") {
 		t.Fatalf("expected health scores to be clamped in list rows, rows=%+v", rows)
+	}
+	for i, row := range rows[:2] {
+		if got, max := lipgloss.Width(row[8]), m.table.Columns()[8].Width; got > max {
+			t.Fatalf("health cell %d too wide: got=%d max=%d row=%q", i, got, max, row[8])
+		}
 	}
 
 	m.openDetail()
@@ -552,6 +557,33 @@ func TestViewsClampInvalidHealthScores(t *testing.T) {
 	rendered = m.View()
 	if strings.Contains(rendered, "150%") || strings.Contains(rendered, "-20%") {
 		t.Fatalf("overview should clamp invalid health scores:\n%s", rendered)
+	}
+}
+
+func TestHealthCellShowsScanFriendlyBar(t *testing.T) {
+	tests := []struct {
+		health int
+		width  int
+		want   string
+	}{
+		{health: 92, width: 9, want: "92%"},
+		{health: 64, width: 8, want: "64%"},
+		{health: -20, width: 9, want: "0%"},
+		{health: 150, width: 9, want: "100%"},
+		{health: 42, width: 5, want: "42%"},
+	}
+
+	for _, tt := range tests {
+		got := healthCell(tt.health, tt.width)
+		if !strings.Contains(got, tt.want) {
+			t.Fatalf("healthCell(%d, %d) missing %q: %q", tt.health, tt.width, tt.want, got)
+		}
+		if lipgloss.Width(got) > tt.width {
+			t.Fatalf("healthCell(%d, %d) too wide: got=%d %q", tt.health, tt.width, lipgloss.Width(got), got)
+		}
+		if tt.width >= 7 && !strings.Contains(got, "█") && !strings.Contains(got, "░") {
+			t.Fatalf("healthCell(%d, %d) should include a scan bar: %q", tt.health, tt.width, got)
+		}
 	}
 }
 
