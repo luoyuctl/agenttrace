@@ -107,11 +107,13 @@ Open PRs:
 - awesome-claude-code-toolkit: https://github.com/rohitg00/awesome-claude-code-toolkit/pull/361
 - jqueryscript/awesome-claude-code: https://github.com/jqueryscript/awesome-claude-code/pull/252
 - GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
+- awesome-go-cli: https://github.com/mantcz/awesome-go-cli/pull/4
 
 Manual-only submission:
 
 - hesreallyhim/awesome-claude-code: submit via the GitHub issue form, because the repo asks contributors not to create automated issues or PRs. Suggested category: Tooling / Usage Monitors.
 - awesome-claude-skills: skip automated PRs unless submitted manually by a human; its contribution guide asks that PRs are not AI-assisted and generally expects social proof.
+- awesome-go: defer until the project is older and has the required quality links; contribution checks expect repository maturity, pkg.go.dev, Go Report Card, and coverage evidence.
 
 ## Demo Checklist
 
