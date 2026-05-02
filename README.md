@@ -88,6 +88,12 @@ iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.p
 brew install luoyuctl/tap/agenttrace
 ```
 
+### Go install
+
+```bash
+go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
+```
+
 ### npm
 
 The npm wrapper is prepared in `npm/`, but the public package is not published yet. Use the one-liner, Homebrew, or manual build for now.

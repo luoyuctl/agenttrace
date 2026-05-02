@@ -146,6 +146,7 @@ Terminal Trove draft:
 - Install:
   - macOS/Linux: `curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh`
   - Homebrew: `brew install luoyuctl/tap/agenttrace`
+  - Go install: `go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest`
   - Windows PowerShell: `iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex`
 
 ## Demo Checklist
