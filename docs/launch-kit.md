@@ -110,10 +110,13 @@ Open PRs:
 - awesome-go-cli: https://github.com/mantcz/awesome-go-cli/pull/4
 - awesome-observability: https://github.com/adriannovegil/awesome-observability/pull/63
 - awesome-agents: https://github.com/kyrolabs/awesome-agents/pull/437
+- awesome-ai-devtools: https://github.com/jamesmurdza/awesome-ai-devtools/pull/492
+- awesome_ai_agents: https://github.com/jim-schwoebel/awesome_ai_agents/pull/250
 
 Manual-only submission:
 
 - hesreallyhim/awesome-claude-code: submit via the GitHub issue form, because the repo asks contributors not to create automated issues or PRs. Suggested category: Tooling / Usage Monitors.
+- e2b-dev/awesome-ai-agents: submit through the Google Form linked from the README; the repo asks for product submissions through the form instead of direct README edits.
 - awesome-claude-skills: skip automated PRs unless submitted manually by a human; its contribution guide asks that PRs are not AI-assisted and generally expects social proof.
 - awesome-go: defer until the project is older and has the required quality links; contribution checks expect repository maturity, pkg.go.dev, Go Report Card, and coverage evidence.
 
