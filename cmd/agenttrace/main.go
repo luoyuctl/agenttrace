@@ -17,7 +17,7 @@ import (
 
 func main() {
 	// Parse flags
-	format := flag.String("f", "text", "Output format: text, json, markdown")
+	format := flag.String("f", "text", "Output format: text, json, markdown, html")
 	dir := flag.String("d", "", "Directory containing session JSONL files")
 	compare := flag.Bool("compare", false, "Compare all sessions")
 	overview := flag.Bool("overview", false, "Show global overview dashboard")
@@ -168,6 +168,8 @@ func main() {
 			out = engine.ReportOverviewJSON(ov, sessions)
 		case "markdown", "md":
 			out = engine.ReportOverviewMarkdown(ov, sessions)
+		case "html":
+			out = engine.ReportOverviewHTML(ov, sessions)
 		}
 		if *output != "" {
 			os.MkdirAll(filepath.Dir(*output), 0755)

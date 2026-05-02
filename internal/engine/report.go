@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"sort"
 	"strings"
 
@@ -453,34 +454,17 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 
 // ReportOverviewMarkdown generates a human-readable Markdown overview for PR comments and CI artifacts.
 func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
-	totalTokens := 0
-	totalTools := 0
-	failedTools := 0
-	totalHealth := 0
-	for _, s := range sessions {
-		totalTokens += s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
-		totalTools += s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
-		failedTools += s.Metrics.ToolCallsFail
-		totalHealth += s.Health
-	}
-	avgHealth := 0.0
-	if len(sessions) > 0 {
-		avgHealth = round4(float64(totalHealth) / float64(len(sessions)))
-	}
-	toolFailRate := 0.0
-	if totalTools > 0 {
-		toolFailRate = round4(float64(failedTools) / float64(totalTools) * 100)
-	}
+	summary := overviewReportSummary(sessions)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# agenttrace overview\n\n")
 	fmt.Fprintf(&b, "| Metric | Value |\n|---|---:|\n")
 	fmt.Fprintf(&b, "| Sessions | %d |\n", ov.TotalSessions)
 	fmt.Fprintf(&b, "| Healthy / Warning / Critical | %d / %d / %d |\n", ov.Healthy, ov.Warning, ov.Critical)
-	fmt.Fprintf(&b, "| Average health | %.1f |\n", avgHealth)
+	fmt.Fprintf(&b, "| Average health | %.1f |\n", summary.AvgHealth)
 	fmt.Fprintf(&b, "| Total cost | $%.2f |\n", ov.TotalCost)
-	fmt.Fprintf(&b, "| Total tokens | %d |\n", totalTokens)
-	fmt.Fprintf(&b, "| Tool failures | %d / %d (%.1f%%) |\n\n", failedTools, totalTools, toolFailRate)
+	fmt.Fprintf(&b, "| Total tokens | %d |\n", summary.TotalTokens)
+	fmt.Fprintf(&b, "| Tool failures | %d / %d (%.1f%%) |\n\n", summary.FailedTools, summary.TotalTools, summary.ToolFailRate)
 
 	fmt.Fprintf(&b, "## By agent\n\n")
 	fmt.Fprintf(&b, "| Agent | Sessions | Cost |\n|---|---:|---:|\n")
@@ -542,6 +526,193 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n", markdownCell(a.Session), markdownCell(a.Type), markdownCell(a.Age))
 	}
 	return b.String()
+}
+
+// ReportOverviewHTML generates a self-contained HTML report for CI artifacts and sharing.
+func ReportOverviewHTML(ov Overview, sessions []Session) string {
+	summary := overviewReportSummary(sessions)
+	agents := sortedAgents(ov.ByAgent)
+	models := sortedModels(ov.ByModel)
+
+	var b strings.Builder
+	w := func(s string) { b.WriteString(s + "\n") }
+	w(`<!doctype html>`)
+	w(`<html lang="en">`)
+	w(`<head>`)
+	w(`<meta charset="utf-8">`)
+	w(`<meta name="viewport" content="width=device-width, initial-scale=1">`)
+	w(`<title>agenttrace overview</title>`)
+	w(`<link rel="icon" href="data:,">`)
+	w(`<style>`)
+	w(`:root{color-scheme:dark;--bg:#07090b;--panel:#101419;--line:#273039;--text:#f4f0dd;--muted:#a9a391;--green:#54ff00;--cyan:#00d8ff;--amber:#ffb000;--red:#ff4a4a}`)
+	w(`*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#0b0f12,#050607);color:var(--text);font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}`)
+	w(`main{max-width:1180px;margin:0 auto;padding:32px 18px 48px}header{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:24px}`)
+	w(`h1{font-size:clamp(42px,7vw,88px);line-height:.9;margin:0;letter-spacing:0}h2{margin:0 0 14px;font-size:20px;color:var(--cyan)}p{margin:10px 0 0;color:var(--muted)}`)
+	w(`.brand{color:var(--green);font-weight:800}.meta{text-align:right;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin:24px 0}.metric{background:var(--panel);padding:18px;min-height:120px}.metric span{display:block;color:var(--muted);font-size:12px;text-transform:uppercase}.metric strong{display:block;margin-top:12px;font-size:30px;color:var(--green)}.warn strong{color:var(--amber)}.bad strong{color:var(--red)}`)
+	w(`section{border:1px solid var(--line);background:rgba(16,20,25,.78);padding:20px;margin-top:20px}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-size:12px;text-transform:uppercase}td.num,th.num{text-align:right}.health-good{color:var(--green)}.health-warn{color:var(--amber)}.health-bad{color:var(--red)}code{color:var(--cyan)}@media(max-width:760px){header{display:block}.meta{text-align:left;margin-top:16px}.grid{grid-template-columns:1fr}table{font-size:13px}}`)
+	w(`</style>`)
+	w(`</head>`)
+	w(`<body>`)
+	w(`<main>`)
+	w(`<header>`)
+	w(`<div><div class="brand">agenttrace</div><h1>AI agent session overview</h1><p>Static report generated from local coding-agent traces.</p></div>`)
+	w(fmt.Sprintf(`<div class="meta">v%s<br>%d sessions<br><code>agenttrace --overview -f html</code></div>`, html.EscapeString(Version), ov.TotalSessions))
+	w(`</header>`)
+	w(`<div class="grid" aria-label="summary metrics">`)
+	w(fmt.Sprintf(`<div class="metric"><span>Sessions</span><strong>%d</strong><p>%d healthy / %d warning / %d critical</p></div>`, ov.TotalSessions, ov.Healthy, ov.Warning, ov.Critical))
+	w(fmt.Sprintf(`<div class="metric"><span>Average health</span><strong>%s</strong><p>Fleet quality score</p></div>`, html.EscapeString(fmt.Sprintf("%.1f", summary.AvgHealth))))
+	w(fmt.Sprintf(`<div class="metric"><span>Total cost</span><strong>$%.2f</strong><p>Estimated session cost</p></div>`, ov.TotalCost))
+	w(fmt.Sprintf(`<div class="metric %s"><span>Tool failures</span><strong>%d/%d</strong><p>%.1f%% failure rate</p></div>`, html.EscapeString(failureClass(summary.ToolFailRate)), summary.FailedTools, summary.TotalTools, summary.ToolFailRate))
+	w(`</div>`)
+
+	w(`<section><h2>Recent sessions</h2><table><thead><tr><th>Session</th><th>Source</th><th>Model</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Health</th><th class="num">Anomalies</th></tr></thead><tbody>`)
+	limit := minReportInt(len(sessions), 20)
+	for i := 0; i < limit; i++ {
+		s := sessions[i]
+		source := s.Metrics.SourceTool
+		if d, ok := ToolDisplayNames[source]; ok {
+			source = d
+		}
+		tokens := s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
+		w(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td class="num">%d</td><td class="num">$%.4f</td><td class="num %s">%d</td><td class="num">%d</td></tr>`,
+			html.EscapeString(s.Name),
+			html.EscapeString(source),
+			html.EscapeString(s.Metrics.ModelUsed),
+			tokens,
+			s.Metrics.CostEstimated,
+			html.EscapeString(healthClass(s.Health)),
+			s.Health,
+			len(s.Anomalies)))
+	}
+	w(`</tbody></table></section>`)
+
+	w(`<section><h2>By agent</h2><table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>`)
+	for _, a := range agents {
+		display := a.k
+		if d, ok := ToolDisplayNames[a.k]; ok {
+			display = d
+		}
+		w(fmt.Sprintf(`<tr><td>%s</td><td class="num">%d</td><td class="num">$%.2f</td></tr>`, html.EscapeString(display), a.v.Sessions, a.v.Cost))
+	}
+	w(`</tbody></table></section>`)
+
+	w(`<section><h2>By model</h2><table><thead><tr><th>Model</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>`)
+	modelLimit := minReportInt(len(models), 12)
+	for i := 0; i < modelLimit; i++ {
+		mdl := models[i]
+		w(fmt.Sprintf(`<tr><td>%s</td><td class="num">%d</td><td class="num">$%.2f</td></tr>`, html.EscapeString(mdl.k), mdl.v.Sessions, mdl.v.Cost))
+	}
+	w(`</tbody></table></section>`)
+
+	w(`<section><h2>Recent anomalies</h2>`)
+	if len(ov.AnomaliesTop) == 0 {
+		w(`<p>No anomalies detected.</p>`)
+	} else {
+		w(`<table><thead><tr><th>Session</th><th>Type</th><th>Age</th></tr></thead><tbody>`)
+		anomLimit := minReportInt(len(ov.AnomaliesTop), 20)
+		for i := 0; i < anomLimit; i++ {
+			a := ov.AnomaliesTop[i]
+			w(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, html.EscapeString(a.Session), html.EscapeString(a.Type), html.EscapeString(a.Age)))
+		}
+		w(`</tbody></table>`)
+	}
+	w(`</section>`)
+	w(`</main>`)
+	w(`</body>`)
+	w(`</html>`)
+	return b.String()
+}
+
+type overviewSummary struct {
+	TotalTokens  int
+	TotalTools   int
+	FailedTools  int
+	AvgHealth    float64
+	ToolFailRate float64
+}
+
+func overviewReportSummary(sessions []Session) overviewSummary {
+	var summary overviewSummary
+	totalHealth := 0
+	for _, s := range sessions {
+		summary.TotalTokens += s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
+		summary.TotalTools += s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
+		summary.FailedTools += s.Metrics.ToolCallsFail
+		totalHealth += s.Health
+	}
+	if len(sessions) > 0 {
+		summary.AvgHealth = round4(float64(totalHealth) / float64(len(sessions)))
+	}
+	if summary.TotalTools > 0 {
+		summary.ToolFailRate = round4(float64(summary.FailedTools) / float64(summary.TotalTools) * 100)
+	}
+	return summary
+}
+
+type agentKV struct {
+	k string
+	v AgentOverview
+}
+
+func sortedAgents(items map[string]AgentOverview) []agentKV {
+	agents := make([]agentKV, 0, len(items))
+	for k, v := range items {
+		agents = append(agents, agentKV{k, v})
+	}
+	sort.Slice(agents, func(i, j int) bool {
+		if agents[i].v.Sessions == agents[j].v.Sessions {
+			return agents[i].v.Cost > agents[j].v.Cost
+		}
+		return agents[i].v.Sessions > agents[j].v.Sessions
+	})
+	return agents
+}
+
+type modelKV struct {
+	k string
+	v ModelOverview
+}
+
+func sortedModels(items map[string]ModelOverview) []modelKV {
+	models := make([]modelKV, 0, len(items))
+	for k, v := range items {
+		models = append(models, modelKV{k, v})
+	}
+	sort.Slice(models, func(i, j int) bool {
+		if models[i].v.Cost == models[j].v.Cost {
+			return models[i].v.Sessions > models[j].v.Sessions
+		}
+		return models[i].v.Cost > models[j].v.Cost
+	})
+	return models
+}
+
+func healthClass(health int) string {
+	switch {
+	case health >= 80:
+		return "health-good"
+	case health >= 50:
+		return "health-warn"
+	default:
+		return "health-bad"
+	}
+}
+
+func failureClass(rate float64) string {
+	if rate >= 25 {
+		return "bad"
+	}
+	if rate >= 10 {
+		return "warn"
+	}
+	return ""
+}
+
+func minReportInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func markdownCell(value string) string {

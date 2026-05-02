@@ -21,8 +21,16 @@ jobs:
             --fail-on-critical \
             --max-tool-fail-rate 15 \
             -o agenttrace-overview.json
+      - name: Write shareable reports
+        if: always()
+        run: |
+          agenttrace --overview -f markdown -o agenttrace-overview.md || true
+          agenttrace --overview -f html -o agenttrace-overview.html || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: agenttrace-overview
-          path: agenttrace-overview.json
+          path: |
+            agenttrace-overview.json
+            agenttrace-overview.md
+            agenttrace-overview.html

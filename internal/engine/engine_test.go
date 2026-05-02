@@ -547,6 +547,55 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 	}
 }
 
+func TestReportOverviewHTMLIsShareableAndEscaped(t *testing.T) {
+	sessions := []Session{
+		{
+			Name:   `good<script>`,
+			Health: 92,
+			Metrics: Metrics{
+				SourceTool:    "aider",
+				ModelUsed:     "gpt-4.1",
+				TokensInput:   1000,
+				TokensOutput:  500,
+				ToolCallsOK:   4,
+				ToolCallsFail: 1,
+				CostEstimated: 0.12,
+			},
+		},
+		{
+			Name:      "bad",
+			Health:    30,
+			Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
+			Metrics: Metrics{
+				SourceTool:    "cursor",
+				ModelUsed:     "default",
+				TokensInput:   300,
+				TokensOutput:  200,
+				ToolCallsFail: 5,
+				CostEstimated: 0.34,
+			},
+		},
+	}
+	out := ReportOverviewHTML(ComputeOverview(sessions), sessions)
+	for _, want := range []string{
+		"<!doctype html>",
+		"<title>agenttrace overview</title>",
+		"AI agent session overview",
+		"Tool failures",
+		"Aider",
+		"Cursor",
+		"good&lt;script&gt;",
+		"health-bad",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("html report missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "good<script>") {
+		t.Fatalf("html report did not escape session name:\n%s", out)
+	}
+}
+
 func TestAnalyze_ToolFailures(t *testing.T) {
 	events := []Event{
 		{Role: "user", Content: "x", SourceTool: "c"},

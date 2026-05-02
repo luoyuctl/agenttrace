@@ -11,7 +11,7 @@ agenttrace --overview \
   --max-tool-fail-rate 15
 ```
 
-The command exits with code `2` when a gate fails. Add `-f json -o agenttrace-overview.json` when CI should upload machine-readable data, or `-f markdown -o agenttrace-overview.md` when the report should be pasted into a PR comment.
+The command exits with code `2` when a gate fails. Add `-f json -o agenttrace-overview.json` when CI should upload machine-readable data, `-f markdown -o agenttrace-overview.md` when the report should be pasted into a PR comment, or `-f html -o agenttrace-overview.html` for a self-contained visual artifact.
 
 ## GitHub Actions
 
@@ -43,6 +43,7 @@ jobs:
         if: always()
         run: |
           agenttrace --overview -f markdown -o agenttrace-overview.md || true
+          agenttrace --overview -f html -o agenttrace-overview.html || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -50,6 +51,7 @@ jobs:
           path: |
             agenttrace-overview.json
             agenttrace-overview.md
+            agenttrace-overview.html
 ```
 
 Tune thresholds per repository. A stricter team can start with health `90` and tool failure rate `5`; early adopters may start at `70` and `25` to avoid blocking useful experimentation.

@@ -126,6 +126,9 @@ agenttrace --overview -f json -o agenttrace-overview.json
 # Markdown report for PR comments or CI artifacts
 agenttrace --overview -f markdown -o agenttrace-overview.md
 
+# Self-contained HTML report for sharing
+agenttrace --overview -f html -o agenttrace-overview.html
+
 # CI health gate
 agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-rate 15
 
