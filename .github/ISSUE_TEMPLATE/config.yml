@@ -3,3 +3,6 @@ contact_links:
   - name: Try doctor mode first
     url: https://github.com/luoyuctl/agenttrace#usage
     about: Run `agenttrace --doctor` before opening setup or discovery issues.
+  - name: Ask a question or share feedback
+    url: https://github.com/luoyuctl/agenttrace/discussions
+    about: Use Discussions for usage questions, screenshots, parser ideas, and workflow feedback.

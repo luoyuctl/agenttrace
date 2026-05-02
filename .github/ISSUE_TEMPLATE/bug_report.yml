@@ -23,6 +23,8 @@ body:
         - Claude Code
         - Codex CLI
         - Gemini CLI
+        - Aider
+        - Cursor export
         - Hermes Agent
         - OpenCode
         - OpenClaw
