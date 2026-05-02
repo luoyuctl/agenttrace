@@ -109,6 +109,7 @@ Open PRs:
 - GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
 - awesome-go-cli: https://github.com/mantcz/awesome-go-cli/pull/4
 - awesome-observability: https://github.com/adriannovegil/awesome-observability/pull/63
+- awesome-agents: https://github.com/kyrolabs/awesome-agents/pull/437
 
 Manual-only submission:
 
