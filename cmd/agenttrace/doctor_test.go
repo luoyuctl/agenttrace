@@ -30,6 +30,9 @@ func TestDoctorReportWithDemoSessions(t *testing.T) {
 	if !report.Directories[0].Exists || report.Directories[0].Files != 3 {
 		t.Fatalf("bad directory diagnosis: %+v", report.Directories[0])
 	}
+	if len(report.Recommendations) != 2 || report.Recommendations[1] != i18n.T("doctor_next_demo_cache") {
+		t.Fatalf("demo doctor should explain temporary cache behavior: %+v", report.Recommendations)
+	}
 }
 
 func TestDoctorReportChineseText(t *testing.T) {

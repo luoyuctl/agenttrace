@@ -70,7 +70,7 @@ func buildDoctorReport(dir string, demo bool) doctorReport {
 		SessionFiles: len(files),
 		Directories:  doctorDirectories(dir, files),
 	}
-	report.Recommendations = doctorRecommendations(report, dir)
+	report.Recommendations = doctorRecommendations(report, dir, demo)
 	return report
 }
 
@@ -111,7 +111,7 @@ func doctorDirectories(dir string, files []string) []doctorDirReport {
 	return dirs
 }
 
-func doctorRecommendations(report doctorReport, dir string) []string {
+func doctorRecommendations(report doctorReport, dir string, demo bool) []string {
 	if report.SessionFiles == 0 {
 		if dir != "" {
 			return []string{i18n.T("doctor_next_custom")}
@@ -119,6 +119,10 @@ func doctorRecommendations(report doctorReport, dir string) []string {
 		return []string{i18n.T("doctor_next_demo")}
 	}
 	recs := []string{i18n.T("doctor_next_ready")}
+	if demo {
+		recs = append(recs, i18n.T("doctor_next_demo_cache"))
+		return recs
+	}
 	if report.CachedValid == 0 {
 		recs = append(recs, i18n.T("doctor_next_cache"))
 	}

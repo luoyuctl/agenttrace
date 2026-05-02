@@ -1138,6 +1138,7 @@ var translations = map[string]map[Lang]string{
 	"doctor_next_demo":           {EN: "No sessions found. Run `agenttrace --demo` to try the TUI immediately.", ZH: "未找到会话。运行 `agenttrace --demo` 可以立即体验 TUI。"},
 	"doctor_next_custom":         {EN: "No sessions found in this directory. Check `-d <dir>` or point it at a session JSON/JSONL directory.", ZH: "指定目录中未找到会话。检查 `-d <dir>` 是否指向 session JSON/JSONL 目录。"},
 	"doctor_next_ready":          {EN: "Ready: run `agenttrace` for the TUI or `agenttrace --overview -f json` for automation.", ZH: "已就绪：运行 `agenttrace` 打开 TUI，或运行 `agenttrace --overview -f json` 用于自动化。"},
+	"doctor_next_demo_cache":     {EN: "Demo sessions use a temporary directory, so cache reuse is not expected in this mode.", ZH: "演示会话使用临时目录，因此该模式下不会复用缓存。"},
 	"doctor_next_cache":          {EN: "Cache is cold for this scan. The next TUI startup should reuse parsed sessions incrementally.", ZH: "当前扫描缓存较冷。下一次启动 TUI 应会增量复用已解析会话。"},
 	"gate_failed":                {EN: "Gate failed: %s\n", ZH: "门禁失败: %s\n"},
 	"gate_avg_health_failed":     {EN: "avg health %.1f is below %d", ZH: "平均健康分 %.1f 低于 %d"},
