@@ -451,6 +451,105 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	return string(out)
 }
 
+// ReportOverviewMarkdown generates a human-readable Markdown overview for PR comments and CI artifacts.
+func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
+	totalTokens := 0
+	totalTools := 0
+	failedTools := 0
+	totalHealth := 0
+	for _, s := range sessions {
+		totalTokens += s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
+		totalTools += s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
+		failedTools += s.Metrics.ToolCallsFail
+		totalHealth += s.Health
+	}
+	avgHealth := 0.0
+	if len(sessions) > 0 {
+		avgHealth = round4(float64(totalHealth) / float64(len(sessions)))
+	}
+	toolFailRate := 0.0
+	if totalTools > 0 {
+		toolFailRate = round4(float64(failedTools) / float64(totalTools) * 100)
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "# agenttrace overview\n\n")
+	fmt.Fprintf(&b, "| Metric | Value |\n|---|---:|\n")
+	fmt.Fprintf(&b, "| Sessions | %d |\n", ov.TotalSessions)
+	fmt.Fprintf(&b, "| Healthy / Warning / Critical | %d / %d / %d |\n", ov.Healthy, ov.Warning, ov.Critical)
+	fmt.Fprintf(&b, "| Average health | %.1f |\n", avgHealth)
+	fmt.Fprintf(&b, "| Total cost | $%.2f |\n", ov.TotalCost)
+	fmt.Fprintf(&b, "| Total tokens | %d |\n", totalTokens)
+	fmt.Fprintf(&b, "| Tool failures | %d / %d (%.1f%%) |\n\n", failedTools, totalTools, toolFailRate)
+
+	fmt.Fprintf(&b, "## By agent\n\n")
+	fmt.Fprintf(&b, "| Agent | Sessions | Cost |\n|---|---:|---:|\n")
+	type akv struct {
+		k string
+		v AgentOverview
+	}
+	var agents []akv
+	for k, v := range ov.ByAgent {
+		agents = append(agents, akv{k, v})
+	}
+	sort.Slice(agents, func(i, j int) bool {
+		if agents[i].v.Sessions == agents[j].v.Sessions {
+			return agents[i].v.Cost > agents[j].v.Cost
+		}
+		return agents[i].v.Sessions > agents[j].v.Sessions
+	})
+	for _, a := range agents {
+		display := a.k
+		if d, ok := ToolDisplayNames[a.k]; ok {
+			display = d
+		}
+		fmt.Fprintf(&b, "| %s | %d | $%.2f |\n", markdownCell(display), a.v.Sessions, a.v.Cost)
+	}
+
+	fmt.Fprintf(&b, "\n## Recent sessions\n\n")
+	fmt.Fprintf(&b, "| Session | Source | Model | Health | Cost | Anomalies |\n|---|---|---|---:|---:|---:|\n")
+	limit := len(sessions)
+	if limit > 10 {
+		limit = 10
+	}
+	for i := 0; i < limit; i++ {
+		s := sessions[i]
+		source := s.Metrics.SourceTool
+		if d, ok := ToolDisplayNames[source]; ok {
+			source = d
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %d | $%.4f | %d |\n",
+			markdownCell(s.Name),
+			markdownCell(source),
+			markdownCell(s.Metrics.ModelUsed),
+			s.Health,
+			s.Metrics.CostEstimated,
+			len(s.Anomalies))
+	}
+
+	fmt.Fprintf(&b, "\n## Recent anomalies\n\n")
+	if len(ov.AnomaliesTop) == 0 {
+		fmt.Fprintf(&b, "No anomalies detected.\n")
+		return b.String()
+	}
+	fmt.Fprintf(&b, "| Session | Type | Age |\n|---|---|---|\n")
+	anomLimit := len(ov.AnomaliesTop)
+	if anomLimit > 10 {
+		anomLimit = 10
+	}
+	for i := 0; i < anomLimit; i++ {
+		a := ov.AnomaliesTop[i]
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", markdownCell(a.Session), markdownCell(a.Type), markdownCell(a.Age))
+	}
+	return b.String()
+}
+
+func markdownCell(value string) string {
+	value = strings.ReplaceAll(value, "|", "\\|")
+	value = strings.ReplaceAll(value, "\n", "<br>")
+	return value
+}
+
 // LoopCostSection generates the loop cost breakdown section for text reports.
 func LoopCostSection(lc LoopCost) string {
 	var b strings.Builder

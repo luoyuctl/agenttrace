@@ -120,6 +120,9 @@ agenttrace --latest -f json
 # Global fleet overview as JSON
 agenttrace --overview -f json -o agenttrace-overview.json
 
+# Markdown report for PR comments or CI artifacts
+agenttrace --overview -f markdown -o agenttrace-overview.md
+
 # CI health gate
 agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-rate 15
 

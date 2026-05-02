@@ -502,6 +502,51 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	}
 }
 
+func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
+	sessions := []Session{
+		{
+			Name:   "good|session",
+			Health: 92,
+			Metrics: Metrics{
+				SourceTool:    "aider",
+				ModelUsed:     "gpt-4.1",
+				TokensInput:   1000,
+				TokensOutput:  500,
+				ToolCallsOK:   4,
+				ToolCallsFail: 1,
+				CostEstimated: 0.12,
+			},
+		},
+		{
+			Name:      "bad",
+			Health:    30,
+			Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
+			Metrics: Metrics{
+				SourceTool:    "cursor",
+				ModelUsed:     "default",
+				TokensInput:   300,
+				TokensOutput:  200,
+				ToolCallsFail: 5,
+				CostEstimated: 0.34,
+			},
+		},
+	}
+	out := ReportOverviewMarkdown(ComputeOverview(sessions), sessions)
+	for _, want := range []string{
+		"# agenttrace overview",
+		"| Sessions | 2 |",
+		"| Tool failures | 6 / 10 (60.0%) |",
+		"| Aider | 1 |",
+		"| Cursor | 1 |",
+		"good\\|session",
+		"| bad | hanging |",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("markdown report missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestAnalyze_ToolFailures(t *testing.T) {
 	events := []Event{
 		{Role: "user", Content: "x", SourceTool: "c"},
