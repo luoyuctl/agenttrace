@@ -106,7 +106,6 @@ Open PRs:
 - awesome-ai-coding-tools: https://github.com/ai-for-developers/awesome-ai-coding-tools/pull/288
 - awesome-claude-code-toolkit: https://github.com/rohitg00/awesome-claude-code-toolkit/pull/361
 - jqueryscript/awesome-claude-code: https://github.com/jqueryscript/awesome-claude-code/pull/252
-- GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
 - awesome-go-cli: https://github.com/mantcz/awesome-go-cli/pull/4
 - awesome-observability: https://github.com/adriannovegil/awesome-observability/pull/63
 - awesome-agents: https://github.com/kyrolabs/awesome-agents/pull/437
@@ -120,6 +119,10 @@ Open PRs:
 - awesome-llmops: https://github.com/KennethanCeyer/awesome-llmops/pull/10
 - awesome-harness-engineering: https://github.com/ai-boost/awesome-harness-engineering/pull/14
 - Scottcjn/awesome-agents: https://github.com/Scottcjn/awesome-agents/pull/12
+
+Merged listings:
+
+- GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
 
 Manual-only submission:
 
