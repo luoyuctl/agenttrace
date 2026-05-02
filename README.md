@@ -106,6 +106,13 @@ brew install luoyuctl/tap/agenttrace
 go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
 ```
 
+### Codex plugin
+
+This repo includes a Codex plugin manifest and skill so Codex can use `agenttrace` to audit local AI agent session logs:
+
+- `.codex-plugin/plugin.json`
+- `skills/agenttrace-session-audit/SKILL.md`
+
 ### npm
 
 The npm wrapper is prepared in `npm/`, but the public package is not published yet. Use the one-liner, Homebrew, or manual build for now.
