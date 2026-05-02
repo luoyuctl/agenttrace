@@ -504,7 +504,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "/":
-			if m.view == viewList {
+			if m.view == viewOverview || m.view == viewList {
+				m.view = viewList
 				m.filterActive = true
 				m.filterInput = ""
 			}
