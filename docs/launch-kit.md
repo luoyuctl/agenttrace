@@ -121,6 +121,7 @@ Open PRs:
 - Scottcjn/awesome-agents: https://github.com/Scottcjn/awesome-agents/pull/12
 - awesome-cli-apps-in-a-csv: https://github.com/toolleeo/awesome-cli-apps-in-a-csv/pull/255
 - awesome-agent-clis: https://github.com/ComposioHQ/awesome-agent-clis/pull/8
+- awesome-code-agents: https://github.com/sorrycc/awesome-code-agents/pull/20
 
 Merged listings:
 
