@@ -138,6 +138,7 @@ Open PRs:
 - awesome-opencode: https://github.com/awesome-opencode/awesome-opencode/pull/334
 - awesome-opensource-ai: https://github.com/alvinreal/awesome-opensource-ai/pull/418
 - awesome-llm-skills: https://github.com/Prat011/awesome-llm-skills/pull/116
+- awesome-codex-plugins: https://github.com/hashgraph-online/awesome-codex-plugins/pull/65
 - awesome-ai-eval: https://github.com/Vvkmnn/awesome-ai-eval/pull/10
 - awesome-ai-dev-tools: https://github.com/PierrunoYT/awesome-ai-dev-tools/pull/20
 - awesome-utils-dev: https://github.com/pegaltier/awesome-utils-dev/pull/29
