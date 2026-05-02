@@ -129,6 +129,7 @@ Open PRs:
 - LangGPT/awesome-claude-code: https://github.com/LangGPT/awesome-claude-code/pull/58
 - awesome-mac: https://github.com/jaywcjlove/awesome-mac/pull/2026
 - awesome-ChatGPT-repositories: https://github.com/taishi-i/awesome-ChatGPT-repositories/pull/130
+- awesome-agent-harness: https://github.com/Picrew/awesome-agent-harness/pull/5
 
 Merged listings:
 
