@@ -2938,7 +2938,7 @@ func subtlePanel(title, content string, width int) string {
 }
 
 func styleForOuterWidth(style lipgloss.Style, outerWidth int) lipgloss.Style {
-	frameW, _ := style.GetFrameSize()
+	frameW := style.GetHorizontalMargins() + style.GetHorizontalBorderSize()
 	return style.Width(maxInt(1, outerWidth-frameW))
 }
 
