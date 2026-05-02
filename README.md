@@ -34,6 +34,7 @@ AI agents now behave like tiny build systems: they plan, call tools, retry, hang
 | 🚀 **Single Binary** | 7.5 MB — `curl -sL ... \| sh` install, no runtime deps |
 | 🖥️ **Bubble Tea TUI** | Modern terminal UI: Overview → Session List → Detail → Diagnostics → Diff |
 | ⚡ **Persistent Cache** | Incremental session cache avoids a full disk parse on every startup |
+| 🩺 **Doctor Mode** | `--doctor` checks detected agent dirs, cache health, and next steps |
 | ⌨️ **Command Mode** | `:health <80`, `:cost >0.1`, `:sort cost desc`, `:anomalies` |
 | 🔍 **Multi-Format Auto-Detect** | Hermes Agent / Claude Code / Codex CLI / Gemini CLI / OpenCode / OpenClaw — all parsed seamlessly |
 | 💸 **Cost & Time Waste** | How much 💰 you burned + ⏱️ time lost to loops, retries, failures |
@@ -86,6 +87,9 @@ agenttrace
 # Try the TUI with built-in sample sessions
 agenttrace --demo
 
+# Diagnose local session discovery and cache status
+agenttrace --doctor
+
 # Analyze latest session
 agenttrace --latest
 
@@ -100,6 +104,9 @@ agenttrace --overview -f json -o agenttrace-overview.json
 
 # Demo JSON for screenshots, CI examples, or first-time evaluation
 agenttrace --demo --overview -f json
+
+# Doctor JSON for support tickets or CI setup checks
+agenttrace --doctor -f json
 
 # List all model pricings (900+ from LiteLLM when cached)
 agenttrace --list-models
@@ -135,7 +142,7 @@ agenttrace --latest --lang zh    # Chinese (supports zh, en)
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v0.3.3 — AI Agent Session Performance Report
+  AGENTTRACE v0.3.4 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST

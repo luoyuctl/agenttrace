@@ -31,6 +31,7 @@ func main() {
 	testMatch := flag.Bool("test-match", false, "Test model name fuzzy matching")
 	version := flag.Bool("version", false, "Show version")
 	demo := flag.Bool("demo", false, "Use built-in demo sessions")
+	doctor := flag.Bool("doctor", false, "Check detected session directories, cache status, and next steps")
 	lang := flag.String("lang", "en", "Language for report output: en, zh")
 	flag.Parse()
 
@@ -115,6 +116,21 @@ func main() {
 	}
 
 	path := flag.Arg(0)
+	if *doctor {
+		out, err := renderDoctorReport(sessionsDir, *demo, *format)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
+			os.Exit(1)
+		}
+		if *output != "" {
+			os.MkdirAll(filepath.Dir(*output), 0755)
+			os.WriteFile(*output, []byte(out), 0644)
+			fmt.Fprintf(os.Stderr, i18n.T("cli_saved"), *output)
+		}
+		fmt.Print(out)
+		return
+	}
+
 	hasAction := path != "" || *latest || *compare || *overview || *wasteFlag
 
 	if !hasAction {

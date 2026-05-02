@@ -15,7 +15,7 @@ import (
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
 
-const Version = "0.3.3"
+const Version = "0.3.4"
 
 // Severity constants for anomaly severity (internal, not i18n).
 const (
@@ -31,6 +31,12 @@ type Price struct {
 	Output float64
 	CW     float64
 	CR     float64
+}
+
+// KnownSessionDir describes a well-known local agent session directory.
+type KnownSessionDir struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
 }
 
 var ToolDisplayNames = map[string]string{
@@ -1924,28 +1930,28 @@ func sortFilesByModTime(paths []string) []string {
 	return out
 }
 
-// DiscoverSessionDirs returns all well-known agent session directories found on this machine.
-func DiscoverSessionDirs() []string {
+// KnownSessionDirs returns the well-known agent session directory candidates.
+func KnownSessionDirs() []KnownSessionDir {
 	home, _ := os.UserHomeDir()
 	if home == "" {
 		return nil
 	}
-	var dirs []string
+	return []KnownSessionDir{
+		{Name: "Hermes Agent", Path: filepath.Join(home, ".hermes", "sessions")},
+		{Name: "Codex CLI", Path: filepath.Join(home, ".codex", "sessions")},
+		{Name: "Codex CLI archived", Path: filepath.Join(home, ".codex", "archived_sessions")},
+		{Name: "Gemini CLI", Path: filepath.Join(home, ".gemini", "sessions")},
+		{Name: "Claude Code", Path: filepath.Join(home, ".claude", "projects")},
+	}
+}
 
-	if s := filepath.Join(home, ".hermes", "sessions"); dirExists(s) {
-		dirs = append(dirs, s)
-	}
-	if s := filepath.Join(home, ".codex", "sessions"); dirExists(s) {
-		dirs = append(dirs, s)
-	}
-	if s := filepath.Join(home, ".codex", "archived_sessions"); dirExists(s) {
-		dirs = append(dirs, s)
-	}
-	if s := filepath.Join(home, ".gemini", "sessions"); dirExists(s) {
-		dirs = append(dirs, s)
-	}
-	if s := filepath.Join(home, ".claude", "projects"); dirExists(s) {
-		dirs = append(dirs, s)
+// DiscoverSessionDirs returns all well-known agent session directories found on this machine.
+func DiscoverSessionDirs() []string {
+	var dirs []string
+	for _, candidate := range KnownSessionDirs() {
+		if dirExists(candidate.Path) {
+			dirs = append(dirs, candidate.Path)
+		}
 	}
 
 	return dirs

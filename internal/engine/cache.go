@@ -47,6 +47,11 @@ func sessionCachePath() string {
 	return filepath.Join(dir, "sessions.json")
 }
 
+// SessionCachePath returns the on-disk session cache path.
+func SessionCachePath() string {
+	return sessionCachePath()
+}
+
 func emptySessionCache() SessionCache {
 	return SessionCache{
 		Entries: make(map[string]CacheEntry),
