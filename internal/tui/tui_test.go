@@ -579,6 +579,33 @@ func TestDetailRendersDiagnosticSummary(t *testing.T) {
 	}
 }
 
+func TestOpeningDetailWithNoVisibleRowsClearsStaleViewport(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 100, 36)
+	m.view = viewList
+	m.table.SetCursor(1)
+	m.openDetail()
+	if !m.detailReady {
+		t.Fatalf("expected initial detail viewport to be ready")
+	}
+
+	m.view = viewList
+	m.filterText = "no-such-session"
+	m.rebuildFilteredView()
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = next.(Model)
+
+	if m.view != viewDetail {
+		t.Fatalf("expected Tab from list to enter detail view, got %d", m.view)
+	}
+	if m.detailReady {
+		t.Fatalf("expected stale detail viewport to be cleared")
+	}
+	rendered := m.View()
+	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("select_session_hint"))) {
+		t.Fatalf("expected empty detail hint, got:\n%s", rendered)
+	}
+}
+
 func TestDiffRendersWinnerInsight(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 36)
 	m.diffResult = engine.DiffSessions(m.sessions[0], m.sessions[1])

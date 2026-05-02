@@ -653,6 +653,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) openDetail() {
+	m.detailReady = false
 	if !m.tableReady || len(m.sessions) == 0 {
 		return
 	}
