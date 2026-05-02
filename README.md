@@ -38,6 +38,18 @@ Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
 AI agents now behave like tiny build systems: they plan, call tools, retry, hang, and spend money while doing it. Most teams only see the final output, not the session health, token burn, tool failure rate, or whether the agent got stuck. agenttrace gives that missing operational view in the terminal.
 
+## Where it fits
+
+agenttrace is not a hosted tracing backend or another chat client. It is a local inspection tool for the logs your coding agents already leave on disk.
+
+| If you need... | Use agenttrace for... |
+|---|---|
+| Local-first privacy | Inspect sessions without uploading prompts, code, or tool logs |
+| Fast terminal triage | Open a TUI, sort bad sessions, and jump into detail/diagnostics |
+| Cross-agent comparison | Compare Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, Hermes, OpenCode, Kimi, and more |
+| Cost and token evidence | See cost, token usage, cache usage, retries, loops, latency, and health in one place |
+| CI guardrails | Export JSON/Markdown/HTML and fail builds on low health or high tool failure rates |
+
 ## What it catches
 
 | Pain | What agenttrace shows |
