@@ -31,7 +31,7 @@ jobs:
           cp assets/agenttrace-demo.gif assets/hero-banner.png assets/logo-icon.png assets/tui-preview.png public/assets/
 
       - name: Configure Pages
-        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
         with:
           enablement: true
 
