@@ -439,6 +439,22 @@ func TestWideListKeepsFullOperationalColumns(t *testing.T) {
 	}
 }
 
+func TestUltraWideListAddsDiagnosticColumns(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 180, 36)
+	m.view = viewList
+	if got := len(m.table.Columns()); got != 12 {
+		t.Fatalf("expected diagnostic columns on ultra-wide screens, got %d", got)
+	}
+	cols := m.table.Columns()
+	if cols[2].Title != "MODEL" || cols[9].Title != "DURATION" || cols[10].Title != "ANOM" {
+		t.Fatalf("unexpected ultra-wide column titles: %+v", cols)
+	}
+	row := m.table.Rows()[0]
+	if row[2] != "gpt-5.1" || row[10] != "0" {
+		t.Fatalf("expected model and anomaly count columns, got row=%v", row)
+	}
+}
+
 func TestListAndDetailClampInvalidToolCounts(t *testing.T) {
 	m := sampleModelForTest()
 	m.sessions[0].Metrics.AssistantTurns = -2
@@ -605,6 +621,13 @@ func TestChineseListUsesTranslatedLabels(t *testing.T) {
 			t.Fatalf("expected translated label %q in list view", want)
 		}
 	}
+
+	m.runCommand("clear")
+	m.runCommand("health good")
+	rendered = m.View()
+	if !strings.Contains(rendered, "健康=良好") {
+		t.Fatalf("expected translated health filter label in list view:\n%s", rendered)
+	}
 }
 
 func TestChineseTUITranslatesRuntimeLabels(t *testing.T) {
@@ -652,10 +675,13 @@ func TestChineseDiffAndDiagnosticsTranslateComputedLabels(t *testing.T) {
 	if got := riskLabel("high"); got != "高" {
 		t.Fatalf("expected translated risk label, got %q", got)
 	}
+	if got := healthFilterLabel("crit"); got != "严重" {
+		t.Fatalf("expected translated health filter label, got %q", got)
+	}
 }
 
 func TestWideListRendersStableSingleTable(t *testing.T) {
-	m := resizeForTest(t, sampleModelForTest(), 160, 36)
+	m := resizeForTest(t, sampleModelForTest(), 220, 36)
 	m.view = viewList
 	rendered := m.View()
 	for _, stale := range []string{"SESSION INSPECTOR", "Enter detail · d diff · w diagnostics"} {
@@ -663,21 +689,45 @@ func TestWideListRendersStableSingleTable(t *testing.T) {
 			t.Fatalf("list should not render stale split preview fragment %q", stale)
 		}
 	}
-	if !strings.Contains(rendered, "session_alpha") || !strings.Contains(rendered, "issue") {
-		t.Fatalf("expected stable list table with selected summary")
+	for _, want := range []string{"SESSION", "SOURCE", "MODEL", "DURATION", "ANOM", "session_alpha", "gpt-5.1", "issue"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected wide list to include %q:\n%s", want, rendered)
+		}
 	}
-	if got := maxRenderedWidth(rendered); got > 160 {
+	if got := maxRenderedWidth(rendered); got > 220 {
 		t.Fatalf("wide list render too wide: got=%d line=%q", got, widestLine(rendered))
 	}
 }
 
 func TestListFrameClearsFullTerminalWidth(t *testing.T) {
-	m := resizeForTest(t, sampleModelForTest(), 180, 40)
+	m := resizeForTest(t, sampleModelForTest(), 244, 40)
 	m.view = viewList
 
 	for i, line := range strings.Split(m.View(), "\n") {
-		if got := lipgloss.Width(line); got != 180 {
+		if got := lipgloss.Width(line); got != 244 {
 			t.Fatalf("line %d should fill terminal width, got=%d line=%q", i, got, line)
+		}
+	}
+}
+
+func TestChineseWideListColumnsAndFilterLabels(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 220, 36)
+	m.view = viewList
+	m.runCommand("critical")
+
+	rendered := m.View()
+	for _, want := range []string{"模型", "时长", "异常", "健康=严重"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("wide Chinese list missing translated label %q:\n%s", want, rendered)
+		}
+	}
+	for _, unwanted := range []string{"MODEL", "DURATION", "ANOM", "health=crit"} {
+		if strings.Contains(rendered, unwanted) {
+			t.Fatalf("wide Chinese list leaked English/internal label %q:\n%s", unwanted, rendered)
 		}
 	}
 }

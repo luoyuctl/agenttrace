@@ -49,7 +49,7 @@ func (m *Model) runCommand(input string) {
 		m.filterValue = ""
 		m.view = viewList
 		m.rebuildFilteredView()
-		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_filter_health"), m.filterHealth)
+		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_filter_health"), healthFilterLabel(m.filterHealth))
 	case "source":
 		if len(fields) < 2 {
 			m.commandFeedback = i18n.T("cmd_usage_source")

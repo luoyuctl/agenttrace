@@ -736,6 +736,21 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			tokensStr,
 			healthCol,
 		}
+	case 12:
+		return table.Row{
+			s.Name,
+			sourceDisplay,
+			met.ModelUsed,
+			fmt.Sprintf("%d", nonNegativeInt(met.AssistantTurns)),
+			fmt.Sprintf("%d", totalToolCalls),
+			sr,
+			failStr,
+			costColor(met.CostEstimated),
+			tokensStr,
+			engine.FmtDuration(chartValue(met.DurationSec)),
+			fmt.Sprintf("%d", len(s.Anomalies)),
+			healthCol,
+		}
 	case 8:
 		return table.Row{
 			s.Name,
@@ -1907,7 +1922,10 @@ func (m *Model) refreshColumns() {
 func (m *Model) adjustColumnWidths(width int) {
 	var sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW int
 
-	if width > 130 {
+	if width >= 170 {
+		m.setColumnsAndRefreshRows(m.wideListColumns(24, 14, 18, 5, 5, 5, 5, 8, 7, 8, 5, 9))
+		return
+	} else if width > 130 {
 		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 20, 12, 5, 5, 5, 5, 8, 7, 9
 	} else if width >= 100 {
 		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 17, 10, 5, 5, 5, 4, 8, 7, 8
@@ -1928,6 +1946,23 @@ func (m *Model) adjustColumnWidths(width int) {
 	}
 
 	m.setColumnsAndRefreshRows(m.fullListColumns(sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW))
+}
+
+func (m *Model) wideListColumns(sessW, srcW, modelW, turnsW, toolsW, succW, failW, costW, tokensW, durationW, anomW, healthW int) []table.Column {
+	return []table.Column{
+		{Title: m.sortColTitle(i18n.T("session"), "name"), Width: sessW},
+		{Title: m.sortColTitle(i18n.T("source_tool"), "source"), Width: srcW},
+		{Title: i18n.T("model_col"), Width: modelW},
+		{Title: m.sortColTitle(i18n.T("turns_header"), "turns"), Width: turnsW},
+		{Title: m.sortColTitle(i18n.T("tools"), ""), Width: toolsW},
+		{Title: m.sortColTitle(i18n.T("succ_pct"), ""), Width: succW},
+		{Title: m.sortColTitle(i18n.T("fail"), ""), Width: failW},
+		{Title: m.sortColTitle(i18n.T("cost"), "cost"), Width: costW},
+		{Title: m.sortColTitle(i18n.T("tokens"), ""), Width: tokensW},
+		{Title: i18n.T("duration_col"), Width: durationW},
+		{Title: i18n.T("anomaly_count_col"), Width: anomW},
+		{Title: m.sortColTitle(i18n.T("health"), "health"), Width: healthW},
+	}
 }
 
 func (m *Model) fullListColumns(sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW int) []table.Column {
@@ -2811,6 +2846,19 @@ func riskLabel(risk string) string {
 	return risk
 }
 
+func healthFilterLabel(filter string) string {
+	switch filter {
+	case "good":
+		return i18n.T("list_health_good")
+	case "warn":
+		return i18n.T("list_health_warn")
+	case "crit":
+		return i18n.T("list_health_crit")
+	default:
+		return filter
+	}
+}
+
 func anomalyColor(t string) lipgloss.Style {
 	switch t {
 	case "tool_failures", "hanging":
@@ -3091,9 +3139,9 @@ func (m *Model) matchesFilters(s engine.Session) bool {
 func (m *Model) filterLabel() string {
 	var parts []string
 	if m.filterHealth != "" {
-		parts = append(parts, fmt.Sprintf("%s=%s", i18n.T("list_filter_health"), m.filterHealth))
+		parts = append(parts, fmt.Sprintf("%s=%s", i18n.T("list_filter_health"), healthFilterLabel(m.filterHealth)))
 	} else if m.filterMode == "health" {
-		parts = append(parts, fmt.Sprintf("%s=%s", i18n.T("list_filter_health"), m.filterValue))
+		parts = append(parts, fmt.Sprintf("%s=%s", i18n.T("list_filter_health"), healthFilterLabel(m.filterValue)))
 	}
 	if m.filterSource != "" {
 		parts = append(parts, fmt.Sprintf("%s=%s", i18n.T("list_filter_source"), m.filterSource))

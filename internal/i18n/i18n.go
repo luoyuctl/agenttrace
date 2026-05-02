@@ -268,6 +268,18 @@ var translations = map[string]map[Lang]string{
 		EN: "Model",
 		ZH: "模型",
 	},
+	"model_col": {
+		EN: "MODEL",
+		ZH: "模型",
+	},
+	"duration_col": {
+		EN: "DURATION",
+		ZH: "时长",
+	},
+	"anomaly_count_col": {
+		EN: "ANOM",
+		ZH: "异常",
+	},
 	"input_per_m": {
 		EN: "Input $/M",
 		ZH: "输入$/M",
@@ -697,6 +709,9 @@ var translations = map[string]map[Lang]string{
 	"list_filter_health":    {EN: "health", ZH: "健康"},
 	"list_filter_source":    {EN: "source", ZH: "来源"},
 	"list_filter_cost":      {EN: "cost", ZH: "费用"},
+	"list_health_good":      {EN: "good", ZH: "良好"},
+	"list_health_warn":      {EN: "warn", ZH: "警告"},
+	"list_health_crit":      {EN: "crit", ZH: "严重"},
 	"sort_label":            {EN: "sort", ZH: "排序"},
 	"sort_asc":              {EN: "asc", ZH: "升序"},
 	"sort_desc":             {EN: "desc", ZH: "降序"},
