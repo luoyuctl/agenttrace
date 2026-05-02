@@ -132,6 +132,7 @@ Open PRs:
 - awesome-agent-harness: https://github.com/Picrew/awesome-agent-harness/pull/5
 - awesome-cli-apps: https://github.com/agarrharr/awesome-cli-apps/pull/1032
 - awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
+- command-line-tools: https://github.com/linsa-io/command-line-tools/pull/35
 
 Merged listings:
 
