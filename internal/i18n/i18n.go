@@ -383,6 +383,118 @@ var translations = map[string]map[Lang]string{
 		EN: "Global Overview",
 		ZH: "全局概览",
 	},
+	"report_md_title": {
+		EN: "agenttrace overview",
+		ZH: "agenttrace 概览",
+	},
+	"report_html_title": {
+		EN: "agenttrace overview",
+		ZH: "agenttrace 概览",
+	},
+	"report_html_h1": {
+		EN: "AI agent session overview",
+		ZH: "AI 代理会话概览",
+	},
+	"report_html_subtitle": {
+		EN: "Static report generated from local coding-agent traces.",
+		ZH: "基于本地编码 Agent 轨迹生成的静态报告。",
+	},
+	"report_metric": {
+		EN: "Metric",
+		ZH: "指标",
+	},
+	"report_value": {
+		EN: "Value",
+		ZH: "值",
+	},
+	"report_sessions": {
+		EN: "Sessions",
+		ZH: "会话",
+	},
+	"report_health_breakdown": {
+		EN: "Healthy / Warning / Critical",
+		ZH: "健康 / 警告 / 严重",
+	},
+	"report_avg_health": {
+		EN: "Average health",
+		ZH: "平均健康分",
+	},
+	"report_fleet_quality": {
+		EN: "Fleet quality score",
+		ZH: "整体质量评分",
+	},
+	"report_total_tokens": {
+		EN: "Total tokens",
+		ZH: "总 token",
+	},
+	"report_tool_failures": {
+		EN: "Tool failures",
+		ZH: "工具失败",
+	},
+	"report_failure_rate": {
+		EN: "%.1f%% failure rate",
+		ZH: "%.1f%% 失败率",
+	},
+	"report_by_agent": {
+		EN: "By agent",
+		ZH: "按 Agent",
+	},
+	"report_by_model": {
+		EN: "By model",
+		ZH: "按模型",
+	},
+	"report_recent_sessions": {
+		EN: "Recent sessions",
+		ZH: "最近会话",
+	},
+	"report_recent_anomalies": {
+		EN: "Recent anomalies",
+		ZH: "近期异常",
+	},
+	"report_agent": {
+		EN: "Agent",
+		ZH: "Agent",
+	},
+	"report_session": {
+		EN: "Session",
+		ZH: "会话",
+	},
+	"report_source": {
+		EN: "Source",
+		ZH: "来源",
+	},
+	"report_model": {
+		EN: "Model",
+		ZH: "模型",
+	},
+	"report_cost": {
+		EN: "Cost",
+		ZH: "费用",
+	},
+	"report_health": {
+		EN: "Health",
+		ZH: "健康",
+	},
+	"report_anomalies": {
+		EN: "Anomalies",
+		ZH: "异常",
+	},
+	"report_type": {
+		EN: "Type",
+		ZH: "类型",
+	},
+	"report_age": {
+		EN: "Age",
+		ZH: "时间",
+	},
+	"report_no_anomalies": {
+		EN: "No anomalies detected.",
+		ZH: "未检测到异常。",
+	},
+	"report_estimated_cost": {
+		EN: "Estimated session cost",
+		ZH: "估算会话费用",
+	},
 	"overview_total": {
 		EN: "Total Sessions",
 		ZH: "总会话数",

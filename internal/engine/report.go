@@ -457,17 +457,17 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 	summary := overviewReportSummary(sessions)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# agenttrace overview\n\n")
-	fmt.Fprintf(&b, "| Metric | Value |\n|---|---:|\n")
-	fmt.Fprintf(&b, "| Sessions | %d |\n", ov.TotalSessions)
-	fmt.Fprintf(&b, "| Healthy / Warning / Critical | %d / %d / %d |\n", ov.Healthy, ov.Warning, ov.Critical)
-	fmt.Fprintf(&b, "| Average health | %.1f |\n", summary.AvgHealth)
-	fmt.Fprintf(&b, "| Total cost | $%.2f |\n", ov.TotalCost)
-	fmt.Fprintf(&b, "| Total tokens | %d |\n", summary.TotalTokens)
-	fmt.Fprintf(&b, "| Tool failures | %d / %d (%.1f%%) |\n\n", summary.FailedTools, summary.TotalTools, summary.ToolFailRate)
+	fmt.Fprintf(&b, "# %s\n\n", i18n.T("report_md_title"))
+	fmt.Fprintf(&b, "| %s | %s |\n|---|---:|\n", i18n.T("report_metric"), i18n.T("report_value"))
+	fmt.Fprintf(&b, "| %s | %d |\n", i18n.T("report_sessions"), ov.TotalSessions)
+	fmt.Fprintf(&b, "| %s | %d / %d / %d |\n", i18n.T("report_health_breakdown"), ov.Healthy, ov.Warning, ov.Critical)
+	fmt.Fprintf(&b, "| %s | %.1f |\n", i18n.T("report_avg_health"), summary.AvgHealth)
+	fmt.Fprintf(&b, "| %s | $%.2f |\n", i18n.T("total_cost"), ov.TotalCost)
+	fmt.Fprintf(&b, "| %s | %d |\n", i18n.T("report_total_tokens"), summary.TotalTokens)
+	fmt.Fprintf(&b, "| %s | %d / %d (%.1f%%) |\n\n", i18n.T("report_tool_failures"), summary.FailedTools, summary.TotalTools, summary.ToolFailRate)
 
-	fmt.Fprintf(&b, "## By agent\n\n")
-	fmt.Fprintf(&b, "| Agent | Sessions | Cost |\n|---|---:|---:|\n")
+	fmt.Fprintf(&b, "## %s\n\n", i18n.T("report_by_agent"))
+	fmt.Fprintf(&b, "| %s | %s | %s |\n|---|---:|---:|\n", i18n.T("report_agent"), i18n.T("report_sessions"), i18n.T("report_cost"))
 	type akv struct {
 		k string
 		v AgentOverview
@@ -490,8 +490,9 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 		fmt.Fprintf(&b, "| %s | %d | $%.2f |\n", markdownCell(display), a.v.Sessions, a.v.Cost)
 	}
 
-	fmt.Fprintf(&b, "\n## Recent sessions\n\n")
-	fmt.Fprintf(&b, "| Session | Source | Model | Health | Cost | Anomalies |\n|---|---|---|---:|---:|---:|\n")
+	fmt.Fprintf(&b, "\n## %s\n\n", i18n.T("report_recent_sessions"))
+	fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n|---|---|---|---:|---:|---:|\n",
+		i18n.T("report_session"), i18n.T("report_source"), i18n.T("report_model"), i18n.T("report_health"), i18n.T("report_cost"), i18n.T("report_anomalies"))
 	limit := len(sessions)
 	if limit > 10 {
 		limit = 10
@@ -511,19 +512,19 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 			len(s.Anomalies))
 	}
 
-	fmt.Fprintf(&b, "\n## Recent anomalies\n\n")
+	fmt.Fprintf(&b, "\n## %s\n\n", i18n.T("report_recent_anomalies"))
 	if len(ov.AnomaliesTop) == 0 {
-		fmt.Fprintf(&b, "No anomalies detected.\n")
+		fmt.Fprintf(&b, "%s\n", i18n.T("report_no_anomalies"))
 		return b.String()
 	}
-	fmt.Fprintf(&b, "| Session | Type | Age |\n|---|---|---|\n")
+	fmt.Fprintf(&b, "| %s | %s | %s |\n|---|---|---|\n", i18n.T("report_session"), i18n.T("report_type"), i18n.T("report_age"))
 	anomLimit := len(ov.AnomaliesTop)
 	if anomLimit > 10 {
 		anomLimit = 10
 	}
 	for i := 0; i < anomLimit; i++ {
 		a := ov.AnomaliesTop[i]
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", markdownCell(a.Session), markdownCell(a.Type), markdownCell(a.Age))
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", markdownCell(a.Session), markdownCell(reportAnomalyTypeLabel(a.Type)), markdownCell(a.Age))
 	}
 	return b.String()
 }
@@ -537,11 +538,11 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	var b strings.Builder
 	w := func(s string) { b.WriteString(s + "\n") }
 	w(`<!doctype html>`)
-	w(`<html lang="en">`)
+	w(fmt.Sprintf(`<html lang="%s">`, html.EscapeString(reportLangCode())))
 	w(`<head>`)
 	w(`<meta charset="utf-8">`)
 	w(`<meta name="viewport" content="width=device-width, initial-scale=1">`)
-	w(`<title>agenttrace overview</title>`)
+	w(fmt.Sprintf(`<title>%s</title>`, html.EscapeString(i18n.T("report_html_title"))))
 	w(`<link rel="icon" href="data:,">`)
 	w(`<style>`)
 	w(`:root{color-scheme:dark;--bg:#07090b;--panel:#101419;--line:#273039;--text:#f4f0dd;--muted:#a9a391;--green:#54ff00;--cyan:#00d8ff;--amber:#ffb000;--red:#ff4a4a}`)
@@ -555,17 +556,18 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	w(`<body>`)
 	w(`<main>`)
 	w(`<header>`)
-	w(`<div><div class="brand">agenttrace</div><h1>AI agent session overview</h1><p>Static report generated from local coding-agent traces.</p></div>`)
-	w(fmt.Sprintf(`<div class="meta">v%s<br>%d sessions<br><code>agenttrace --overview -f html</code></div>`, html.EscapeString(Version), ov.TotalSessions))
+	w(fmt.Sprintf(`<div><div class="brand">agenttrace</div><h1>%s</h1><p>%s</p></div>`, html.EscapeString(i18n.T("report_html_h1")), html.EscapeString(i18n.T("report_html_subtitle"))))
+	w(fmt.Sprintf(`<div class="meta">v%s<br>%d %s<br><code>agenttrace --overview -f html</code></div>`, html.EscapeString(Version), ov.TotalSessions, html.EscapeString(i18n.T("report_sessions"))))
 	w(`</header>`)
 	w(`<div class="grid" aria-label="summary metrics">`)
-	w(fmt.Sprintf(`<div class="metric"><span>Sessions</span><strong>%d</strong><p>%d healthy / %d warning / %d critical</p></div>`, ov.TotalSessions, ov.Healthy, ov.Warning, ov.Critical))
-	w(fmt.Sprintf(`<div class="metric"><span>Average health</span><strong>%s</strong><p>Fleet quality score</p></div>`, html.EscapeString(fmt.Sprintf("%.1f", summary.AvgHealth))))
-	w(fmt.Sprintf(`<div class="metric"><span>Total cost</span><strong>$%.2f</strong><p>Estimated session cost</p></div>`, ov.TotalCost))
-	w(fmt.Sprintf(`<div class="metric %s"><span>Tool failures</span><strong>%d/%d</strong><p>%.1f%% failure rate</p></div>`, html.EscapeString(failureClass(summary.ToolFailRate)), summary.FailedTools, summary.TotalTools, summary.ToolFailRate))
+	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>%d</strong><p>%d %s / %d %s / %d %s</p></div>`, html.EscapeString(i18n.T("report_sessions")), ov.TotalSessions, ov.Healthy, html.EscapeString(i18n.T("overview_healthy")), ov.Warning, html.EscapeString(i18n.T("overview_warning")), ov.Critical, html.EscapeString(i18n.T("overview_critical"))))
+	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>%s</strong><p>%s</p></div>`, html.EscapeString(i18n.T("report_avg_health")), html.EscapeString(fmt.Sprintf("%.1f", summary.AvgHealth)), html.EscapeString(i18n.T("report_fleet_quality"))))
+	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>$%.2f</strong><p>%s</p></div>`, html.EscapeString(i18n.T("total_cost")), ov.TotalCost, html.EscapeString(i18n.T("report_estimated_cost"))))
+	w(fmt.Sprintf(`<div class="metric %s"><span>%s</span><strong>%d/%d</strong><p>%s</p></div>`, html.EscapeString(failureClass(summary.ToolFailRate)), html.EscapeString(i18n.T("report_tool_failures")), summary.FailedTools, summary.TotalTools, html.EscapeString(fmt.Sprintf(i18n.T("report_failure_rate"), summary.ToolFailRate))))
 	w(`</div>`)
 
-	w(`<section><h2>Recent sessions</h2><table><thead><tr><th>Session</th><th>Source</th><th>Model</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Health</th><th class="num">Anomalies</th></tr></thead><tbody>`)
+	w(fmt.Sprintf(`<section><h2>%s</h2><table><thead><tr><th>%s</th><th>%s</th><th>%s</th><th class="num">%s</th><th class="num">%s</th><th class="num">%s</th><th class="num">%s</th></tr></thead><tbody>`,
+		html.EscapeString(i18n.T("report_recent_sessions")), html.EscapeString(i18n.T("report_session")), html.EscapeString(i18n.T("report_source")), html.EscapeString(i18n.T("report_model")), html.EscapeString(i18n.T("report_total_tokens")), html.EscapeString(i18n.T("report_cost")), html.EscapeString(i18n.T("report_health")), html.EscapeString(i18n.T("report_anomalies"))))
 	limit := minReportInt(len(sessions), 20)
 	for i := 0; i < limit; i++ {
 		s := sessions[i]
@@ -586,7 +588,8 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	}
 	w(`</tbody></table></section>`)
 
-	w(`<section><h2>By agent</h2><table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>`)
+	w(fmt.Sprintf(`<section><h2>%s</h2><table><thead><tr><th>%s</th><th class="num">%s</th><th class="num">%s</th></tr></thead><tbody>`,
+		html.EscapeString(i18n.T("report_by_agent")), html.EscapeString(i18n.T("report_agent")), html.EscapeString(i18n.T("report_sessions")), html.EscapeString(i18n.T("report_cost"))))
 	for _, a := range agents {
 		display := a.k
 		if d, ok := ToolDisplayNames[a.k]; ok {
@@ -596,7 +599,8 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	}
 	w(`</tbody></table></section>`)
 
-	w(`<section><h2>By model</h2><table><thead><tr><th>Model</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>`)
+	w(fmt.Sprintf(`<section><h2>%s</h2><table><thead><tr><th>%s</th><th class="num">%s</th><th class="num">%s</th></tr></thead><tbody>`,
+		html.EscapeString(i18n.T("report_by_model")), html.EscapeString(i18n.T("report_model")), html.EscapeString(i18n.T("report_sessions")), html.EscapeString(i18n.T("report_cost"))))
 	modelLimit := minReportInt(len(models), 12)
 	for i := 0; i < modelLimit; i++ {
 		mdl := models[i]
@@ -604,15 +608,16 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	}
 	w(`</tbody></table></section>`)
 
-	w(`<section><h2>Recent anomalies</h2>`)
+	w(fmt.Sprintf(`<section><h2>%s</h2>`, html.EscapeString(i18n.T("report_recent_anomalies"))))
 	if len(ov.AnomaliesTop) == 0 {
-		w(`<p>No anomalies detected.</p>`)
+		w(fmt.Sprintf(`<p>%s</p>`, html.EscapeString(i18n.T("report_no_anomalies"))))
 	} else {
-		w(`<table><thead><tr><th>Session</th><th>Type</th><th>Age</th></tr></thead><tbody>`)
+		w(fmt.Sprintf(`<table><thead><tr><th>%s</th><th>%s</th><th>%s</th></tr></thead><tbody>`,
+			html.EscapeString(i18n.T("report_session")), html.EscapeString(i18n.T("report_type")), html.EscapeString(i18n.T("report_age"))))
 		anomLimit := minReportInt(len(ov.AnomaliesTop), 20)
 		for i := 0; i < anomLimit; i++ {
 			a := ov.AnomaliesTop[i]
-			w(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, html.EscapeString(a.Session), html.EscapeString(a.Type), html.EscapeString(a.Age)))
+			w(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, html.EscapeString(a.Session), html.EscapeString(reportAnomalyTypeLabel(a.Type)), html.EscapeString(a.Age)))
 		}
 		w(`</tbody></table>`)
 	}
@@ -621,6 +626,21 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	w(`</body>`)
 	w(`</html>`)
 	return b.String()
+}
+
+func reportLangCode() string {
+	if i18n.Current == i18n.ZH {
+		return "zh"
+	}
+	return "en"
+}
+
+func reportAnomalyTypeLabel(kind string) string {
+	key := "anomaly_type_" + kind
+	if translated := i18n.T(key); translated != key {
+		return translated
+	}
+	return strings.ReplaceAll(kind, "_", " ")
 }
 
 type overviewSummary struct {
@@ -747,7 +767,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 	wf := func(f string, args ...interface{}) { b.WriteString(fmt.Sprintf(f, args...) + "\n") }
 
 	w(sep)
-	w(fmt.Sprintf("  AGENTTRACE v%s — "+i18n.T("overview_title")+"  (%d "+i18n.T("sessions_label")+")", Version, ov.TotalSessions))
+	w(fmt.Sprintf("  AGENTTRACE v%s — "+i18n.T("overview_title")+"  (%d "+i18n.T("report_sessions")+")", Version, ov.TotalSessions))
 	w(sep)
 	w("")
 
@@ -781,7 +801,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 		if d, ok := ToolDisplayNames[a.k]; ok {
 			display = d
 		}
-		wf("    %-30s %4d sessions  $%7.2f", display, a.v.Sessions, a.v.Cost)
+		wf("    %-30s %4d %s  $%7.2f", display, a.v.Sessions, i18n.T("report_sessions"), a.v.Cost)
 	}
 	w("")
 
@@ -800,7 +820,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 		if i >= 8 {
 			break
 		}
-		wf("    %-25s %4d sessions  $%7.2f", mdl.k, mdl.v.Sessions, mdl.v.Cost)
+		wf("    %-25s %4d %s  $%7.2f", mdl.k, mdl.v.Sessions, i18n.T("report_sessions"), mdl.v.Cost)
 	}
 	w("")
 
@@ -819,7 +839,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 			if len(name) > 30 {
 				name = name[:30]
 			}
-			wf("    ⚠️  %-30s %s", name, a.Type)
+			wf("    ⚠️  %-30s %s", name, reportAnomalyTypeLabel(a.Type))
 		}
 	}
 	w("")

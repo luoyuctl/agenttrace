@@ -547,6 +547,37 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 	}
 }
 
+func TestReportOverviewMarkdownChineseLabels(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	sessions := []Session{{
+		Name:      "bad",
+		Health:    30,
+		Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
+		Metrics: Metrics{
+			SourceTool:    "cursor",
+			ModelUsed:     "default",
+			TokensInput:   300,
+			TokensOutput:  200,
+			ToolCallsFail: 5,
+			CostEstimated: 0.34,
+		},
+	}}
+	out := ReportOverviewMarkdown(ComputeOverview(sessions), sessions)
+	for _, want := range []string{"# agenttrace 概览", "| 指标 | 值 |", "| 会话 | 1 |", "## 最近会话", "挂起"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Chinese markdown report missing %q:\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{"Metric", "Recent sessions", "Tool failures", "| bad | hanging |"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("Chinese markdown report leaked English label %q:\n%s", unwanted, out)
+		}
+	}
+}
+
 func TestReportOverviewHTMLIsShareableAndEscaped(t *testing.T) {
 	sessions := []Session{
 		{
@@ -593,6 +624,37 @@ func TestReportOverviewHTMLIsShareableAndEscaped(t *testing.T) {
 	}
 	if strings.Contains(out, "good<script>") {
 		t.Fatalf("html report did not escape session name:\n%s", out)
+	}
+}
+
+func TestReportOverviewHTMLChineseLabels(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	sessions := []Session{{
+		Name:      "bad<script>",
+		Health:    30,
+		Anomalies: []Anomaly{{Type: "tool_failures", Severity: SeverityHigh}},
+		Metrics: Metrics{
+			SourceTool:    "cursor",
+			ModelUsed:     "default",
+			TokensInput:   300,
+			TokensOutput:  200,
+			ToolCallsFail: 5,
+			CostEstimated: 0.34,
+		},
+	}}
+	out := ReportOverviewHTML(ComputeOverview(sessions), sessions)
+	for _, want := range []string{`<html lang="zh">`, "<title>agenttrace 概览</title>", "AI 代理会话概览", "工具失败", "最近会话", "bad&lt;script&gt;"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Chinese html report missing %q:\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{"AI agent session overview", "Recent sessions", "Tool failures", "bad<script>"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("Chinese html report leaked English/raw label %q:\n%s", unwanted, out)
+		}
 	}
 }
 
