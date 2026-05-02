@@ -134,6 +134,8 @@ Open PRs:
 - awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
 - command-line-tools: https://github.com/linsa-io/command-line-tools/pull/35
 - awesome-cli-coding-agents: https://github.com/bradAGI/awesome-cli-coding-agents/pull/73
+- awesome-ai-dev-tools: https://github.com/PierrunoYT/awesome-ai-dev-tools/pull/20
+- awesome-utils-dev: https://github.com/pegaltier/awesome-utils-dev/pull/29
 
 Merged listings:
 
