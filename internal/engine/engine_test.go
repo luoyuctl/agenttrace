@@ -474,6 +474,15 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 			TotalCost     float64 `json:"total_cost"`
 			TotalTokens   int     `json:"total_tokens"`
 			ToolFailRate  float64 `json:"tool_fail_rate"`
+			HealthTrend   struct {
+				Direction  string `json:"direction"`
+				Regressing bool   `json:"regressing"`
+				Message    string `json:"message"`
+				Points     []struct {
+					Name   string `json:"name"`
+					Health int    `json:"health"`
+				} `json:"points"`
+			} `json:"health_trend"`
 		} `json:"summary"`
 		ByAgent []struct {
 			Name     string  `json:"name"`
@@ -495,6 +504,9 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	}
 	if payload.Summary.TotalCost != 1 || payload.Summary.TotalTokens != 450 || payload.Summary.ToolFailRate != 25 {
 		t.Fatalf("missing operational totals: %+v", payload.Summary)
+	}
+	if payload.Summary.HealthTrend.Direction == "" || payload.Summary.HealthTrend.Message == "" || len(payload.Summary.HealthTrend.Points) != 2 {
+		t.Fatalf("missing health trend: %+v", payload.Summary.HealthTrend)
 	}
 	if len(payload.ByAgent) != 2 || len(payload.RecentSessions) != 2 || len(payload.Anomalies) != 1 {
 		t.Fatalf("missing overview sections: agents=%d recent=%d anomalies=%d",
@@ -535,6 +547,7 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 	for _, want := range []string{
 		"# agenttrace overview",
 		"| Sessions | 2 |",
+		"| Health Trend |",
 		"| Tool failures | 6 / 10 (60.0%) |",
 		"| Aider | 1 |",
 		"| Cursor | 1 |",
@@ -566,7 +579,7 @@ func TestReportOverviewMarkdownChineseLabels(t *testing.T) {
 		},
 	}}
 	out := ReportOverviewMarkdown(ComputeOverview(sessions), sessions)
-	for _, want := range []string{"# agenttrace 概览", "| 指标 | 值 |", "| 会话 | 1 |", "## 最近会话", "挂起"} {
+	for _, want := range []string{"# agenttrace 概览", "| 指标 | 值 |", "| 会话 | 1 |", "健康趋势", "## 最近会话", "挂起"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("Chinese markdown report missing %q:\n%s", want, out)
 		}
@@ -790,6 +803,17 @@ func TestAnalyzeHealthTrend_Declining(t *testing.T) {
 	}
 	if strings.Contains(trend.Message, "%!") {
 		t.Fatalf("trend message has bad formatting: %q", trend.Message)
+	}
+}
+
+func TestAnalyzeHealthTrend_DownMessage(t *testing.T) {
+	sessions := []Session{{Name: "s1", Health: 100}, {Name: "s2", Health: 10}, {Name: "s3", Health: 66}}
+	trend := AnalyzeHealthTrend(sessions)
+	if trend.Direction != "down" {
+		t.Fatalf("expected down trend, got %+v", trend)
+	}
+	if !strings.Contains(trend.Message, "Declining") {
+		t.Fatalf("down trend should not render as stable: %q", trend.Message)
 	}
 }
 

@@ -357,6 +357,11 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 		Health     int     `json:"health"`
 		Anomalies  int     `json:"anomalies"`
 	}
+	type trendPoint struct {
+		Name   string  `json:"name"`
+		Health int     `json:"health"`
+		Cost   float64 `json:"cost"`
+	}
 
 	totalTokens := 0
 	totalTools := 0
@@ -428,6 +433,11 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	if anomalies == nil {
 		anomalies = []AnomalyTop{}
 	}
+	trend := AnalyzeHealthTrend(sessions)
+	points := make([]trendPoint, 0, len(trend.Points))
+	for _, p := range trend.Points {
+		points = append(points, trendPoint{Name: p.Name, Health: p.Health, Cost: round4(p.Cost)})
+	}
 
 	payload := map[string]interface{}{
 		"version": Version,
@@ -442,6 +452,13 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 			"tool_calls":     totalTools,
 			"tool_failures":  failedTools,
 			"tool_fail_rate": toolFailRate,
+			"health_trend": map[string]interface{}{
+				"direction":  trend.Direction,
+				"regressing": trend.Regressing,
+				"avg_health": round4(trend.AvgHealth),
+				"message":    trend.Message,
+				"points":     points,
+			},
 		},
 		"by_agent":        agents,
 		"by_model":        models,
@@ -455,6 +472,7 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 // ReportOverviewMarkdown generates a human-readable Markdown overview for PR comments and CI artifacts.
 func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 	summary := overviewReportSummary(sessions)
+	trend := AnalyzeHealthTrend(sessions)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", i18n.T("report_md_title"))
@@ -462,6 +480,7 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 	fmt.Fprintf(&b, "| %s | %d |\n", i18n.T("report_sessions"), ov.TotalSessions)
 	fmt.Fprintf(&b, "| %s | %d / %d / %d |\n", i18n.T("report_health_breakdown"), ov.Healthy, ov.Warning, ov.Critical)
 	fmt.Fprintf(&b, "| %s | %.1f |\n", i18n.T("report_avg_health"), summary.AvgHealth)
+	fmt.Fprintf(&b, "| %s | %s |\n", i18n.T("trend_title"), markdownCell(trend.Message))
 	fmt.Fprintf(&b, "| %s | $%.2f |\n", i18n.T("total_cost"), ov.TotalCost)
 	fmt.Fprintf(&b, "| %s | %d |\n", i18n.T("report_total_tokens"), summary.TotalTokens)
 	fmt.Fprintf(&b, "| %s | %d / %d (%.1f%%) |\n\n", i18n.T("report_tool_failures"), summary.FailedTools, summary.TotalTools, summary.ToolFailRate)
@@ -532,6 +551,7 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 // ReportOverviewHTML generates a self-contained HTML report for CI artifacts and sharing.
 func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	summary := overviewReportSummary(sessions)
+	trend := AnalyzeHealthTrend(sessions)
 	agents := sortedAgents(ov.ByAgent)
 	models := sortedModels(ov.ByModel)
 
@@ -565,6 +585,9 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>$%.2f</strong><p>%s</p></div>`, html.EscapeString(i18n.T("total_cost")), ov.TotalCost, html.EscapeString(i18n.T("report_estimated_cost"))))
 	w(fmt.Sprintf(`<div class="metric %s"><span>%s</span><strong>%d/%d</strong><p>%s</p></div>`, html.EscapeString(failureClass(summary.ToolFailRate)), html.EscapeString(i18n.T("report_tool_failures")), summary.FailedTools, summary.TotalTools, html.EscapeString(fmt.Sprintf(i18n.T("report_failure_rate"), summary.ToolFailRate))))
 	w(`</div>`)
+	if len(sessions) > 1 {
+		w(fmt.Sprintf(`<section><h2>%s</h2><p>%s</p></section>`, html.EscapeString(i18n.T("trend_title")), html.EscapeString(trend.Message)))
+	}
 
 	w(fmt.Sprintf(`<section><h2>%s</h2><table><thead><tr><th>%s</th><th>%s</th><th>%s</th><th class="num">%s</th><th class="num">%s</th><th class="num">%s</th><th class="num">%s</th></tr></thead><tbody>`,
 		html.EscapeString(i18n.T("report_recent_sessions")), html.EscapeString(i18n.T("report_session")), html.EscapeString(i18n.T("report_source")), html.EscapeString(i18n.T("report_model")), html.EscapeString(i18n.T("report_total_tokens")), html.EscapeString(i18n.T("report_cost")), html.EscapeString(i18n.T("report_health")), html.EscapeString(i18n.T("report_anomalies"))))

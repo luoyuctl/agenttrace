@@ -2707,7 +2707,9 @@ func AnalyzeHealthTrend(sessions []Session) HealthTrend {
 		last3Vals = append(last3Vals, fmt.Sprintf("%d", trend.Points[i].Health))
 	}
 	switch {
-	case trend.Regressing:
+	case trend.Regressing || (trend.Direction == "down" && len(last3Vals) >= 2):
+		trend.Message = fmt.Sprintf(i18n.T("trend_regressing"), strings.Join(last3Vals, "→"))
+	case trend.Direction == "down" && len(last3Vals) >= 2:
 		trend.Message = fmt.Sprintf(i18n.T("trend_regressing"), strings.Join(last3Vals, "→"))
 	case trend.Direction == "up" && len(last3Vals) >= 2:
 		trend.Message = fmt.Sprintf(i18n.T("trend_improving"), strings.Join(last3Vals, "→"))
