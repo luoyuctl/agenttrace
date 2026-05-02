@@ -1345,10 +1345,16 @@ func (m Model) renderWaste() string {
 		header := lipgloss.NewStyle().Bold(true).Foreground(borderColor).Render(truncate(title, maxInt(8, cardW-4)))
 		style := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("238")).
-			Padding(1, 2)
+			BorderForeground(lipgloss.Color("238"))
+		body := lipgloss.JoinVertical(lipgloss.Left, header, "", truncateLines(content, maxInt(8, cardW-8)))
+		if twoColumn {
+			style = style.Padding(0, 1)
+			body = lipgloss.JoinVertical(lipgloss.Left, header, truncateLines(content, maxInt(8, cardW-4)))
+		} else {
+			style = style.Padding(1, 2)
+		}
 		return styleForOuterWidth(style, cardW).
-			Render(lipgloss.JoinVertical(lipgloss.Left, header, "", truncateLines(content, maxInt(8, cardW-8))))
+			Render(body)
 	}
 
 	sessionLabel := cyanStyle.Render(truncate(fmt.Sprintf(i18n.T("diag_for"), s.Name), panelW))
@@ -1746,7 +1752,8 @@ func (m Model) renderDiffSessionPanel(label, name string, entries []engine.DiffE
 		}
 		delta := ""
 		if !leftSide {
-			delta = " " + diffDeltaStyle(e).Render(e.Delta)
+			deltaW := maxInt(1, bodyW-17-lipgloss.Width(value))
+			delta = " " + diffDeltaStyle(e).Render(truncate(e.Delta, deltaW))
 		}
 		lines = append(lines, fmt.Sprintf("%-14s %s%s", dimStyle.Render(truncate(diffFieldLabel(e.Field), 13)), style.Render(truncate(value, maxInt(4, bodyW-17))), delta))
 	}
