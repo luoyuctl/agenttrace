@@ -31,6 +31,14 @@ func main() {
 	version := flag.Bool("version", false, "Show version")
 	demo := flag.Bool("demo", false, "Use built-in demo sessions")
 	doctor := flag.Bool("doctor", false, "Check detected session directories, cache status, and next steps")
+	tuiView := flag.String("tui-view", "", "Render a TUI view without entering interactive mode: overview, list, detail, diagnostics, diff, help, all")
+	tuiCommand := flag.String("tui-command", "", "Semicolon-separated TUI commands to run before rendering --tui-view")
+	tuiKeys := flag.String("tui-keys", "", "Semicolon-separated TUI keys to replay before rendering --tui-view")
+	tuiWidth := flag.Int("tui-width", 120, "Terminal width for --tui-view rendering")
+	tuiHeight := flag.Int("tui-height", 36, "Terminal height for --tui-view rendering")
+	tuiRow := flag.Int("tui-row", 1, "Visible session row to select for --tui-view detail/diagnostics/diff")
+	tuiNoColor := flag.Bool("tui-no-color", false, "Strip ANSI color from --tui-view output")
+	tuiMaxFiles := flag.Int("tui-max-files", 0, "Limit loaded session files for --tui-view verification; 0 means all")
 	failUnderHealth := flag.Int("fail-under-health", 0, "Exit non-zero when overview average health is below this score")
 	failOnCritical := flag.Bool("fail-on-critical", false, "Exit non-zero when overview contains critical sessions")
 	maxToolFailRate := flag.Float64("max-tool-fail-rate", -1, "Exit non-zero when overview tool failure rate exceeds this percent")
@@ -127,6 +135,31 @@ func main() {
 		if *output != "" {
 			os.MkdirAll(filepath.Dir(*output), 0755)
 			os.WriteFile(*output, []byte(out), 0644)
+			fmt.Fprintf(os.Stderr, i18n.T("cli_saved"), *output)
+		}
+		fmt.Print(out)
+		return
+	}
+
+	if *tuiView != "" {
+		out, err := tui.RenderSnapshot(tui.SnapshotOptions{
+			Dir:      sessionsDir,
+			View:     *tuiView,
+			Command:  *tuiCommand,
+			Keys:     *tuiKeys,
+			Width:    *tuiWidth,
+			Height:   *tuiHeight,
+			Row:      *tuiRow,
+			NoColor:  *tuiNoColor,
+			MaxFiles: *tuiMaxFiles,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
+			os.Exit(1)
+		}
+		if *output != "" {
+			os.MkdirAll(filepath.Dir(*output), 0755)
+			os.WriteFile(*output, []byte(out+"\n"), 0644)
 			fmt.Fprintf(os.Stderr, i18n.T("cli_saved"), *output)
 		}
 		fmt.Print(out)
