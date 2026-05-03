@@ -1,0 +1,4 @@
+{"timestamp":"2026-05-03T11:00:00Z","type":"session_meta","payload":{"model_provider":"openai"}}
+{"timestamp":"2026-05-03T11:00:01Z","type":"turn_context","payload":{"model":"gpt-5.4"}}
+{"timestamp":"2026-05-03T11:00:02Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Review this fixture snippet:\n# aider chat started at 2026-05-03 10:00:00\n\n#### Fix parser detection\n\nIt should remain a Codex rollout."}]}}
+{"timestamp":"2026-05-03T11:00:03Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"The rollout parser should own this JSONL session."}]}}
