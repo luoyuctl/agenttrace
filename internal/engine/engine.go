@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agenttrace.
-// Pure Go. Supports 12 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, Qwen Code, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Oh My Pi, Aider, Cursor.
+// Pure Go. Supports 13 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, Qwen Code, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Oh My Pi, Aider, Cursor, Cline.
 package engine
 
 import (
@@ -55,6 +55,7 @@ var ToolDisplayNames = map[string]string{
 	"oh_my_pi":          "Oh My Pi",
 	"aider":             "Aider",
 	"cursor":            "Cursor",
+	"cline":             "Cline",
 	"generic":           "Generic JSON/JSONL",
 }
 
@@ -436,6 +437,11 @@ type FormatInfo struct {
 func DetectFormat(path string) FormatInfo {
 	fi := FormatInfo{Format: "unknown"}
 
+	if isClineTaskDir(path) {
+		fi.Format = "cline"
+		return fi
+	}
+
 	// Read entire file — Parse() downstream uses fi.Raw directly for event extraction
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -448,6 +454,11 @@ func DetectFormat(path string) FormatInfo {
 	if isAiderHistoryFile(path, content) {
 		fi.Raw = data
 		fi.Format = "aider_chat_history"
+		return fi
+	}
+	if isClineTaskFile(path) {
+		fi.Raw = data
+		fi.Format = "cline"
 		return fi
 	}
 
@@ -704,6 +715,8 @@ func Parse(path string) ([]Event, error) {
 		return parseAiderChatHistory(string(fi.Raw))
 	case "cursor":
 		return parseCursorExport(fi.Doc, fi.Arr)
+	case "cline":
+		return parseClinePath(path)
 	default:
 		return parseGeneric(string(fi.Raw))
 	}
@@ -1970,6 +1983,9 @@ func LoadAll(dir string) []Session {
 }
 
 func FindSessionFiles(dir string) []string {
+	if isClineTaskDir(dir) {
+		return []string{dir}
+	}
 	if dir == "" {
 		var all []string
 		for _, d := range DiscoverSessionDirs() {
@@ -1987,7 +2003,16 @@ func FindSessionFiles(dir string) []string {
 	}
 	var items []entryInfo
 	for _, e := range entries {
+		path := filepath.Join(dir, e.Name())
 		if e.IsDir() {
+			if isClineTaskDir(path) {
+				info, err := e.Info()
+				mt := time.Time{}
+				if err == nil {
+					mt = info.ModTime()
+				}
+				items = append(items, entryInfo{path: path, t: mt})
+			}
 			continue
 		}
 		name := e.Name()
@@ -1999,7 +2024,7 @@ func FindSessionFiles(dir string) []string {
 		if err == nil {
 			mt = info.ModTime()
 		}
-		items = append(items, entryInfo{path: filepath.Join(dir, name), t: mt})
+		items = append(items, entryInfo{path: path, t: mt})
 	}
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].t.After(items[j].t)
@@ -2050,7 +2075,7 @@ func KnownSessionDirs() []KnownSessionDir {
 	if home == "" {
 		return nil
 	}
-	return []KnownSessionDir{
+	dirs := []KnownSessionDir{
 		{Name: "Hermes Agent", Path: filepath.Join(home, ".hermes", "sessions")},
 		{Name: "Codex CLI", Path: filepath.Join(home, ".codex", "sessions")},
 		{Name: "Codex CLI archived", Path: filepath.Join(home, ".codex", "archived_sessions")},
@@ -2059,6 +2084,19 @@ func KnownSessionDirs() []KnownSessionDir {
 		{Name: "Claude Code", Path: filepath.Join(home, ".claude", "projects")},
 		{Name: "Oh My Pi", Path: filepath.Join(home, ".omp", "agent", "sessions")},
 	}
+	dirs = append(dirs, clineKnownSessionDirs(home)...)
+	return dirs
+}
+
+func clineKnownSessionDirs(home string) []KnownSessionDir {
+	configDir, _ := os.UserConfigDir()
+	if configDir == "" {
+		configDir = filepath.Join(home, ".config")
+	}
+	return []KnownSessionDir{{
+		Name: "Cline",
+		Path: filepath.Join(configDir, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "tasks"),
+	}}
 }
 
 // DiscoverSessionDirs returns all well-known agent session directories found on this machine.
@@ -2087,6 +2125,9 @@ func dirExists(p string) bool {
 
 // collectSessionFiles walks dir and returns all session files.
 func collectSessionFiles(dir string) []string {
+	if isClineTaskDir(dir) {
+		return []string{dir}
+	}
 	type entryInfo struct {
 		path string
 		t    time.Time
@@ -2104,8 +2145,18 @@ func collectSessionFiles(dir string) []string {
 			return
 		}
 		for _, e := range entries {
+			path := filepath.Join(d, e.Name())
 			if e.IsDir() {
-				walk(filepath.Join(d, e.Name()), depth+1)
+				if isClineTaskDir(path) {
+					info, err := e.Info()
+					mt := time.Time{}
+					if err == nil {
+						mt = info.ModTime()
+					}
+					items = append(items, entryInfo{path: path, t: mt})
+					continue
+				}
+				walk(path, depth+1)
 				continue
 			}
 			name := e.Name()
@@ -2117,7 +2168,7 @@ func collectSessionFiles(dir string) []string {
 			if err == nil {
 				mt = info.ModTime()
 			}
-			items = append(items, entryInfo{path: filepath.Join(d, name), t: mt})
+			items = append(items, entryInfo{path: path, t: mt})
 		}
 	}
 	walk(dir, 0)
