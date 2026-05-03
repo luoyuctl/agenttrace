@@ -104,6 +104,8 @@ Open PRs:
 - awesome-codex-cli: https://github.com/RoggeOhta/awesome-codex-cli/pull/23
 - awesome-ai-coding-tools: https://github.com/ai-for-developers/awesome-ai-coding-tools/pull/288
 - awesome-vibe-coding: https://github.com/ai-for-developers/awesome-vibe-coding/pull/56
+- awesome-ai-coding: https://github.com/wsxiaoys/awesome-ai-coding/pull/97
+- filipecalegario/awesome-vibe-coding: https://github.com/filipecalegario/awesome-vibe-coding/pull/171
 - awesome-claude-code-toolkit: https://github.com/rohitg00/awesome-claude-code-toolkit/pull/361
 - jqueryscript/awesome-claude-code: https://github.com/jqueryscript/awesome-claude-code/pull/252
 - awesome-go-cli: https://github.com/mantcz/awesome-go-cli/pull/4
@@ -133,7 +135,6 @@ Open PRs:
 - awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
 - command-line-tools: https://github.com/linsa-io/command-line-tools/pull/35
 - awesome-cli-coding-agents: https://github.com/bradAGI/awesome-cli-coding-agents/pull/73
-- awesome-gemini-cli: https://github.com/Piebald-AI/awesome-gemini-cli/pull/47
 - awesome-opencode: https://github.com/awesome-opencode/awesome-opencode/pull/334
 - awesome-opensource-ai: https://github.com/alvinreal/awesome-opensource-ai/pull/418
 - awesome-llm-skills: https://github.com/Prat011/awesome-llm-skills/pull/116
@@ -150,6 +151,7 @@ Open PRs:
 Merged listings:
 
 - GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
+- awesome-gemini-cli: https://github.com/Piebald-AI/awesome-gemini-cli/pull/47
 
 Manual-only submission:
 
