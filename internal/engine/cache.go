@@ -200,6 +200,9 @@ func collectSessionFilesCached(dir string, depth, maxDepth int, cache SessionCac
 	for _, e := range entries {
 		path := filepath.Join(dir, e.Name())
 		if e.IsDir() {
+			if isSkippedSessionDir(path) {
+				continue
+			}
 			if isClineTaskDir(path) {
 				files = append(files, path)
 				continue
@@ -209,6 +212,9 @@ func collectSessionFilesCached(dir string, depth, maxDepth int, cache SessionCac
 		}
 		name := e.Name()
 		if !isSessionFileName(name) {
+			continue
+		}
+		if isGeminiTempPath(path) && !isGeminiTempSessionFile(path) {
 			continue
 		}
 		files = append(files, path)

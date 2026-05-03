@@ -578,6 +578,9 @@ func detectSingleJSON(doc map[string]interface{}) string {
 	if provider, _ := doc["provider"].(string); provider == "openclaw" {
 		return "openclaw"
 	}
+	if isGeminiWrapper(doc) {
+		return "gemini_cli"
+	}
 
 	// Hermes .json: session_id + messages + model + platform, NO "usage" at top level
 	_, hasSessID := doc["session_id"]
@@ -674,6 +677,9 @@ func detectSingleJSON(doc map[string]interface{}) string {
 func detectJSONArray(arr []interface{}) string {
 	if isCursorGenerationArray(arr) || isCursorPromptArray(arr) {
 		return "cursor"
+	}
+	if isGeminiContentArray(arr) {
+		return "gemini_cli"
 	}
 	if isQwenCodeArray(arr) {
 		return "qwen_code"
@@ -1109,30 +1115,45 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 	model := "unknown"
 
 	parseParts := func(role, ts string, parts []interface{}) {
+		role = geminiRole(role)
 		for _, part := range parts {
 			p, ok := part.(map[string]interface{})
 			if !ok {
 				continue
 			}
 			if text, _ := p["text"].(string); text != "" {
-				events = append(events, Event{
-					Role: role, Content: text, Timestamp: ts,
-					ModelUsed: model, SourceTool: "gemini_cli",
-				})
+				if thought, _ := p["thought"].(bool); thought {
+					events = append(events, Event{
+						Role: "assistant", Reasoning: text, Timestamp: ts,
+						ModelUsed: model, SourceTool: "gemini_cli",
+					})
+				} else {
+					events = append(events, Event{
+						Role: role, Content: text, Timestamp: ts,
+						ModelUsed: model, SourceTool: "gemini_cli",
+					})
+				}
 			}
 			if fc, ok := p["functionCall"].(map[string]interface{}); ok {
 				name, _ := fc["name"].(string)
+				if name == "" && jsonish(fc["args"]) == "" {
+					continue
+				}
 				events = append(events, Event{
-					Role: role, Timestamp: ts,
+					Role: "assistant", Timestamp: ts,
 					ToolCalls: []ToolCall{{Name: name, Args: jsonish(fc["args"])}},
 					ModelUsed: model, SourceTool: "gemini_cli",
 				})
 			}
 			if fr, ok := p["functionResponse"].(map[string]interface{}); ok {
 				name, _ := fr["name"].(string)
+				content := jsonish(fr["response"])
+				if name == "" && content == "" {
+					continue
+				}
 				events = append(events, Event{
 					Role:       "tool",
-					Content:    jsonish(fr["response"]),
+					Content:    content,
 					Timestamp:  ts,
 					ToolCallID: name,
 					SourceTool: "gemini_cli",
@@ -1141,28 +1162,53 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 		}
 	}
 
-	parseObject := func(obj map[string]interface{}) {
+	parseContent := func(obj map[string]interface{}, fallbackTS string) {
+		role, _ := obj["role"].(string)
+		ts := fallbackTS
+		if tsItem, _ := obj["timestamp"].(string); tsItem != "" {
+			ts = tsItem
+		}
+		parts, _ := obj["parts"].([]interface{})
+		parseParts(role, ts, parts)
+	}
+
+	parseArray := func(arr []interface{}, fallbackTS string) {
+		for _, item := range arr {
+			cItem, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			parseContent(cItem, fallbackTS)
+		}
+	}
+
+	var parseObject func(map[string]interface{})
+	parseObject = func(obj map[string]interface{}) {
 		if mv, ok := obj["modelVersion"].(string); ok && mv != "" {
 			model = mv
 		}
-		if um, ok := obj["usageMetadata"]; ok {
+		if mv, ok := obj["model"].(string); ok && mv != "" {
+			model = mv
+		}
+		if mv, ok := obj["modelId"].(string); ok && mv != "" {
+			model = mv
+		}
+		for _, key := range []string{"usageMetadata", "usage", "tokenUsage"} {
+			um, ok := obj[key]
+			if !ok {
+				continue
+			}
 			ev := Event{Role: "meta", ModelUsed: model, SourceTool: "gemini_cli"}
 			ev.Usage = geminiUsage(um)
 			events = append(events, ev)
 		}
 		ts, _ := obj["timestamp"].(string)
 		if contents, ok := obj["contents"].([]interface{}); ok {
-			for _, item := range contents {
-				cItem, ok := item.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				role, _ := cItem["role"].(string)
-				if tsItem, _ := cItem["timestamp"].(string); tsItem != "" {
-					ts = tsItem
-				}
-				parts, _ := cItem["parts"].([]interface{})
-				parseParts(role, ts, parts)
+			parseArray(contents, ts)
+		}
+		for _, key := range []string{"history", "messages", "conversation", "clientHistory", "chatHistory"} {
+			if arr, ok := obj[key].([]interface{}); ok {
+				parseArray(arr, ts)
 			}
 		}
 		if candidates, ok := obj["candidates"].([]interface{}); ok {
@@ -1178,10 +1224,25 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 				}
 			}
 		}
+		if isGeminiContentObject(obj) {
+			parseContent(obj, ts)
+		}
+		for _, key := range []string{"checkpoint", "session", "chat"} {
+			if nested, ok := obj[key].(map[string]interface{}); ok {
+				parseObject(nested)
+			}
+		}
 	}
 
 	if doc != nil {
 		parseObject(doc)
+		if len(events) > 0 {
+			return events, nil
+		}
+	}
+	var arr []interface{}
+	if err := json.Unmarshal([]byte(raw), &arr); err == nil {
+		parseArray(arr, "")
 		if len(events) > 0 {
 			return events, nil
 		}
@@ -1195,6 +1256,9 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 		if err := json.Unmarshal([]byte(line), &obj); err == nil {
 			parseObject(obj)
 		}
+	}
+	if len(events) == 0 {
+		return nil, fmt.Errorf("gemini_cli: no parseable events")
 	}
 	return events, nil
 }
@@ -2123,6 +2187,7 @@ func KnownSessionDirs() []KnownSessionDir {
 		{Name: "Codex CLI", Path: filepath.Join(home, ".codex", "sessions")},
 		{Name: "Codex CLI archived", Path: filepath.Join(home, ".codex", "archived_sessions")},
 		{Name: "Gemini CLI", Path: filepath.Join(home, ".gemini", "sessions")},
+		{Name: "Gemini CLI tmp", Path: filepath.Join(home, ".gemini", "tmp")},
 		{Name: "Qwen Code", Path: filepath.Join(home, ".qwen", "projects")},
 		{Name: "Claude Code", Path: filepath.Join(home, ".claude", "projects")},
 		{Name: "Oh My Pi", Path: filepath.Join(home, ".omp", "agent", "sessions")},
@@ -2190,6 +2255,9 @@ func collectSessionFiles(dir string) []string {
 		for _, e := range entries {
 			path := filepath.Join(d, e.Name())
 			if e.IsDir() {
+				if isSkippedSessionDir(path) {
+					continue
+				}
 				if isClineTaskDir(path) {
 					info, err := e.Info()
 					mt := time.Time{}
@@ -2204,6 +2272,9 @@ func collectSessionFiles(dir string) []string {
 			}
 			name := e.Name()
 			if !isSessionFileName(name) {
+				continue
+			}
+			if isGeminiTempPath(path) && !isGeminiTempSessionFile(path) {
 				continue
 			}
 			info, err := e.Info()
@@ -2255,6 +2326,9 @@ func maxSessionDirDepth(dir string) int {
 	if filepath.Base(dir) == "projects" && strings.Contains(filepath.ToSlash(dir), "/.claude/") {
 		return 1
 	}
+	if filepath.Base(dir) == "tmp" && strings.Contains(filepath.ToSlash(dir), "/.gemini/") {
+		return 4
+	}
 	return 4
 }
 
@@ -2292,9 +2366,22 @@ func geminiUsage(raw interface{}) map[string]int {
 		return nil
 	}
 	return map[string]int{
-		"input_tokens":  numberAsInt(m["promptTokenCount"]),
-		"output_tokens": numberAsInt(m["candidatesTokenCount"]),
+		"input_tokens": numberAsInt(firstNumeric(m,
+			"promptTokenCount", "inputTokenCount", "inputTokens", "input_tokens", "prompt_tokens")),
+		"output_tokens": numberAsInt(firstNumeric(m,
+			"candidatesTokenCount", "outputTokenCount", "outputTokens", "output_tokens", "completion_tokens")),
+		"cache_read_input_tokens": numberAsInt(firstNumeric(m,
+			"cachedContentTokenCount", "cacheReadInputTokens", "cache_read_input_tokens")),
 	}
+}
+
+func firstNumeric(m map[string]interface{}, keys ...string) interface{} {
+	for _, key := range keys {
+		if v, ok := m[key]; ok {
+			return v
+		}
+	}
+	return nil
 }
 
 func numberAsInt(v interface{}) int {
