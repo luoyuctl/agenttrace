@@ -133,7 +133,6 @@ Open PRs:
 - awesome-cli-tui-software: https://github.com/lgaggini/awesome-cli-tui-software/pull/3
 - awesome-tuis follow-up: https://github.com/rothgar/awesome-tuis/pull/659
 - LangGPT/awesome-claude-code: https://github.com/LangGPT/awesome-claude-code/pull/58
-- awesome-ChatGPT-repositories: https://github.com/taishi-i/awesome-ChatGPT-repositories/pull/130
 - awesome-agent-harness: https://github.com/Picrew/awesome-agent-harness/pull/5
 - awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
 - command-line-tools: https://github.com/linsa-io/command-line-tools/pull/35
@@ -157,6 +156,7 @@ Open PRs:
 
 Merged listings:
 
+- awesome-ChatGPT-repositories: https://github.com/taishi-i/awesome-ChatGPT-repositories/pull/130
 - GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
 - awesome-gemini-cli: https://github.com/Piebald-AI/awesome-gemini-cli/pull/47
 - awesome-mac: https://github.com/jaywcjlove/awesome-mac/pull/2026
