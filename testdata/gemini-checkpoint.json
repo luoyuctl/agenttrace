@@ -1,0 +1,33 @@
+{
+  "checkpoint": {
+    "model": "gemini-2.5-flash",
+    "conversation": [
+      {
+        "role": "user",
+        "timestamp": "2026-01-02T10:00:00Z",
+        "parts": [
+          {
+            "text": "Resume this checkpoint."
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "timestamp": "2026-01-02T10:00:04Z",
+        "parts": [
+          {
+            "thought": true,
+            "text": "Need to restore the previous context."
+          },
+          {
+            "text": "Checkpoint resumed."
+          }
+        ]
+      }
+    ],
+    "tokenUsage": {
+      "inputTokens": 80,
+      "outputTokens": 20
+    }
+  }
+}

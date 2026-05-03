@@ -1,0 +1,51 @@
+{
+  "modelVersion": "gemini-2.5-pro",
+  "history": [
+    {
+      "role": "user",
+      "timestamp": "2026-01-02T09:00:00Z",
+      "parts": [
+        {
+          "text": "Inspect the parser tests."
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "timestamp": "2026-01-02T09:00:05Z",
+      "parts": [
+        {
+          "text": "I will read the test file."
+        },
+        {
+          "functionCall": {
+            "name": "read_file",
+            "args": {
+              "path": "internal/engine/engine_test.go"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "timestamp": "2026-01-02T09:00:06Z",
+      "parts": [
+        {
+          "functionResponse": {
+            "name": "read_file",
+            "response": {
+              "success": true,
+              "content": "package engine"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 120,
+    "candidatesTokenCount": 45,
+    "cachedContentTokenCount": 8
+  }
+}
