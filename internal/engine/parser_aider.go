@@ -22,8 +22,12 @@ func isAiderHistoryFile(path, content string) bool {
 	if filepath.Base(path) == aiderHistoryFile {
 		return true
 	}
-	return strings.Contains(content, "# aider chat started at") &&
-		strings.Contains(content, "#### ")
+	trimmed := strings.TrimSpace(content)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		return false
+	}
+	return strings.Contains(trimmed, "# aider chat started at") &&
+		strings.Contains(trimmed, "#### ")
 }
 
 func parseAiderChatHistory(raw string) ([]Event, error) {
