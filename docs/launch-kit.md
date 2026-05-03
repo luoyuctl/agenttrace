@@ -130,7 +130,6 @@ Open PRs:
 - ARUNAGIRINATHAN-K/awesome-ai-agents: https://github.com/ARUNAGIRINATHAN-K/awesome-ai-agents/pull/27
 - awesome-cli-tui-software: https://github.com/lgaggini/awesome-cli-tui-software/pull/3
 - LangGPT/awesome-claude-code: https://github.com/LangGPT/awesome-claude-code/pull/58
-- awesome-mac: https://github.com/jaywcjlove/awesome-mac/pull/2026
 - awesome-ChatGPT-repositories: https://github.com/taishi-i/awesome-ChatGPT-repositories/pull/130
 - awesome-agent-harness: https://github.com/Picrew/awesome-agent-harness/pull/5
 - awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
@@ -143,8 +142,6 @@ Open PRs:
 - awesome-copilot-agents: https://github.com/Code-and-Sorts/awesome-copilot-agents/pull/53
 - github/awesome-copilot: https://github.com/github/awesome-copilot/pull/1595
 - awesome-agent-skills: https://github.com/heilcheng/awesome-agent-skills/pull/216
-- awesome-skills: https://github.com/gmh5225/awesome-skills/pull/14
-- charm-in-the-wild: https://github.com/charm-and-friends/charm-in-the-wild/pull/88
 - awesome-ai-eval: https://github.com/Vvkmnn/awesome-ai-eval/pull/10
 - awesome-ai-dev-tools: https://github.com/PierrunoYT/awesome-ai-dev-tools/pull/20
 - awesome-utils-dev: https://github.com/pegaltier/awesome-utils-dev/pull/29
@@ -153,6 +150,9 @@ Merged listings:
 
 - GetBindu/awesome-claude-code-and-skills: https://github.com/GetBindu/awesome-claude-code-and-skills/pull/21
 - awesome-gemini-cli: https://github.com/Piebald-AI/awesome-gemini-cli/pull/47
+- awesome-mac: https://github.com/jaywcjlove/awesome-mac/pull/2026
+- awesome-skills: https://github.com/gmh5225/awesome-skills/pull/14
+- charm-in-the-wild: https://github.com/charm-and-friends/charm-in-the-wild/pull/88
 
 Manual-only submission:
 
