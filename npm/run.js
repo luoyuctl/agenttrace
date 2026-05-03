@@ -6,14 +6,13 @@ const os = require('os');
 const fs = require('fs');
 
 const ext = process.platform === 'win32' ? '.exe' : '';
-const binDir = path.join(__dirname, '..', '..', '.bin');
+const vendorBin = path.join(__dirname, 'vendor', 'agenttrace' + ext);
 
-// resolve real binary path (priority: project .bin > local install)
 const candidates = [];
 if (process.env.AGENTTRACE_BIN) {
     candidates.push(process.env.AGENTTRACE_BIN);
 }
-candidates.push(path.join(binDir, 'agenttrace' + ext));
+candidates.push(vendorBin);
 
 // also check /usr/local/bin and ~/.local/bin
 const nixCandidates = [

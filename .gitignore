@@ -3,3 +3,4 @@ go/agenttrace
 dist/
 agentwaste
 .claude/settings.local.json
+.playwright-mcp/

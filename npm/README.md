@@ -32,6 +32,7 @@ From this directory:
 ```bash
 node --check install.js
 node --check run.js
+AGENTTRACE_BIN=/path/to/agenttrace node run.js --version
 npm pack --dry-run
 ```
 
