@@ -2347,33 +2347,33 @@ func (m Model) renderOverview() string {
 
 	var body string
 	if contentW >= 132 {
-		leftW := contentW * 42 / 100
-		midW := contentW * 35 / 100
+		leftW := contentW * 34 / 100
+		midW := contentW * 33 / 100
 		rightW := contentW - leftW - midW - 4
 		row1 := lipgloss.JoinHorizontal(lipgloss.Top,
-			m.renderTokenUsagePanel(leftW), "  ",
-			m.renderLatencyPanel(midW), "  ",
+			m.renderTriagePanel(leftW), "  ",
+			m.renderTokenUsagePanel(midW), "  ",
 			m.renderHealthPanel(rightW),
 		)
 
 		bottomW := (contentW - 4) / 3
 		row2 := lipgloss.JoinHorizontal(lipgloss.Top,
+			m.renderLatencyPanel(bottomW), "  ",
 			m.renderAnomalyPanel(bottomW), "  ",
-			m.renderTopAgentsPanel(bottomW), "  ",
 			m.renderRecentSessionsPanel(contentW-2*bottomW-4),
 		)
 		body = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2)
 	} else if contentW >= 86 {
 		half := (contentW - 2) / 2
-		row1 := lipgloss.JoinHorizontal(lipgloss.Top, m.renderTokenUsagePanel(half), "  ", m.renderHealthPanel(contentW-half-2))
-		row2 := lipgloss.JoinHorizontal(lipgloss.Top, m.renderAnomalyPanel(half), "  ", m.renderRecentSessionsPanel(contentW-half-2))
-		body = lipgloss.JoinVertical(lipgloss.Left, row1, "", m.renderLatencyPanel(contentW), "", row2, "", m.renderTopAgentsPanel(contentW))
+		row1 := lipgloss.JoinHorizontal(lipgloss.Top, m.renderTriagePanel(half), "  ", m.renderHealthPanel(contentW-half-2))
+		row2 := lipgloss.JoinHorizontal(lipgloss.Top, m.renderTokenUsagePanel(half), "  ", m.renderRecentSessionsPanel(contentW-half-2))
+		body = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2, "", m.renderLatencyPanel(contentW), "", m.renderTopAgentsPanel(contentW))
 	} else {
 		body = lipgloss.JoinVertical(lipgloss.Left,
+			m.renderTriagePanel(contentW), "",
+			m.renderHealthPanel(contentW), "",
 			m.renderTokenUsagePanel(contentW), "",
 			m.renderLatencyPanel(contentW), "",
-			m.renderHealthPanel(contentW), "",
-			m.renderAnomalyPanel(contentW), "",
 			m.renderRecentSessionsPanel(contentW), "",
 			m.renderTopAgentsPanel(contentW),
 		)
@@ -2818,6 +2818,59 @@ func (m Model) renderAnomalyPanel(width int) string {
 		}
 	}
 	return dashboardPanel(i18n.T("panel_anomaly_detection"), cyanStyle.Render(i18n.T("panel_view_all")), strings.Join(lines, "\n"), width)
+}
+
+func (m Model) renderTriagePanel(width int) string {
+	innerW := dashboardInnerWidth(width)
+	if len(m.sessions) == 0 {
+		return dashboardPanel(i18n.T("panel_triage_now"), "", dimStyle.Render(i18n.T("triage_no_sessions")), width)
+	}
+
+	s := topRiskSessions(m.sessions, 1)[0]
+	ins := buildSessionInsight(
+		s,
+		engine.GenerateFixes(s.Metrics, s.Anomalies),
+		engine.PredictCostAnomaly(costBaselineSessions(m.sessions, s), s),
+	)
+	health := clampHealth(s.Health)
+	nameW := maxInt(8, innerW-17)
+	head := fmt.Sprintf("%s %-*s %3d%% %s",
+		healthColor(health).Render("●"),
+		nameW,
+		truncate(s.Name, nameW),
+		health,
+		money4(s.Metrics.CostEstimated),
+	)
+	labelW := lipgloss.Width(i18n.T("triage_evidence_label"))
+	lines := []string{
+		truncate(head, innerW),
+		triageLine(i18n.T("triage_issue_label"), ins.Issue, labelW, innerW),
+		triageLine(i18n.T("triage_impact_label"), ins.Impact, labelW, innerW),
+		triageLine(i18n.T("triage_evidence_label"), ins.Evidence, labelW, innerW),
+		triageLine(i18n.T("triage_next_label"), triageKeyHint(s)+" · "+ins.NextAction, labelW, innerW),
+	}
+	return dashboardPanel(i18n.T("panel_triage_now"), cyanStyle.Render(i18n.T("triage_panel_aside")), strings.Join(lines, "\n"), width)
+}
+
+func triageLine(label, value string, labelW int, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	prefix := dimStyle.Render(fmt.Sprintf("%-*s ", labelW, label))
+	return truncate(prefix+value, width)
+}
+
+func triageKeyHint(s engine.Session) string {
+	switch {
+	case clampHealth(s.Health) < 50:
+		return i18n.T("triage_key_critical")
+	case len(s.Anomalies) > 0:
+		return i18n.T("triage_key_anomalies")
+	case safeAmount(s.Metrics.CostEstimated) > 0:
+		return i18n.T("triage_key_cost")
+	default:
+		return i18n.T("triage_key_detail")
+	}
 }
 
 func (m Model) renderTopAgentsPanel(width int) string {

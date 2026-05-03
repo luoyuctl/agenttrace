@@ -1038,6 +1038,22 @@ func TestOverviewShowsActionHint(t *testing.T) {
 	}
 }
 
+func TestOverviewShowsTriagePanel(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	for _, want := range []string{"TRIAGE NOW", "gamma", "Issue", "Impact", "Evidence", "press ! then Enter"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("overview triage panel missing %q:\n%s", want, rendered)
+		}
+	}
+	if got := maxRenderedWidth(rendered); got > 120 {
+		t.Fatalf("overview triage panel too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+}
+
 func TestChineseOverviewShowsTranslatedActionHint(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.ZH)
@@ -1055,6 +1071,28 @@ func TestChineseOverviewShowsTranslatedActionHint(t *testing.T) {
 	}
 	if strings.Contains(rendered, "Next") {
 		t.Fatalf("Chinese overview leaked English action label:\n%s", rendered)
+	}
+}
+
+func TestChineseOverviewShowsTranslatedTriagePanel(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.lang = i18n.ZH
+	m.refreshColumns()
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	for _, want := range []string{"立即排查", "问题", "影响", "证据", "按 ! 再 Enter"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("Chinese overview triage panel missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "TRIAGE NOW") {
+		t.Fatalf("Chinese overview leaked English triage label:\n%s", rendered)
 	}
 }
 
