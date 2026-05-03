@@ -341,6 +341,7 @@ func ReportCompareJSON(sessions []Session, model string) string {
 
 // ReportOverviewJSON generates machine-readable global overview data.
 func ReportOverviewJSON(ov Overview, sessions []Session) string {
+	orderedSessions := canonicalOverviewSessions(sessions)
 	type groupItem struct {
 		Name     string  `json:"name"`
 		Sessions int     `json:"sessions"`
@@ -367,15 +368,15 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	totalTools := 0
 	failedTools := 0
 	totalHealth := 0
-	for _, s := range sessions {
+	for _, s := range orderedSessions {
 		totalTokens += s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
 		totalTools += s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
 		failedTools += s.Metrics.ToolCallsFail
 		totalHealth += s.Health
 	}
 	avgHealth := 0.0
-	if len(sessions) > 0 {
-		avgHealth = round4(float64(totalHealth) / float64(len(sessions)))
+	if len(orderedSessions) > 0 {
+		avgHealth = round4(float64(totalHealth) / float64(len(orderedSessions)))
 	}
 	toolFailRate := 0.0
 	if totalTools > 0 {
@@ -392,6 +393,9 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	}
 	sort.Slice(agents, func(i, j int) bool {
 		if agents[i].Sessions == agents[j].Sessions {
+			if agents[i].Cost == agents[j].Cost {
+				return agents[i].Name < agents[j].Name
+			}
 			return agents[i].Cost > agents[j].Cost
 		}
 		return agents[i].Sessions > agents[j].Sessions
@@ -403,17 +407,20 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	}
 	sort.Slice(models, func(i, j int) bool {
 		if models[i].Cost == models[j].Cost {
+			if models[i].Sessions == models[j].Sessions {
+				return models[i].Name < models[j].Name
+			}
 			return models[i].Sessions > models[j].Sessions
 		}
 		return models[i].Cost > models[j].Cost
 	})
 
-	recentCap := len(sessions)
+	recentCap := len(orderedSessions)
 	if recentCap > 10 {
 		recentCap = 10
 	}
 	recent := make([]recentSession, 0, recentCap)
-	for i, s := range sessions {
+	for i, s := range orderedSessions {
 		if i >= 10 {
 			break
 		}
@@ -433,7 +440,7 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	if anomalies == nil {
 		anomalies = []AnomalyTop{}
 	}
-	trend := AnalyzeHealthTrend(sessions)
+	trend := AnalyzeHealthTrend(orderedSessions)
 	points := make([]trendPoint, 0, len(trend.Points))
 	for _, p := range trend.Points {
 		points = append(points, trendPoint{Name: p.Name, Health: p.Health, Cost: round4(p.Cost)})
@@ -471,8 +478,9 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 
 // ReportOverviewMarkdown generates a human-readable Markdown overview for PR comments and CI artifacts.
 func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
-	summary := overviewReportSummary(sessions)
-	trend := AnalyzeHealthTrend(sessions)
+	orderedSessions := canonicalOverviewSessions(sessions)
+	summary := overviewReportSummary(orderedSessions)
+	trend := AnalyzeHealthTrend(orderedSessions)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", i18n.T("report_md_title"))
@@ -497,6 +505,9 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 	}
 	sort.Slice(agents, func(i, j int) bool {
 		if agents[i].v.Sessions == agents[j].v.Sessions {
+			if agents[i].v.Cost == agents[j].v.Cost {
+				return agents[i].k < agents[j].k
+			}
 			return agents[i].v.Cost > agents[j].v.Cost
 		}
 		return agents[i].v.Sessions > agents[j].v.Sessions
@@ -512,12 +523,12 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 	fmt.Fprintf(&b, "\n## %s\n\n", i18n.T("report_recent_sessions"))
 	fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n|---|---|---|---:|---:|---:|\n",
 		i18n.T("report_session"), i18n.T("report_source"), i18n.T("report_model"), i18n.T("report_health"), i18n.T("report_cost"), i18n.T("report_anomalies"))
-	limit := len(sessions)
+	limit := len(orderedSessions)
 	if limit > 10 {
 		limit = 10
 	}
 	for i := 0; i < limit; i++ {
-		s := sessions[i]
+		s := orderedSessions[i]
 		source := s.Metrics.SourceTool
 		if d, ok := ToolDisplayNames[source]; ok {
 			source = d
@@ -550,8 +561,9 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 
 // ReportOverviewHTML generates a self-contained HTML report for CI artifacts and sharing.
 func ReportOverviewHTML(ov Overview, sessions []Session) string {
-	summary := overviewReportSummary(sessions)
-	trend := AnalyzeHealthTrend(sessions)
+	orderedSessions := canonicalOverviewSessions(sessions)
+	summary := overviewReportSummary(orderedSessions)
+	trend := AnalyzeHealthTrend(orderedSessions)
 	agents := sortedAgents(ov.ByAgent)
 	models := sortedModels(ov.ByModel)
 
@@ -585,15 +597,15 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>$%.2f</strong><p>%s</p></div>`, html.EscapeString(i18n.T("total_cost")), ov.TotalCost, html.EscapeString(i18n.T("report_estimated_cost"))))
 	w(fmt.Sprintf(`<div class="metric %s"><span>%s</span><strong>%d/%d</strong><p>%s</p></div>`, html.EscapeString(failureClass(summary.ToolFailRate)), html.EscapeString(i18n.T("report_tool_failures")), summary.FailedTools, summary.TotalTools, html.EscapeString(fmt.Sprintf(i18n.T("report_failure_rate"), summary.ToolFailRate))))
 	w(`</div>`)
-	if len(sessions) > 1 {
+	if len(orderedSessions) > 1 {
 		w(fmt.Sprintf(`<section><h2>%s</h2><p>%s</p></section>`, html.EscapeString(i18n.T("trend_title")), html.EscapeString(trend.Message)))
 	}
 
 	w(fmt.Sprintf(`<section><h2>%s</h2><table><thead><tr><th>%s</th><th>%s</th><th>%s</th><th class="num">%s</th><th class="num">%s</th><th class="num">%s</th><th class="num">%s</th></tr></thead><tbody>`,
 		html.EscapeString(i18n.T("report_recent_sessions")), html.EscapeString(i18n.T("report_session")), html.EscapeString(i18n.T("report_source")), html.EscapeString(i18n.T("report_model")), html.EscapeString(i18n.T("report_total_tokens")), html.EscapeString(i18n.T("report_cost")), html.EscapeString(i18n.T("report_health")), html.EscapeString(i18n.T("report_anomalies"))))
-	limit := minReportInt(len(sessions), 20)
+	limit := minReportInt(len(orderedSessions), 20)
 	for i := 0; i < limit; i++ {
-		s := sessions[i]
+		s := orderedSessions[i]
 		source := s.Metrics.SourceTool
 		if d, ok := ToolDisplayNames[source]; ok {
 			source = d
@@ -705,6 +717,27 @@ func overviewReportSummary(sessions []Session) overviewSummary {
 	return summary
 }
 
+func canonicalOverviewSessions(sessions []Session) []Session {
+	ordered := append([]Session(nil), sessions...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		ti := parseTS(ordered[i].Metrics.SessionStart)
+		tj := parseTS(ordered[j].Metrics.SessionStart)
+		if !ti.IsZero() || !tj.IsZero() {
+			if ti.IsZero() != tj.IsZero() {
+				return !ti.IsZero()
+			}
+			if !ti.Equal(tj) {
+				return ti.After(tj)
+			}
+		}
+		if ordered[i].Name != ordered[j].Name {
+			return ordered[i].Name < ordered[j].Name
+		}
+		return ordered[i].Path < ordered[j].Path
+	})
+	return ordered
+}
+
 type agentKV struct {
 	k string
 	v AgentOverview
@@ -717,6 +750,9 @@ func sortedAgents(items map[string]AgentOverview) []agentKV {
 	}
 	sort.Slice(agents, func(i, j int) bool {
 		if agents[i].v.Sessions == agents[j].v.Sessions {
+			if agents[i].v.Cost == agents[j].v.Cost {
+				return agents[i].k < agents[j].k
+			}
 			return agents[i].v.Cost > agents[j].v.Cost
 		}
 		return agents[i].v.Sessions > agents[j].v.Sessions
@@ -736,6 +772,9 @@ func sortedModels(items map[string]ModelOverview) []modelKV {
 	}
 	sort.Slice(models, func(i, j int) bool {
 		if models[i].v.Cost == models[j].v.Cost {
+			if models[i].v.Sessions == models[j].v.Sessions {
+				return models[i].k < models[j].k
+			}
 			return models[i].v.Sessions > models[j].v.Sessions
 		}
 		return models[i].v.Cost > models[j].v.Cost

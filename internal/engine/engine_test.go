@@ -1206,6 +1206,66 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	}
 }
 
+func TestReportOverviewFormatsUseCanonicalRecentSessionOrder(t *testing.T) {
+	sessions := []Session{
+		{
+			Name:   "mid",
+			Health: 70,
+			Metrics: Metrics{
+				SessionStart:  "2026-05-02T10:10:00Z",
+				SourceTool:    "codex_cli",
+				ModelUsed:     "gpt-5.1",
+				TokensInput:   20,
+				TokensOutput:  10,
+				CostEstimated: 0.02,
+			},
+		},
+		{
+			Name:   "old",
+			Health: 90,
+			Metrics: Metrics{
+				SessionStart:  "2026-05-02T10:00:00Z",
+				SourceTool:    "aider",
+				ModelUsed:     "gpt-4.1",
+				TokensInput:   10,
+				TokensOutput:  5,
+				CostEstimated: 0.01,
+			},
+		},
+		{
+			Name:   "new",
+			Health: 40,
+			Metrics: Metrics{
+				SessionStart:  "2026-05-02T10:35:00Z",
+				SourceTool:    "gemini_cli",
+				ModelUsed:     "gemini-2.5-pro",
+				TokensInput:   30,
+				TokensOutput:  15,
+				CostEstimated: 0.03,
+			},
+		},
+	}
+	ov := ComputeOverview(sessions)
+
+	var payload struct {
+		RecentSessions []struct {
+			Name string `json:"name"`
+		} `json:"recent_sessions"`
+	}
+	if err := json.Unmarshal([]byte(ReportOverviewJSON(ov, sessions)), &payload); err != nil {
+		t.Fatalf("invalid overview json: %v", err)
+	}
+	if got := []string{payload.RecentSessions[0].Name, payload.RecentSessions[1].Name, payload.RecentSessions[2].Name}; strings.Join(got, ",") != "new,mid,old" {
+		t.Fatalf("json recent sessions should be newest first, got %v", got)
+	}
+
+	md := ReportOverviewMarkdown(ov, sessions)
+	assertOrderedSubstrings(t, md, []string{"| new |", "| mid |", "| old |"})
+
+	html := ReportOverviewHTML(ov, sessions)
+	assertOrderedSubstrings(t, html, []string{">new<", ">mid<", ">old<"})
+}
+
 func TestComputeOverviewSortsAnomaliesBySeverity(t *testing.T) {
 	sessions := []Session{
 		{
@@ -1235,6 +1295,33 @@ func TestComputeOverviewSortsAnomaliesBySeverity(t *testing.T) {
 		if got[i].Session != name {
 			t.Fatalf("anomaly %d should be %q, got %+v", i, name, got)
 		}
+	}
+}
+
+func TestComputeOverviewSortsAnomaliesDeterministicallyWithinSeverity(t *testing.T) {
+	sessions := []Session{
+		{
+			Name:      "z-session",
+			Anomalies: []Anomaly{{Type: "tool_failures", Severity: SeverityHigh}, {Type: "hanging", Severity: SeverityHigh}},
+		},
+		{
+			Name:      "a-session",
+			Anomalies: []Anomaly{{Type: "latency", Severity: SeverityHigh}},
+		},
+		{
+			Name:      "m-session",
+			Anomalies: []Anomaly{{Type: "no_tools", Severity: SeverityLow}},
+		},
+	}
+
+	got := ComputeOverview(sessions).AnomaliesTop
+	want := []string{"a-session:latency", "z-session:hanging", "z-session:tool_failures", "m-session:no_tools"}
+	var names []string
+	for _, item := range got {
+		names = append(names, item.Session+":"+item.Type)
+	}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Fatalf("anomalies should have deterministic severity/session/type order, got %v", names)
 	}
 }
 
@@ -1281,6 +1368,21 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("markdown report missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func assertOrderedSubstrings(t *testing.T, haystack string, needles []string) {
+	t.Helper()
+	last := -1
+	for _, needle := range needles {
+		idx := strings.Index(haystack, needle)
+		if idx < 0 {
+			t.Fatalf("missing %q in:\n%s", needle, haystack)
+		}
+		if idx <= last {
+			t.Fatalf("%q should appear after previous marker in:\n%s", needle, haystack)
+		}
+		last = idx
 	}
 }
 
