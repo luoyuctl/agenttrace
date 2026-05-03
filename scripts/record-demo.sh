@@ -15,5 +15,12 @@ if ! command -v ttyd >/dev/null 2>&1; then
   exit 1
 fi
 
-vhs docs/demo.tape
+tmpbin="$(mktemp -d)"
+cleanup() {
+  rm -rf "$tmpbin"
+}
+trap cleanup EXIT
+
+go build -o "$tmpbin/agenttrace" ./cmd/agenttrace
+PATH="$tmpbin:$PATH" vhs docs/demo.tape
 echo "Wrote assets/agenttrace-demo.gif"

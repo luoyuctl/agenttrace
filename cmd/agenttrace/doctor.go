@@ -64,7 +64,7 @@ func buildDoctorReport(dir string, demo bool) doctorReport {
 		Version:      engine.Version,
 		Mode:         mode,
 		CachePath:    engine.SessionCachePath(),
-		CacheEntries: len(cache.Entries),
+		CacheEntries: cache.EntryCount(),
 		CacheDirs:    len(cache.Dirs),
 		CachedValid:  valid,
 		SessionFiles: len(files),

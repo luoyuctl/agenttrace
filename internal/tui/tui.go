@@ -78,14 +78,22 @@ const (
 	viewDiff        // diff two sessions side-by-side
 )
 
-// loadProgressMsg carries one loaded (or cached) session during progressive loading.
-type loadProgressMsg struct {
+type loadedSession struct {
 	session   engine.Session
 	fromCache bool
-	index     int
-	total     int
-	err       error // non-nil if this file failed to parse
-	done      bool  // true when all files have been processed
+}
+
+type sessionDiscoveryMsg struct {
+	files []string
+}
+
+// loadProgressMsg 承载一批渐进加载结果。
+type loadProgressMsg struct {
+	sessions []loadedSession
+	index    int
+	total    int
+	skipped  int
+	done     bool
 }
 
 // startLoadMsg triggers the initial load in Update() (so state changes are on the real model).
@@ -212,36 +220,24 @@ func (m Model) Init() tea.Cmd {
 
 // ── Progressive Loading ──────────────────────────────────────────
 
-const cacheSaveInterval = 10
+const (
+	cacheSaveInterval = 10
+	loadBatchSize     = 32
+)
 
-// startReload begins a progressive (cached) load of all session files.
+// startReload 启动渐进式缓存加载。
 func (m *Model) startReload() tea.Cmd {
 	m.sessions = nil
 	m.view = viewOverview
 	m.detailReady = false
-	files := engine.FindSessionFilesCached(m.dir, m.sessionCache)
 	m.loadQueue = nil
 	m.loadProgress = 0
-	m.loadTotal = len(files)
+	m.loadTotal = 0
 	m.loadedFromCache = 0
 	m.unsavedNewCount = 0
 	m.loading = true
 
-	for _, path := range files {
-		if s, ok := engine.CachedSession(path, m.sessionCache); ok {
-			m.sessions = append(m.sessions, s)
-			m.loadProgress++
-			m.loadedFromCache++
-			continue
-		}
-		m.loadQueue = append(m.loadQueue, path)
-	}
-
-	if m.loadTotal == 0 || len(m.loadQueue) == 0 {
-		m.finishLoading()
-		return nil
-	}
-	return loadNextCmd(m.loadQueue, m.sessionCache, 0)
+	return discoverSessionFilesCmd(m.dir, m.sessionCache)
 }
 
 // startForceReload clears the cache and does a fresh progressive load.
@@ -256,17 +252,22 @@ func (m *Model) startForceReload() tea.Cmd {
 
 // appendSession 追加一条加载结果，并同步当前筛选后的列表。
 func (m *Model) appendSession(s engine.Session, fromCache bool) {
-	m.sessions = append(m.sessions, s)
-	if !fromCache {
-		m.unsavedNewCount++
-	}
-	m.loadProgress++
-	if fromCache {
-		m.loadedFromCache++
+	m.appendLoadedSessions([]loadedSession{{session: s, fromCache: fromCache}})
+}
+
+func (m *Model) appendLoadedSessions(sessions []loadedSession) {
+	for _, loaded := range sessions {
+		m.sessions = append(m.sessions, loaded.session)
+		if !loaded.fromCache {
+			m.unsavedNewCount++
+		}
+		m.loadProgress++
+		if loaded.fromCache {
+			m.loadedFromCache++
+		}
 	}
 
 	m.rebuildFilteredView()
-
 	if m.unsavedNewCount >= cacheSaveInterval {
 		engine.SaveSessionCache(m.sessionCache)
 		m.unsavedNewCount = 0
@@ -290,46 +291,54 @@ func (m *Model) finishLoading() {
 	m.rebuildFilteredView()
 }
 
+func discoverSessionFilesCmd(dir string, cache engine.SessionCache) tea.Cmd {
+	return func() tea.Msg {
+		return sessionDiscoveryMsg{files: engine.FindSessionFilesCached(dir, cache)}
+	}
+}
+
 func loadNextCmd(files []string, cache engine.SessionCache, idx int) tea.Cmd {
 	return func() tea.Msg {
 		if idx >= len(files) {
 			return loadProgressMsg{done: true, total: len(files)}
 		}
-		path := files[idx]
-
-		info, err := os.Stat(path)
-		if err != nil {
-			return loadProgressMsg{index: idx, total: len(files), err: err}
+		msg := loadProgressMsg{index: idx, total: len(files)}
+		end := idx + loadBatchSize
+		if end > len(files) {
+			end = len(files)
 		}
 
-		if s, ok := engine.CachedSession(path, cache); ok {
-			return loadProgressMsg{
-				session:   s,
-				fromCache: true,
-				index:     idx,
-				total:     len(files),
+		for i := idx; i < end; i++ {
+			path := files[i]
+			info, err := os.Stat(path)
+			if err != nil {
+				msg.skipped++
+				continue
 			}
+
+			if s, ok := engine.CachedSession(path, cache); ok {
+				msg.sessions = append(msg.sessions, loadedSession{session: s, fromCache: true})
+				continue
+			}
+
+			s, err := engine.LoadSession(path)
+			if err != nil {
+				msg.skipped++
+				continue
+			}
+
+			s.Path = path
+			cache.Entries[path] = engine.CacheEntry{
+				ModTime: info.ModTime().UnixNano(),
+				Size:    info.Size(),
+				Session: *s,
+			}
+			msg.sessions = append(msg.sessions, loadedSession{session: *s, fromCache: false})
 		}
 
-		s, err := engine.LoadSession(path)
-		if err != nil {
-			return loadProgressMsg{index: idx, total: len(files), err: err}
-		}
-
-		// Fill in mtime+size for future cache hits
-		s.Path = path
-		cache.Entries[path] = engine.CacheEntry{
-			ModTime: info.ModTime().UnixNano(),
-			Size:    info.Size(),
-			Session: *s,
-		}
-
-		return loadProgressMsg{
-			session:   *s,
-			fromCache: false,
-			index:     idx,
-			total:     len(files),
-		}
+		msg.index = end
+		msg.done = end >= len(files)
+		return msg
 	}
 }
 
@@ -344,18 +353,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.startReload()
 		return m, cmd
 
+	case sessionDiscoveryMsg:
+		m.loadQueue = msg.files
+		m.loadTotal = len(msg.files)
+		if m.loadTotal == 0 {
+			m.finishLoading()
+			return m, nil
+		}
+		return m, loadNextCmd(m.loadQueue, m.sessionCache, 0)
+
 	case loadProgressMsg:
+		if len(msg.sessions) > 0 {
+			m.appendLoadedSessions(msg.sessions)
+		}
+		if msg.skipped > 0 {
+			m.loadProgress += msg.skipped
+		}
 		if msg.done {
 			m.finishLoading()
 			return m, nil
 		}
-		if msg.err != nil {
-			// Skip failed files, continue loading
-			m.loadProgress++
-			return m, loadNextCmd(m.loadQueue, m.sessionCache, msg.index+1)
-		}
-		m.appendSession(msg.session, msg.fromCache)
-		return m, loadNextCmd(m.loadQueue, m.sessionCache, msg.index+1)
+		return m, loadNextCmd(m.loadQueue, m.sessionCache, msg.index)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -2869,7 +2887,17 @@ func triageLine(label, value string, labelW int, width int) string {
 		return ""
 	}
 	prefix := dimStyle.Render(fmt.Sprintf("%-*s ", labelW, label))
-	return truncate(prefix+value, width)
+	valueW := maxInt(4, width-labelW-1)
+	wrapped := wrapText(value, valueW, 2)
+	if len(wrapped) == 0 {
+		return truncate(prefix, width)
+	}
+	lines := []string{truncate(prefix+wrapped[0], width)}
+	continuation := dimStyle.Render(strings.Repeat(" ", labelW+1))
+	for _, line := range wrapped[1:] {
+		lines = append(lines, truncate(continuation+line, width))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func triageKeyHint(s engine.Session) string {
@@ -3366,6 +3394,50 @@ func truncateLines(s string, maxLen int) string {
 		lines[i] = truncate(line, maxLen)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func wrapText(s string, width, maxLines int) []string {
+	if width <= 0 || maxLines <= 0 {
+		return nil
+	}
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	var lines []string
+	current := ""
+	for i, word := range words {
+		if lipgloss.Width(word) > width {
+			word = truncate(word, width)
+		}
+		candidate := word
+		if current != "" {
+			candidate = current + " " + word
+		}
+		if lipgloss.Width(candidate) <= width {
+			current = candidate
+			continue
+		}
+		if current == "" {
+			current = word
+			continue
+		}
+		lines = append(lines, current)
+		current = word
+		if len(lines) == maxLines {
+			overflow := strings.Join(append([]string{current}, words[i+1:]...), " ")
+			lines[maxLines-1] = truncate(lines[maxLines-1]+" "+overflow, width)
+			return lines
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	if len(lines) > maxLines {
+		lines[maxLines-1] = truncate(strings.Join(lines[maxLines-1:], " "), width)
+		lines = lines[:maxLines]
+	}
+	return lines
 }
 
 func renderedLineCount(s string) int {

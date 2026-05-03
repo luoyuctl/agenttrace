@@ -97,6 +97,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
 			os.Exit(1)
 		}
+		os.Setenv("AGENTTRACE_SESSION_CACHE_DIR", filepath.Join(demoDir, ".agenttrace-cache"))
 		defer cleanup()
 		sessionsDir = demoDir
 	}

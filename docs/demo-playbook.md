@@ -13,11 +13,10 @@ The script renders [docs/demo.tape](demo.tape) into `assets/agenttrace-demo.gif`
 ## Storyline
 
 1. Start with `agenttrace --demo` so viewers do not need local logs.
-2. Open Session List and show sorting/filtering.
-3. Run `:health <80` to show command mode.
-4. Open Detail to show the primary issue and cost/health summary.
-5. Jump to Diagnostics for loop/tool/context evidence.
-6. End on Diff or Overview to show this is more than a log viewer.
+2. Press `!` to jump from overview to critical sessions.
+3. Press `Enter` to open the selected session detail.
+4. Press `w` to jump to diagnostics for loop/tool/context evidence.
+5. End on Overview so the GIF loops back to the dashboard.
 
 ## Short Caption
 

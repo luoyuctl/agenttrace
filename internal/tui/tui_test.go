@@ -76,6 +76,23 @@ func resizeForTest(t *testing.T, m Model, width, height int) Model {
 	return got
 }
 
+func drainLoadForTest(t *testing.T, m Model, cmd tea.Cmd) Model {
+	t.Helper()
+	for steps := 0; cmd != nil && steps < 1000; steps++ {
+		next, nextCmd := m.Update(cmd())
+		got, ok := next.(Model)
+		if !ok {
+			t.Fatalf("unexpected model type %T", next)
+		}
+		m = got
+		cmd = nextCmd
+	}
+	if cmd != nil {
+		t.Fatalf("load command did not finish")
+	}
+	return m
+}
+
 func pressForTest(t *testing.T, m Model, key string) Model {
 	t.Helper()
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
@@ -2055,7 +2072,7 @@ func TestAppendSessionKeepsFilteredRowsInSync(t *testing.T) {
 	}
 }
 
-func TestStartReloadHydratesCachedSessionsWithoutQueue(t *testing.T) {
+func TestStartReloadDiscoversThenLoadsCachedSessions(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cached.jsonl")
 	if err := os.WriteFile(path, []byte("{}\n"), 0644); err != nil {
@@ -2077,15 +2094,24 @@ func TestStartReloadHydratesCachedSessionsWithoutQueue(t *testing.T) {
 
 	cmd := m.startReload()
 	if cmd != nil {
-		t.Fatalf("expected no load command when all sessions are cached")
+		msg, ok := cmd().(sessionDiscoveryMsg)
+		if !ok {
+			t.Fatalf("expected discovery message")
+		}
+		next, loadCmd := m.Update(msg)
+		m = next.(Model)
+		if loadCmd == nil {
+			t.Fatalf("expected cached sessions to load lazily")
+		}
+		m = drainLoadForTest(t, m, loadCmd)
 	}
 	if m.loading {
-		t.Fatalf("expected loading to finish immediately")
+		t.Fatalf("expected loading to finish")
 	}
 	if len(m.sessions) != 1 || m.sessions[0].Name != "cached" {
 		t.Fatalf("cached sessions not hydrated: %+v", m.sessions)
 	}
-	if m.loadedFromCache != 1 || len(m.loadQueue) != 0 {
+	if m.loadedFromCache != 1 || len(m.loadQueue) != 1 {
 		t.Fatalf("bad cache load state: fromCache=%d queue=%d", m.loadedFromCache, len(m.loadQueue))
 	}
 }
@@ -2110,8 +2136,8 @@ func TestStartLoadMessageKeepsReloadedModelState(t *testing.T) {
 		},
 	}, Dirs: map[string]engine.DirCacheEntry{}}
 
-	next, _ := m.Update(startLoadMsg{})
-	got := next.(Model)
+	next, cmd := m.Update(startLoadMsg{})
+	got := drainLoadForTest(t, next.(Model), cmd)
 	if got.loadProgress != 1 || got.loadedFromCache != 1 || got.loadTotal != 1 || got.loading {
 		t.Fatalf("startLoadMsg lost reloaded state: progress=%d fromCache=%d total=%d loading=%v",
 			got.loadProgress, got.loadedFromCache, got.loadTotal, got.loading)
@@ -2172,10 +2198,48 @@ func TestStartReloadDoesNotHydrateStaleCachedSessions(t *testing.T) {
 
 	cmd := m.startReload()
 	if cmd == nil {
+		t.Fatalf("expected discovery command")
+	}
+	next, loadCmd := m.Update(cmd())
+	m = next.(Model)
+	if loadCmd == nil {
 		t.Fatalf("expected stale file to be queued for parsing")
 	}
 	if len(m.sessions) != 0 || m.loadedFromCache != 0 || len(m.loadQueue) != 1 {
 		t.Fatalf("stale cache should not hydrate: sessions=%d fromCache=%d queue=%d", len(m.sessions), m.loadedFromCache, len(m.loadQueue))
+	}
+}
+
+func TestLoadNextCmdBatchesCachedSessions(t *testing.T) {
+	dir := t.TempDir()
+	files := make([]string, 0, loadBatchSize+1)
+	cache := engine.SessionCache{Entries: map[string]engine.CacheEntry{}, Dirs: map[string]engine.DirCacheEntry{}}
+	for i := 0; i < loadBatchSize+1; i++ {
+		path := filepath.Join(dir, fmt.Sprintf("cached-%02d.jsonl", i))
+		if err := os.WriteFile(path, []byte("{}\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, path)
+		cache.Entries[path] = engine.CacheEntry{
+			ModTime: info.ModTime().UnixNano(),
+			Size:    info.Size(),
+			Session: engine.Session{Name: fmt.Sprintf("cached-%02d", i), Path: path, Health: 91},
+		}
+	}
+
+	msg, ok := loadNextCmd(files, cache, 0)().(loadProgressMsg)
+	if !ok {
+		t.Fatalf("expected load progress message")
+	}
+	if len(msg.sessions) != loadBatchSize || msg.done || msg.index != loadBatchSize {
+		t.Fatalf("bad first batch: sessions=%d done=%v index=%d", len(msg.sessions), msg.done, msg.index)
+	}
+	if !msg.sessions[0].fromCache {
+		t.Fatalf("expected cached batch")
 	}
 }
 

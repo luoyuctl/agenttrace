@@ -869,7 +869,7 @@ func TestFindSessionFilesCachedSkipsDeletedCachedFiles(t *testing.T) {
 	}
 }
 
-func TestLoadSessionCacheSkipsOnlyBadEntries(t *testing.T) {
+func TestLoadSessionCacheDefersEntryDecode(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cachePath := sessionCachePath()
@@ -891,8 +891,11 @@ func TestLoadSessionCacheSkipsOnlyBadEntries(t *testing.T) {
 	}
 
 	cache := LoadSessionCache()
-	if len(cache.Entries) != 1 || cache.Entries["/tmp/good.jsonl"].Session.Name != "good" {
-		t.Fatalf("expected only good entry loaded: %+v", cache.Entries)
+	if len(cache.Entries) != 0 {
+		t.Fatalf("expected entries to stay lazy until requested: %+v", cache.Entries)
+	}
+	if len(cache.rawEntries) != 1 {
+		t.Fatalf("expected raw entries retained for lazy decode: %+v", cache.rawEntries)
 	}
 	if len(cache.Dirs) != 1 || len(cache.Dirs["/tmp"].Files) != 1 {
 		t.Fatalf("expected only good dir loaded: %+v", cache.Dirs)
@@ -903,6 +906,14 @@ func TestSessionCachePersistsAndClears(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	sessionPath := filepath.Join(home, "session.jsonl")
+	if err := os.WriteFile(sessionPath, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(sessionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	cachePath := SessionCachePath()
 	if filepath.Base(cachePath) != "sessions.json" || filepath.Base(filepath.Dir(cachePath)) != "agenttrace" {
@@ -914,16 +925,16 @@ func TestSessionCachePersistsAndClears(t *testing.T) {
 
 	want := SessionCache{
 		Entries: map[string]CacheEntry{
-			"/tmp/session.jsonl": {
-				ModTime: 10,
-				Size:    20,
+			sessionPath: {
+				ModTime: info.ModTime().UnixNano(),
+				Size:    info.Size(),
 				Session: Session{Name: "cached", Health: 88},
 			},
 		},
 		Dirs: map[string]DirCacheEntry{
 			"/tmp": {
 				ModTime: 30,
-				Files:   []string{"/tmp/session.jsonl"},
+				Files:   []string{sessionPath},
 				Dirs:    []string{"/tmp/nested"},
 			},
 		},
@@ -936,8 +947,12 @@ func TestSessionCachePersistsAndClears(t *testing.T) {
 	}
 
 	got := LoadSessionCache()
-	if got.Entries["/tmp/session.jsonl"].Session.Name != "cached" {
-		t.Fatalf("cache entry did not round-trip: %+v", got.Entries)
+	if len(got.Entries) != 0 || len(got.rawEntries) != 1 {
+		t.Fatalf("cache entry should be lazy after load: entries=%+v raw=%+v", got.Entries, got.rawEntries)
+	}
+	cached, ok := CachedSession(sessionPath, got)
+	if !ok || cached.Name != "cached" {
+		t.Fatalf("cache entry did not round-trip: ok=%v session=%+v entries=%+v", ok, cached, got.Entries)
 	}
 	if len(got.Dirs["/tmp"].Files) != 1 || got.Dirs["/tmp"].Dirs[0] != "/tmp/nested" {
 		t.Fatalf("directory cache did not round-trip: %+v", got.Dirs)
@@ -951,6 +966,81 @@ func TestSessionCachePersistsAndClears(t *testing.T) {
 	}
 	if err := ClearSessionCache(); err != nil {
 		t.Fatalf("clearing an already removed cache should be a no-op: %v", err)
+	}
+}
+
+func TestSessionCachePathUsesOverride(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTTRACE_SESSION_CACHE_DIR", dir)
+
+	if got := SessionCachePath(); got != filepath.Join(dir, "sessions.json") {
+		t.Fatalf("unexpected override cache path: %s", got)
+	}
+}
+
+func TestSaveSessionCachePreservesUnhydratedRawEntries(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+
+	oldPath := filepath.Join(home, "old.jsonl")
+	newPath := filepath.Join(home, "new.jsonl")
+	for _, path := range []string{oldPath, newPath} {
+		if err := os.WriteFile(path, []byte("{}\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldInfo, err := os.Stat(oldPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldEntry := CacheEntry{
+		ModTime: oldInfo.ModTime().UnixNano(),
+		Size:    oldInfo.Size(),
+		Session: Session{Name: "old", Health: 80},
+	}
+	oldRaw, err := json.Marshal(oldEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachePath := sessionCachePath()
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	payload := map[string]any{
+		"entries": map[string]json.RawMessage{oldPath: oldRaw},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cachePath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := LoadSessionCache()
+	newInfo, err := os.Stat(newPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.Entries[newPath] = CacheEntry{
+		ModTime: newInfo.ModTime().UnixNano(),
+		Size:    newInfo.Size(),
+		Session: Session{Name: "new", Health: 90},
+	}
+	if err := SaveSessionCache(cache); err != nil {
+		t.Fatalf("save cache: %v", err)
+	}
+
+	loaded := LoadSessionCache()
+	if len(loaded.rawEntries) != 2 {
+		t.Fatalf("expected raw and new entries after save: %+v", loaded.rawEntries)
+	}
+	if got, ok := CachedSession(oldPath, loaded); !ok || got.Name != "old" {
+		t.Fatalf("old raw entry not preserved: ok=%v got=%+v", ok, got)
+	}
+	if got, ok := CachedSession(newPath, loaded); !ok || got.Name != "new" {
+		t.Fatalf("new entry not saved: ok=%v got=%+v", ok, got)
 	}
 }
 
