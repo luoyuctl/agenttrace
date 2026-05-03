@@ -432,6 +432,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "esc", "?", "tab":
 				m.helpOpen = false
+			case "L", "l":
+				m.toggleLanguage()
 			}
 			return m, nil
 		}
@@ -459,6 +461,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "a":
 			if m.view == viewOverview {
 				m.runCommand("anomalies")
+			} else if m.view == viewList && !m.filterActive {
+				if m.sortBy == "anomalies" {
+					m.sortDesc = !m.sortDesc
+				} else {
+					m.sortBy = "anomalies"
+					m.sortDesc = true
+				}
+				m.sortAndRefresh()
 			}
 
 		case "tab", "`":
@@ -489,14 +499,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "L", "l":
-			if m.lang == i18n.EN {
-				m.lang = i18n.ZH
-			} else {
-				m.lang = i18n.EN
-			}
-			i18n.SetLang(m.lang)
-			m.refreshColumns()
-			m.refreshDetailViewport()
+			m.toggleLanguage()
 
 		case "0":
 			m.view = viewOverview
@@ -599,6 +602,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.sortAndRefresh()
 			}
+		case "e":
+			if m.view == viewList && !m.filterActive {
+				if m.sortBy == "failures" {
+					m.sortDesc = !m.sortDesc
+				} else {
+					m.sortBy = "failures"
+					m.sortDesc = true
+				}
+				m.sortAndRefresh()
+			}
 		case "n":
 			if m.view == viewList && !m.filterActive {
 				if m.sortBy == "name" {
@@ -627,6 +640,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m *Model) toggleLanguage() {
+	if m.lang == i18n.EN {
+		m.lang = i18n.ZH
+	} else {
+		m.lang = i18n.EN
+	}
+	i18n.SetLang(m.lang)
+	m.refreshColumns()
+	m.refreshDetailViewport()
 }
 
 func (m *Model) openDetail() {
@@ -977,7 +1001,7 @@ func (m Model) renderKeymapView() string {
 		{title: i18n.T("keymap_filters"), rows: []keymapRow{
 			{"f", i18n.T("keymap_health_filter")},
 			{"s", i18n.T("keymap_source_filter")},
-			{"h/c/t/n", i18n.T("keymap_sort")},
+			{"h/c/t/e/a/n", i18n.T("keymap_sort")},
 			{"$", i18n.T("keymap_top_cost")},
 			{"!", i18n.T("keymap_critical")},
 		}},
@@ -999,7 +1023,7 @@ func (m Model) renderKeymapView() string {
 }
 
 func renderKeymapGroups(groups []keymapGroup, width int) string {
-	if width < 72 {
+	if width < 52 {
 		var rendered []string
 		for _, group := range groups {
 			rendered = append(rendered, renderKeymapGroup(group.title, group.rows, width))
@@ -1007,7 +1031,7 @@ func renderKeymapGroups(groups []keymapGroup, width int) string {
 		return lipgloss.JoinVertical(lipgloss.Left, rendered...)
 	}
 
-	gap := "    "
+	gap := "  "
 	colW := maxInt(20, (width-lipgloss.Width(gap))/2)
 	var rows []string
 	for i := 0; i < len(groups); i += 2 {
@@ -2020,6 +2044,22 @@ func (m *Model) sortAndRefresh() {
 			}
 			return nonNegativeInt(m.sessions[i].Metrics.AssistantTurns) < nonNegativeInt(m.sessions[j].Metrics.AssistantTurns)
 		})
+	case "failures":
+		sort.SliceStable(m.sessions, func(i, j int) bool {
+			left := nonNegativeInt(m.sessions[i].Metrics.ToolCallsFail)
+			right := nonNegativeInt(m.sessions[j].Metrics.ToolCallsFail)
+			if m.sortDesc {
+				return left > right
+			}
+			return left < right
+		})
+	case "anomalies":
+		sort.SliceStable(m.sessions, func(i, j int) bool {
+			if m.sortDesc {
+				return len(m.sessions[i].Anomalies) > len(m.sessions[j].Anomalies)
+			}
+			return len(m.sessions[i].Anomalies) < len(m.sessions[j].Anomalies)
+		})
 	case "source":
 		sort.SliceStable(m.sessions, func(i, j int) bool {
 			left := sourceDisplayName(m.sessions[i].Metrics.SourceTool)
@@ -2133,11 +2173,11 @@ func (m *Model) wideListColumns(sessW, srcW, modelW, turnsW, toolsW, succW, fail
 		{Title: m.sortColTitle(i18n.T("turns_header"), "turns"), Width: turnsW},
 		{Title: m.sortColTitle(i18n.T("tools"), ""), Width: toolsW},
 		{Title: m.sortColTitle(i18n.T("succ_pct"), ""), Width: succW},
-		{Title: m.sortColTitle(i18n.T("fail"), ""), Width: failW},
+		{Title: m.sortColTitle(i18n.T("fail"), "failures"), Width: failW},
 		{Title: m.sortColTitle(i18n.T("cost"), "cost"), Width: costW},
 		{Title: m.sortColTitle(i18n.T("tokens"), ""), Width: tokensW},
 		{Title: i18n.T("duration_col"), Width: durationW},
-		{Title: i18n.T("anomaly_count_col"), Width: anomW},
+		{Title: m.sortColTitle(i18n.T("anomaly_count_col"), "anomalies"), Width: anomW},
 		{Title: m.sortColTitle(i18n.T("health"), "health"), Width: healthW},
 	}
 }
@@ -2149,7 +2189,7 @@ func (m *Model) fullListColumns(sessW, srcW, turnsW, toolsW, succW, failW, costW
 		{Title: m.sortColTitle(i18n.T("turns_header"), "turns"), Width: turnsW},
 		{Title: m.sortColTitle(i18n.T("tools"), ""), Width: toolsW},
 		{Title: m.sortColTitle(i18n.T("succ_pct"), ""), Width: succW},
-		{Title: m.sortColTitle(i18n.T("fail"), ""), Width: failW},
+		{Title: m.sortColTitle(i18n.T("fail"), "failures"), Width: failW},
 		{Title: m.sortColTitle(i18n.T("cost"), "cost"), Width: costW},
 		{Title: m.sortColTitle(i18n.T("tokens"), ""), Width: tokensW},
 		{Title: m.sortColTitle(i18n.T("health"), "health"), Width: healthW},
@@ -2172,7 +2212,7 @@ func (m *Model) mediumListColumns(sessW, srcW, turnsW, toolsW, failW, costW, tok
 		{Title: m.sortColTitle(i18n.T("source_tool"), "source"), Width: srcW},
 		{Title: m.sortColTitle(i18n.T("turns_header"), "turns"), Width: turnsW},
 		{Title: m.sortColTitle(i18n.T("tools"), ""), Width: toolsW},
-		{Title: m.sortColTitle(i18n.T("fail"), ""), Width: failW},
+		{Title: m.sortColTitle(i18n.T("fail"), "failures"), Width: failW},
 		{Title: m.sortColTitle(i18n.T("cost"), "cost"), Width: costW},
 		{Title: m.sortColTitle(i18n.T("tokens"), ""), Width: tokensW},
 		{Title: m.sortColTitle(i18n.T("health"), "health"), Width: healthW},
@@ -3041,6 +3081,10 @@ func sortFieldLabel(field string) string {
 		return i18n.T("sort_field_turns")
 	case "source":
 		return i18n.T("sort_field_source")
+	case "failures":
+		return i18n.T("sort_field_failures")
+	case "anomalies":
+		return i18n.T("sort_field_anomalies")
 	default:
 		return field
 	}

@@ -181,6 +181,58 @@ func TestAppHeaderDoesNotWrapStatusBadge(t *testing.T) {
 	}
 }
 
+func TestKeymapFitsDefaultTerminalAndShowsLanguageShortcut(t *testing.T) {
+	prev := i18n.Current
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	for _, tt := range []struct {
+		lang i18n.Lang
+		want string
+	}{
+		{lang: i18n.EN, want: "toggle language"},
+		{lang: i18n.ZH, want: "切换语言"},
+	} {
+		i18n.SetLang(tt.lang)
+		m := resizeForTest(t, sampleModelForTest(), 80, 24)
+		m.lang = tt.lang
+		m.helpOpen = true
+
+		rendered := m.View()
+		if !strings.Contains(rendered, tt.want) {
+			t.Fatalf("keymap should show language shortcut for %s:\n%s", tt.lang, rendered)
+		}
+		if got := maxRenderedWidth(rendered); got > 80 {
+			t.Fatalf("keymap too wide for %s: got=%d line=%q", tt.lang, got, widestLine(rendered))
+		}
+		if got := renderedHeight(rendered); got > 24 {
+			t.Fatalf("keymap too tall for %s: got=%d", tt.lang, got)
+		}
+	}
+}
+
+func TestLanguageSwitchWorksFromKeymap(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 80, 24)
+	m.lang = i18n.EN
+	m.helpOpen = true
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	m = next.(Model)
+
+	if m.lang != i18n.ZH || i18n.Current != i18n.ZH {
+		t.Fatalf("expected keymap language switch to set Chinese, model=%s current=%s", m.lang, i18n.Current)
+	}
+	if !m.helpOpen {
+		t.Fatalf("language switch should keep keymap open")
+	}
+	if rendered := m.View(); !strings.Contains(rendered, "切换语言") {
+		t.Fatalf("expected keymap to rerender in Chinese:\n%s", rendered)
+	}
+}
+
 func TestFilterSortKeepsTableColumnShape(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
@@ -230,6 +282,42 @@ func TestTurnSortUsesDisplayedNonNegativeValue(t *testing.T) {
 	rows := m.table.Rows()
 	if rows[0][0] != "session_alpha" || rows[1][0] != "session_beta_with_a_long_name" {
 		t.Fatalf("negative turns should sort as displayed zero value, rows=%+v", rows)
+	}
+}
+
+func TestSortByFailuresAndAnomalies(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 30)
+	m.view = viewList
+
+	m.runCommand("sort errors desc")
+	if m.sortBy != "failures" || !m.sortDesc {
+		t.Fatalf("expected failures desc sort, got %q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if got := m.table.Rows()[0][0]; got != "session_beta_with_a_long_name" {
+		t.Fatalf("expected highest failure session first, got %q", got)
+	}
+
+	m.runCommand("top anom")
+	if m.sortBy != "anomalies" || !m.sortDesc {
+		t.Fatalf("expected anomalies desc sort, got %q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if got := m.table.Rows()[0][0]; got != "session_beta_with_a_long_name" {
+		t.Fatalf("expected anomalous session first, got %q", got)
+	}
+}
+
+func TestListSortShortcutsCoverFailureAndAnomalyColumns(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 30)
+	m.view = viewList
+
+	m = pressForTest(t, m, "e")
+	if m.sortBy != "failures" || !m.sortDesc {
+		t.Fatalf("expected e to sort failures desc, got %q desc=%v", m.sortBy, m.sortDesc)
+	}
+
+	m = pressForTest(t, m, "a")
+	if m.sortBy != "anomalies" || !m.sortDesc {
+		t.Fatalf("expected a to sort anomalies desc, got %q desc=%v", m.sortBy, m.sortDesc)
 	}
 }
 
@@ -1138,6 +1226,32 @@ func TestSortCommandSupportsSource(t *testing.T) {
 	}
 }
 
+func TestSortCommandSupportsTriageFields(t *testing.T) {
+	m := sampleModelForTest()
+	m.sessions[0].Anomalies = append(m.sessions[0].Anomalies,
+		engine.Anomaly{Type: "latency", Severity: engine.SeverityMedium},
+		engine.Anomaly{Type: "redacted", Severity: engine.SeverityLow},
+	)
+	m = resizeForTest(t, m, 180, 30)
+	m.view = viewList
+
+	m.runCommand("sort anomalies desc")
+	if m.sortBy != "anomalies" || !m.sortDesc {
+		t.Fatalf("anomaly sort command not applied: sortBy=%q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if got := m.table.Rows()[0][0]; got != "session_alpha" {
+		t.Fatalf("anomaly sort should put most anomalous session first, got %q", got)
+	}
+
+	m.runCommand("top failures")
+	if m.sortBy != "failures" || !m.sortDesc {
+		t.Fatalf("failure top command not applied: sortBy=%q desc=%v", m.sortBy, m.sortDesc)
+	}
+	if got := m.table.Rows()[0][0]; got != "session_beta_with_a_long_name" {
+		t.Fatalf("failure top should put most failed session first, got %q", got)
+	}
+}
+
 func TestSourceSortShowsColumnIndicator(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList
@@ -1149,6 +1263,26 @@ func TestSourceSortShowsColumnIndicator(t *testing.T) {
 	}
 	if !strings.Contains(cols[1].Title, "▲") {
 		t.Fatalf("source sort column should show ascending indicator, got %q", cols[1].Title)
+	}
+}
+
+func TestTriageSortShowsColumnIndicators(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 180, 30)
+	m.view = viewList
+	m.runCommand("sort failures desc")
+
+	cols := m.table.Columns()
+	if len(cols) < 12 {
+		t.Fatalf("expected wide columns, got %+v", cols)
+	}
+	if !strings.Contains(cols[6].Title, "▼") {
+		t.Fatalf("failure sort column should show descending indicator, got %q", cols[6].Title)
+	}
+
+	m.runCommand("sort anomalies desc")
+	cols = m.table.Columns()
+	if !strings.Contains(cols[10].Title, "▼") {
+		t.Fatalf("anomaly sort column should show descending indicator, got %q", cols[10].Title)
 	}
 }
 

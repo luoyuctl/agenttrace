@@ -11,7 +11,7 @@
   <a href="https://github.com/luoyuctl/agenttrace/stargazers"><img src="https://img.shields.io/github/stars/luoyuctl/agenttrace?style=social" alt="GitHub stars"></a>
   <img src="https://img.shields.io/badge/go-1.24+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.3.37-2bbc8a.svg" alt="Homebrew">
+  <img src="https://img.shields.io/badge/Homebrew-v0.3.38-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <h3 align="center">💸 Stop burning cash and hours on invisible AI agent waste</h3>
@@ -201,7 +201,7 @@ See [docs/cursor-import.md](docs/cursor-import.md) for details.
 | `Enter` | View session detail |
 | `Tab` | Switch view: Overview → List → Detail → Diagnostics → Diff |
 | `0`-`4` | Jump directly to a view |
-| `h` / `c` / `t` / `n` | Sort by health / cost / turns / name |
+| `h` / `c` / `t` / `e` / `a` / `n` | Sort by health / cost / turns / failures / anomalies / name |
 | `f` / `s` / `/` | Filter by health / source / text |
 | `:` | Command mode |
 | `?` | Open the keyboard shortcut map |
@@ -215,7 +215,7 @@ See [docs/cursor-import.md](docs/cursor-import.md) for details.
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v0.3.37 — AI Agent Session Performance Report
+  AGENTTRACE v0.3.38 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST

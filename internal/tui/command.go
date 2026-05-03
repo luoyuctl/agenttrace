@@ -185,8 +185,8 @@ func parseHealthCommandFilter(expr string) (string, bool) {
 }
 
 func isTopSortField(field string) bool {
-	switch strings.ToLower(field) {
-	case "cost", "health", "turns", "source":
+	switch normalizeSortField(field) {
+	case "cost", "health", "turns", "source", "failures", "anomalies":
 		return true
 	default:
 		return false
@@ -194,9 +194,10 @@ func isTopSortField(field string) bool {
 }
 
 func (m *Model) applySortCommand(field string, desc bool) {
-	switch strings.ToLower(field) {
-	case "cost", "health", "turns", "name", "source":
-		m.sortBy = strings.ToLower(field)
+	field = normalizeSortField(field)
+	switch field {
+	case "cost", "health", "turns", "name", "source", "failures", "anomalies":
+		m.sortBy = field
 	default:
 		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_unknown_sort"), field)
 		return
@@ -209,6 +210,17 @@ func (m *Model) applySortCommand(field string, desc bool) {
 		dir = i18n.T("sort_asc")
 	}
 	m.commandFeedback = fmt.Sprintf(i18n.T("cmd_sorted"), sortFieldLabel(m.sortBy), dir)
+}
+
+func normalizeSortField(field string) string {
+	switch strings.ToLower(strings.TrimSpace(field)) {
+	case "fail", "fails", "failure", "failures", "errors":
+		return "failures"
+	case "anomaly", "anomalies", "anom":
+		return "anomalies"
+	default:
+		return strings.ToLower(strings.TrimSpace(field))
+	}
 }
 
 func (m *Model) clearFilters() {

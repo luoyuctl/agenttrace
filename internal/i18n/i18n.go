@@ -259,8 +259,8 @@ var translations = map[string]map[Lang]string{
 		ZH: "0-4: 跳转 · Tab: 列表 · q: 退出",
 	},
 	"help_list": {
-		EN: "↑↓:sel Enter:detail 0-4:jump h/c/t/n:sort /:filt f:health s:source d:diff w:diag Tab:next q:quit",
-		ZH: "↑↓:选择 Enter:详情 0-4:跳转 h/c/t/n:排序 /:筛选 f:健康 s:来源 d:对比 w:诊断 Tab:下页 q:退出",
+		EN: "↑↓:sel Enter:detail 0-4:jump h/c/t/e/a/n:sort /:filt f:health s:source d:diff w:diag Tab:next q:quit",
+		ZH: "↑↓:选择 Enter:详情 0-4:跳转 h/c/t/e/a/n:排序 /:筛选 f:健康 s:来源 d:对比 w:诊断 Tab:下页 q:退出",
 	},
 	"help_detail": {
 		EN: "Esc: back · d: diff neighbor · w: diag · Tab: next · q: quit",
@@ -845,6 +845,8 @@ var translations = map[string]map[Lang]string{
 	"sort_field_cost":       {EN: "cost", ZH: "费用"},
 	"sort_field_turns":      {EN: "turns", ZH: "轮次"},
 	"sort_field_source":     {EN: "source", ZH: "来源"},
+	"sort_field_failures":   {EN: "failures", ZH: "失败"},
+	"sort_field_anomalies":  {EN: "anomalies", ZH: "异常"},
 	"view_overview":         {EN: "Overview", ZH: "概览"},
 	"view_list":             {EN: "List", ZH: "列表"},
 	"view_detail":           {EN: "Detail", ZH: "详情"},
@@ -874,7 +876,7 @@ var translations = map[string]map[Lang]string{
 	"keymap_help":           {EN: "toggle this keymap", ZH: "切换本页"},
 	"keymap_health_filter":  {EN: "cycle health filter", ZH: "切换健康筛选"},
 	"keymap_source_filter":  {EN: "cycle source filter", ZH: "切换来源筛选"},
-	"keymap_sort":           {EN: "sort health/cost/turns/name", ZH: "按健康/费用/轮次/名称排序"},
+	"keymap_sort":           {EN: "sort health/cost/turns/fails/anomalies/name", ZH: "按健康/费用/轮次/失败/异常/名称排序"},
 	"keymap_top_cost":       {EN: "show top-cost sessions", ZH: "显示高费用会话"},
 	"keymap_critical":       {EN: "show critical sessions", ZH: "显示严重会话"},
 	"keymap_command":        {EN: "command mode", ZH: "命令模式"},
@@ -885,7 +887,7 @@ var translations = map[string]map[Lang]string{
 
 	// ── Command mode ──
 	"cmd_cleared":                {EN: "cleared filters", ZH: "已清除筛选"},
-	"cmd_help":                   {EN: "commands: health <80|good|warn|crit · source codex · model claude · cost >0.1 · anomalies · sort cost desc · top cost · critical", ZH: "命令: health <80|good|warn|crit · source codex · model claude · cost >0.1 · anomalies · sort cost desc · top cost · critical"},
+	"cmd_help":                   {EN: "commands: health <80|good|warn|crit · source codex · model claude · cost >0.1 · anomalies · sort failures desc · top anomalies · critical", ZH: "命令: health <80|good|warn|crit · source codex · model claude · cost >0.1 · anomalies · sort failures desc · top anomalies · critical"},
 	"cmd_usage_clear":            {EN: "usage: clear", ZH: "用法: clear"},
 	"cmd_usage_help":             {EN: "usage: help", ZH: "用法: help"},
 	"cmd_usage_health":           {EN: "usage: health good|warn|crit|<80|>=90", ZH: "用法: health good|warn|crit|<80|>=90"},
@@ -895,8 +897,8 @@ var translations = map[string]map[Lang]string{
 	"cmd_cost_expect":            {EN: "cost filter expects >, >=, <, <=, or =", ZH: "费用筛选需要 >、>=、<、<= 或 ="},
 	"cmd_usage_anomalies":        {EN: "usage: anomalies", ZH: "用法: anomalies"},
 	"cmd_usage_critical":         {EN: "usage: critical", ZH: "用法: critical"},
-	"cmd_usage_top":              {EN: "usage: top cost|health|turns|source", ZH: "用法: top cost|health|turns|source"},
-	"cmd_usage_sort":             {EN: "usage: sort cost|health|turns|name|source [asc|desc]", ZH: "用法: sort cost|health|turns|name|source [asc|desc]"},
+	"cmd_usage_top":              {EN: "usage: top cost|health|turns|source|failures|anomalies", ZH: "用法: top cost|health|turns|source|failures|anomalies"},
+	"cmd_usage_sort":             {EN: "usage: sort cost|health|turns|name|source|failures|anomalies [asc|desc]", ZH: "用法: sort cost|health|turns|name|source|failures|anomalies [asc|desc]"},
 	"cmd_filter_health":          {EN: "health filter %s", ZH: "健康筛选 %s"},
 	"cmd_filter_source":          {EN: "source filter %q", ZH: "来源筛选 %q"},
 	"cmd_filter_model":           {EN: "model filter %q", ZH: "模型筛选 %q"},
