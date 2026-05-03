@@ -232,6 +232,44 @@ func TestParseClaudeCodeJSONLWithPreamble(t *testing.T) {
 	}
 }
 
+func TestCollectSessionFilesIncludesClaudeSubagents(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".claude", "projects")
+	subagentDir := filepath.Join(root, "project-alpha", "session-abc", "subagents")
+	if err := os.MkdirAll(subagentDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	subagentPath := filepath.Join(subagentDir, "agent-a1.jsonl")
+	if err := os.WriteFile(subagentPath, []byte(`{"type":"assistant","message":{"role":"assistant","model":"claude-haiku-4-5","usage":{"input_tokens":1}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	metaPath := filepath.Join(subagentDir, "agent-a1.meta.json")
+	if err := os.WriteFile(metaPath, []byte(`{"agentId":"a1"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	files := collectSessionFiles(root)
+	if !containsPath(files, subagentPath) {
+		t.Fatalf("expected claude subagent transcript to be discovered")
+	}
+	if containsPath(files, metaPath) {
+		t.Fatalf("expected claude subagent metadata to be skipped")
+	}
+}
+
+func TestParseClaudeCodeJSONLDeduplicatesAssistantUsage(t *testing.T) {
+	raw := strings.Join([]string{
+		`{"type":"assistant","timestamp":"2026-05-03T10:00:00Z","message":{"id":"msg_1","role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10},"content":[{"type":"text","text":"hello"}]}}`,
+		`{"type":"assistant","timestamp":"2026-05-03T10:00:01Z","message":{"id":"msg_1","role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10},"content":[{"type":"tool_use","id":"tool_1","name":"Read","input":{}}]}}`,
+	}, "\n")
+	events, err := parseClaudeCodeJSONL(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "claude-sonnet-4-6")
+	if m.TokensInput != 100 || m.TokensOutput != 10 {
+		t.Fatalf("expected duplicate assistant usage to count once: %+v", m)
+	}
+}
+
 func TestParseClaudeCodeJSONLWithPreambleMalformed(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "broken-claude.jsonl")
