@@ -300,6 +300,221 @@ func TestParseOhMyPiSessionJSONL_InvalidHeader(t *testing.T) {
 	}
 }
 
+func TestParseQwenCodeStreamJSONL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "qwen-stream.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{
+			"type":       "system",
+			"subtype":    "session_start",
+			"uuid":       "sys-1",
+			"session_id": "session-1",
+			"model":      "qwen3-coder-plus",
+			"timestamp":  "2026-05-03T10:00:00Z",
+		},
+		map[string]interface{}{
+			"type":       "assistant",
+			"uuid":       "assistant-1",
+			"session_id": "session-1",
+			"timestamp":  "2026-05-03T10:00:02Z",
+			"message": map[string]interface{}{
+				"id":    "msg-1",
+				"type":  "message",
+				"role":  "assistant",
+				"model": "qwen3-coder-plus",
+				"content": []interface{}{
+					map[string]interface{}{"type": "reasoning", "text": "Need to inspect package files."},
+					map[string]interface{}{"type": "text", "text": "I'll inspect the package."},
+					map[string]interface{}{"type": "tool_use", "id": "tool-1", "name": "read_file", "input": map[string]interface{}{"path": "package.json"}},
+				},
+				"usage": map[string]interface{}{
+					"input_tokens":                120,
+					"output_tokens":               45,
+					"cache_read_input_tokens":     10,
+					"cache_creation_input_tokens": 5,
+				},
+			},
+		},
+		map[string]interface{}{
+			"type":       "user",
+			"uuid":       "user-1",
+			"session_id": "session-1",
+			"timestamp":  "2026-05-03T10:00:03Z",
+			"message": map[string]interface{}{
+				"role":    "user",
+				"content": "Please continue after inspecting it.",
+			},
+		},
+		map[string]interface{}{
+			"type":       "user",
+			"uuid":       "tool-result-1",
+			"session_id": "session-1",
+			"timestamp":  "2026-05-03T10:00:04Z",
+			"message": map[string]interface{}{
+				"role": "user",
+				"content": []interface{}{
+					map[string]interface{}{"type": "tool_result", "tool_use_id": "tool-1", "content": "package metadata", "is_error": false},
+				},
+			},
+		},
+		map[string]interface{}{
+			"type":        "result",
+			"subtype":     "success",
+			"uuid":        "result-1",
+			"session_id":  "session-1",
+			"is_error":    false,
+			"duration_ms": 1234,
+			"result":      "I'll inspect the package.",
+			"usage": map[string]interface{}{
+				"input_tokens":  120,
+				"output_tokens": 45,
+			},
+		},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DetectFormat(path).Format; got != "qwen_code" {
+		t.Fatalf("qwen format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "qwen3-coder-plus")
+	if m.SourceTool != "qwen_code" || m.UserMessages != 1 || m.AssistantTurns != 1 || m.ToolCallsTotal != 1 || m.ToolCallsOK != 1 {
+		t.Fatalf("bad qwen metrics: %+v", m)
+	}
+	if m.ModelUsed != "qwen3-coder-plus" || m.TokensInput != 120 || m.TokensOutput != 45 || m.TokensCacheR != 10 || m.TokensCacheW != 5 {
+		t.Fatalf("bad qwen usage/model: %+v", m)
+	}
+	if m.ReasoningBlocks != 1 || m.ToolUsage["read_file"] != 1 {
+		t.Fatalf("bad qwen reasoning/tool usage: %+v", m)
+	}
+}
+
+func TestParseQwenCodeJSONOutputArray(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "qwen-output.json")
+	raw := []interface{}{
+		map[string]interface{}{
+			"type":       "system",
+			"subtype":    "session_start",
+			"uuid":       "sys-1",
+			"session_id": "session-1",
+			"model":      "qwen3-coder-plus",
+		},
+		map[string]interface{}{
+			"type":       "result",
+			"subtype":    "success",
+			"uuid":       "result-1",
+			"session_id": "session-1",
+			"is_error":   false,
+			"result":     "The capital of France is Paris.",
+			"stats": map[string]interface{}{
+				"models": map[string]interface{}{
+					"qwen3-coder-plus": map[string]interface{}{
+						"tokens": map[string]interface{}{"input": 20, "output": 7},
+					},
+				},
+			},
+		},
+	}
+	if err := os.WriteFile(path, []byte(mustJSON(raw)), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DetectFormat(path).Format; got != "qwen_code" {
+		t.Fatalf("qwen array format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "qwen3-coder-plus")
+	if m.SourceTool != "qwen_code" || m.AssistantTurns != 1 || m.TokensInput != 20 || m.TokensOutput != 7 {
+		t.Fatalf("bad qwen json metrics: %+v", m)
+	}
+}
+
+func TestParseQwenCodeJSONObjectOutput(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "qwen-result.json")
+	raw := map[string]interface{}{
+		"response": "Done.",
+		"stats": map[string]interface{}{
+			"models": map[string]interface{}{
+				"qwen3-coder-plus": map[string]interface{}{
+					"tokens": map[string]interface{}{"input": 31, "output": 9, "cacheRead": 4},
+				},
+			},
+		},
+	}
+	if err := os.WriteFile(path, []byte(mustJSON(raw)), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DetectFormat(path).Format; got != "qwen_code" {
+		t.Fatalf("qwen object format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "qwen3-coder-plus")
+	if m.SourceTool != "qwen_code" || m.AssistantTurns != 1 || m.TokensInput != 31 || m.TokensOutput != 9 || m.TokensCacheR != 4 {
+		t.Fatalf("bad qwen object metrics: %+v", m)
+	}
+}
+
+func TestParseQwenCodeStreamJSONL_NoMessages(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "empty-qwen.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{
+			"type":       "system",
+			"subtype":    "session_start",
+			"uuid":       "sys-1",
+			"session_id": "session-1",
+			"model":      "qwen3-coder-plus",
+		},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DetectFormat(path).Format; got != "qwen_code" {
+		t.Fatalf("qwen empty format: %s", got)
+	}
+	if _, err := Parse(path); err == nil {
+		t.Fatalf("expected qwen stream without assistant/result content to fail")
+	}
+}
+
+func TestFindSessionFilesIncludesQwenProjectChats(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	chatDir := filepath.Join(home, ".qwen", "projects", "repo", "chats")
+	if err := os.MkdirAll(chatDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(chatDir, "chat.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	files := FindSessionFiles("")
+	if len(files) != 1 || files[0] != path {
+		t.Fatalf("expected qwen chat file, got %v", files)
+	}
+	cache := SessionCache{Entries: map[string]CacheEntry{}, Dirs: map[string]DirCacheEntry{}}
+	files = FindSessionFilesCached("", cache)
+	if len(files) != 1 || files[0] != path {
+		t.Fatalf("expected cached qwen chat file, got %v", files)
+	}
+}
+
 func TestFindSessionFilesIncludesAiderHistory(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".aider.chat.history.md")

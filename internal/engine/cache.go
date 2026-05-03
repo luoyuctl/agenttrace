@@ -149,11 +149,7 @@ func FindSessionFilesCached(dir string, cache SessionCache) []string {
 	seen := make(map[string]bool)
 	var files []string
 	for _, root := range roots {
-		base := filepath.Base(root)
-		maxDepth := 4
-		if base == "projects" {
-			maxDepth = 1
-		}
+		maxDepth := maxSessionDirDepth(root)
 		for _, f := range collectSessionFilesCached(root, 0, maxDepth, cache) {
 			if !seen[f] {
 				seen[f] = true
