@@ -47,6 +47,10 @@ A good parser PR includes:
 - regression tests for malformed or partial records
 - no private prompts, API keys, file paths, or proprietary source snippets
 
+Agent-run parser, growth, release, or quality review work should also follow
+[docs/agentops-prompt-rules.md](docs/agentops-prompt-rules.md) before opening
+or approving a PR.
+
 ## Privacy
 
 Session logs often contain prompts, source paths, repository names, tool arguments, and sometimes secrets. Do not paste raw private logs into issues or PRs.
