@@ -217,6 +217,9 @@ func collectSessionFilesCached(dir string, depth, maxDepth int, cache SessionCac
 		if isGeminiTempPath(path) && !isGeminiTempSessionFile(path) {
 			continue
 		}
+		if isOpenCodeStoragePath(path) && !isOpenCodeStorageSessionFile(path) {
+			continue
+		}
 		files = append(files, path)
 	}
 	sort.Strings(files)

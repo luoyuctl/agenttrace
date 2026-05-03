@@ -1,0 +1,15 @@
+{
+  "id": "part_finish",
+  "sessionID": "ses_abc",
+  "messageID": "msg_assistant",
+  "type": "step-finish",
+  "cost": 0.001,
+  "tokens": {
+    "input": 42,
+    "output": 17,
+    "cache": {
+      "read": 3,
+      "write": 2
+    }
+  }
+}

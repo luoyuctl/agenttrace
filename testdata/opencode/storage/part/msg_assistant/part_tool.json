@@ -1,0 +1,20 @@
+{
+  "id": "part_tool",
+  "sessionID": "ses_abc",
+  "messageID": "msg_assistant",
+  "type": "tool",
+  "callID": "call_read",
+  "tool": "read",
+  "state": {
+    "status": "completed",
+    "input": {
+      "path": "internal/engine/engine.go"
+    },
+    "output": "engine.go parsed",
+    "title": "Read file",
+    "time": {
+      "start": 1764750002500,
+      "end": 1764750003000
+    }
+  }
+}

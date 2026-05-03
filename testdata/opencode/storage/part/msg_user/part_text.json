@@ -1,0 +1,11 @@
+{
+  "id": "part_user_text",
+  "sessionID": "ses_abc",
+  "messageID": "msg_user",
+  "type": "text",
+  "text": "show me the parser status",
+  "time": {
+    "start": 1764750001000,
+    "end": 1764750001000
+  }
+}

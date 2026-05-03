@@ -66,6 +66,9 @@ func isSkippedSessionDir(path string) bool {
 	if isGeminiTempPath(path) && strings.HasPrefix(name, ".") {
 		return true
 	}
+	if isOpenCodeStorageSkippedDir(path) {
+		return true
+	}
 	return false
 }
 
