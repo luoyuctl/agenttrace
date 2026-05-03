@@ -890,6 +890,38 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	}
 }
 
+func TestComputeOverviewSortsAnomaliesBySeverity(t *testing.T) {
+	sessions := []Session{
+		{
+			Name:      "low",
+			Anomalies: []Anomaly{{Type: "no_tools", Severity: SeverityLow}},
+		},
+		{
+			Name:      "unknown",
+			Anomalies: []Anomaly{{Type: "legacy"}},
+		},
+		{
+			Name:      "high",
+			Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
+		},
+		{
+			Name:      "medium",
+			Anomalies: []Anomaly{{Type: "latency", Severity: SeverityMedium}},
+		},
+	}
+
+	got := ComputeOverview(sessions).AnomaliesTop
+	if len(got) != 4 {
+		t.Fatalf("expected four anomalies, got %d: %+v", len(got), got)
+	}
+	want := []string{"high", "medium", "low", "unknown"}
+	for i, name := range want {
+		if got[i].Session != name {
+			t.Fatalf("anomaly %d should be %q, got %+v", i, name, got)
+		}
+	}
+}
+
 func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 	sessions := []Session{
 		{
