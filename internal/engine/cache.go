@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -107,7 +108,11 @@ func SaveSessionCache(sc SessionCache) error {
 
 // ClearSessionCache removes the session cache file.
 func ClearSessionCache() error {
-	return os.Remove(sessionCachePath())
+	err := os.Remove(sessionCachePath())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // CachedSession returns a parsed session only when file metadata still matches.

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -725,6 +726,61 @@ func TestLoadSessionCacheSkipsOnlyBadEntries(t *testing.T) {
 	}
 	if len(cache.Dirs) != 1 || len(cache.Dirs["/tmp"].Files) != 1 {
 		t.Fatalf("expected only good dir loaded: %+v", cache.Dirs)
+	}
+}
+
+func TestSessionCachePersistsAndClears(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+
+	cachePath := SessionCachePath()
+	if filepath.Base(cachePath) != "sessions.json" || filepath.Base(filepath.Dir(cachePath)) != "agenttrace" {
+		t.Fatalf("unexpected cache path: %s", cachePath)
+	}
+	if err := ClearSessionCache(); err != nil {
+		t.Fatalf("clearing a missing cache should be a no-op: %v", err)
+	}
+
+	want := SessionCache{
+		Entries: map[string]CacheEntry{
+			"/tmp/session.jsonl": {
+				ModTime: 10,
+				Size:    20,
+				Session: Session{Name: "cached", Health: 88},
+			},
+		},
+		Dirs: map[string]DirCacheEntry{
+			"/tmp": {
+				ModTime: 30,
+				Files:   []string{"/tmp/session.jsonl"},
+				Dirs:    []string{"/tmp/nested"},
+			},
+		},
+	}
+	if err := SaveSessionCache(want); err != nil {
+		t.Fatalf("save cache: %v", err)
+	}
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("expected cache file to exist: %v", err)
+	}
+
+	got := LoadSessionCache()
+	if got.Entries["/tmp/session.jsonl"].Session.Name != "cached" {
+		t.Fatalf("cache entry did not round-trip: %+v", got.Entries)
+	}
+	if len(got.Dirs["/tmp"].Files) != 1 || got.Dirs["/tmp"].Dirs[0] != "/tmp/nested" {
+		t.Fatalf("directory cache did not round-trip: %+v", got.Dirs)
+	}
+
+	if err := ClearSessionCache(); err != nil {
+		t.Fatalf("clear cache: %v", err)
+	}
+	if _, err := os.Stat(cachePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected cache file removed, stat err=%v", err)
+	}
+	if err := ClearSessionCache(); err != nil {
+		t.Fatalf("clearing an already removed cache should be a no-op: %v", err)
 	}
 }
 
