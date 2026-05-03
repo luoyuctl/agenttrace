@@ -122,6 +122,45 @@ func TestParseClaudeCode_ToolResultArray(t *testing.T) {
 	}
 }
 
+func TestParseClaudeCodeJSONLWithPreamble(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "claude-code-preamble.jsonl")
+	if got := DetectFormat(path).Format; got != "claude_code_jsonl" {
+		t.Fatalf("claude preamble format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "claude-sonnet-4")
+	if m.SourceTool != "claude_code" || m.UserMessages != 1 || m.ToolCallsTotal != 1 || m.ToolCallsOK != 1 {
+		t.Fatalf("bad claude preamble metrics: %+v", m)
+	}
+	if m.TokensInput < 120 || m.TokensOutput != 40 || m.TokensCacheR != 10 || m.TokensCacheW != 5 {
+		t.Fatalf("bad claude preamble usage: %+v", m)
+	}
+	if m.ReasoningBlocks != 1 || m.ToolUsage["read_file"] != 1 {
+		t.Fatalf("bad claude preamble reasoning/tool usage: %+v", m)
+	}
+}
+
+func TestParseClaudeCodeJSONLWithPreambleMalformed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "broken-claude.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{"type": "file-history-snapshot", "messageId": "snapshot-1", "snapshot": map[string]interface{}{}},
+		map[string]interface{}{"type": "system", "sessionId": "session-1", "timestamp": "2026-05-03T10:00:00Z"},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectFormat(path).Format; got != "claude_code_jsonl" {
+		t.Fatalf("expected malformed claude JSONL to be detected, got %s", got)
+	}
+	if _, err := Parse(path); err == nil {
+		t.Fatalf("expected malformed claude JSONL to fail")
+	}
+}
+
 func TestParseGeneric_Invalid(t *testing.T) {
 	_, err := parseGeneric("not json at all")
 	if err == nil {
