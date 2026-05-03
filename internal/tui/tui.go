@@ -768,10 +768,12 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 
 	tokensStr := compactInt(met.TokensInput + met.TokensOutput)
 	switch len(m.table.Columns()) {
-	case 5:
+	case 7:
 		return table.Row{
 			s.Name,
 			sourceDisplay,
+			failStr,
+			fmt.Sprintf("%d", len(s.Anomalies)),
 			costColor(met.CostEstimated),
 			tokensStr,
 			healthCol,
@@ -2149,16 +2151,16 @@ func (m *Model) adjustColumnWidths(width int) {
 	} else if width >= 92 {
 		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 10, 7, 4, 4, 4, 4, 7, 5, 7
 	} else if width >= 76 {
-		m.setColumnsAndRefreshRows(m.compactListColumns(14, 8, 7, 6, 5))
+		m.setColumnsAndRefreshRows(m.compactListColumns(13, 7, 4, 4, 7, 6, 5))
 		return
 	} else if width >= 70 {
-		m.setColumnsAndRefreshRows(m.compactListColumns(12, 7, 6, 5, 4))
+		m.setColumnsAndRefreshRows(m.compactListColumns(11, 6, 4, 4, 6, 5, 4))
 		return
 	} else if width >= 64 {
-		m.setColumnsAndRefreshRows(m.compactListColumns(14, 8, 7, 6, 5))
+		m.setColumnsAndRefreshRows(m.compactListColumns(10, 5, 4, 4, 6, 5, 4))
 		return
 	} else {
-		m.setColumnsAndRefreshRows(m.compactListColumns(10, 6, 6, 5, 4))
+		m.setColumnsAndRefreshRows(m.compactListColumns(9, 4, 4, 4, 5, 4, 4))
 		return
 	}
 
@@ -2196,10 +2198,12 @@ func (m *Model) fullListColumns(sessW, srcW, turnsW, toolsW, succW, failW, costW
 	}
 }
 
-func (m *Model) compactListColumns(sessW, srcW, costW, tokensW, healthW int) []table.Column {
+func (m *Model) compactListColumns(sessW, srcW, failW, anomW, costW, tokensW, healthW int) []table.Column {
 	return []table.Column{
 		{Title: m.sortColTitle(i18n.T("session"), "name"), Width: sessW},
 		{Title: m.sortColTitle(i18n.T("source_tool"), "source"), Width: srcW},
+		{Title: m.sortColTitle(i18n.T("fail"), "failures"), Width: failW},
+		{Title: m.sortColTitle(i18n.T("anomaly_count_col"), "anomalies"), Width: anomW},
 		{Title: m.sortColTitle(i18n.T("cost"), "cost"), Width: costW},
 		{Title: m.sortColTitle(i18n.T("tokens"), ""), Width: tokensW},
 		{Title: m.sortColTitle(i18n.T("health"), "health"), Width: healthW},
@@ -2220,7 +2224,7 @@ func (m *Model) mediumListColumns(sessW, srcW, turnsW, toolsW, failW, costW, tok
 }
 
 func (m *Model) compactListTable() bool {
-	if len(m.table.Columns()) == 5 {
+	if len(m.table.Columns()) == 7 {
 		return true
 	}
 	return m.width > 0 && m.width < 72

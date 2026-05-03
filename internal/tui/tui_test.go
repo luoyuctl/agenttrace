@@ -522,15 +522,35 @@ func TestCompactListKeepsTokensAndHealthReadable(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 80, 30)
 	m.view = viewList
 
-	if got := len(m.table.Columns()); got != 5 {
+	if got := len(m.table.Columns()); got != 7 {
 		t.Fatalf("expected compact columns, got %d", got)
 	}
 	row := m.table.Rows()[0]
-	if row[3] != "154.0K" {
-		t.Fatalf("expected full compact token value, got %q", row[3])
+	if row[2] != "1" || row[3] != "0" {
+		t.Fatalf("expected compact triage signals, got row=%v", row)
 	}
-	if row[4] != "92%" {
-		t.Fatalf("expected health value, got %q", row[4])
+	if row[5] != "154.0K" {
+		t.Fatalf("expected full compact token value, got %q", row[5])
+	}
+	if row[6] != "92%" {
+		t.Fatalf("expected health value, got %q", row[6])
+	}
+}
+
+func TestCompactListShowsTriageSortIndicators(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 80, 30)
+	m.view = viewList
+
+	m.runCommand("sort failures desc")
+	cols := m.table.Columns()
+	if !strings.Contains(cols[2].Title, "▼") {
+		t.Fatalf("compact failure column should show descending sort indicator, got %+v", cols)
+	}
+
+	m.runCommand("sort anomalies desc")
+	cols = m.table.Columns()
+	if !strings.Contains(cols[3].Title, "▼") {
+		t.Fatalf("compact anomaly column should show descending sort indicator, got %+v", cols)
 	}
 }
 
