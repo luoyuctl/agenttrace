@@ -88,6 +88,78 @@ Repo: https://github.com/luoyuctl/agenttrace
 Feedback thread: https://github.com/luoyuctl/agenttrace/discussions/2
 Sample report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
+## Channel-Specific Drafts
+
+Use these as starting points. Edit for the community, then post manually.
+
+**Hacker News**
+
+Title:
+
+```text
+Show HN: agenttrace, local TUI observability for AI coding agent sessions
+```
+
+Body:
+
+```text
+I built agenttrace to answer a question I kept running into with coding agents: what actually happened during the run?
+
+It scans local session logs and turns them into a terminal dashboard for token/cost usage, tool failures, latency gaps, anomalies, session health, diffs, and JSON/Markdown/HTML reports. It is local-first, so prompts and raw logs do not need to leave your machine.
+
+It supports Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes, OpenCode, Kimi, and Copilot-style logs.
+
+Try it without local logs:
+
+agenttrace --demo
+
+Repo: https://github.com/luoyuctl/agenttrace
+Sample report: https://luoyuctl.github.io/agenttrace/demo-report.html
+```
+
+**Reddit**
+
+```text
+I made a local TUI for debugging AI coding agent sessions.
+
+The problem it tries to solve: when an agent hangs, retries tools, burns a lot of tokens, or produces a weird final answer, the final output does not show the operational story.
+
+agenttrace scans local session logs and shows token/cost burn, tool success/failure rate, latency gaps, anomalies, session health, diffs, and exportable JSON/Markdown/HTML reports. It also has CI health gates if you want to track agent runs in PRs or nightly jobs.
+
+It is not a hosted tracing backend and does not require uploading prompts or raw logs.
+
+Repo: https://github.com/luoyuctl/agenttrace
+Demo: agenttrace --demo
+```
+
+**V2EX**
+
+```text
+做了一个本地优先的 AI coding agent 会话观测 TUI：agenttrace。
+
+它不是聊天客户端，也不是云端 tracing 服务。主要解决一个问题：agent 跑完之后，只看最终输出很难知道中间有没有卡住、重复调用工具、消耗大量 token、或者健康度明显下降。
+
+目前可以扫本地 Claude Code、Codex CLI、Gemini CLI、Qwen Code、Aider、Cursor 导出、Hermes、OpenCode、Kimi 等会话日志，展示 token/cost、tool failure、latency gap、anomaly、health score，也能导出 JSON/Markdown/HTML 给 CI 或 PR 用。
+
+没本地日志也可以先跑 demo：
+
+agenttrace --demo
+
+Repo: https://github.com/luoyuctl/agenttrace
+```
+
+**X / Threads**
+
+```text
+AI coding agents need local observability too.
+
+agenttrace scans local session logs for token/cost burn, tool failures, latency gaps, anomalies, health, reports, and CI gates.
+
+Try: agenttrace --demo
+
+https://github.com/luoyuctl/agenttrace
+```
+
 ## Target Channels
 
 - Hacker News: Show HN
