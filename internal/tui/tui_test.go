@@ -788,6 +788,26 @@ func TestDetailRefreshUpdatesSessionDiagnostics(t *testing.T) {
 	}
 }
 
+func TestPrepareDetailStateExcludesCurrentSessionFromCostBaseline(t *testing.T) {
+	m := sampleModelForTest()
+	m.sessions = []engine.Session{
+		{
+			Name: "current", Path: "/tmp/current.jsonl",
+			Metrics: engine.Metrics{AssistantTurns: 1, CostEstimated: 10.0, SourceTool: "codex_cli", SessionStart: "2026-05-03T00:00:00Z"},
+		},
+		{
+			Name: "history", Path: "/tmp/history.jsonl",
+			Metrics: engine.Metrics{AssistantTurns: 1, CostEstimated: 1.0, SourceTool: "codex_cli", SessionStart: "2026-05-02T00:00:00Z"},
+		},
+	}
+
+	m.prepareDetailState(m.sessions[0])
+
+	if m.costAlert.Baseline != 1.0 {
+		t.Fatalf("cost baseline should exclude current session, got %.2f", m.costAlert.Baseline)
+	}
+}
+
 func TestChineseListUsesTranslatedLabels(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.ZH)

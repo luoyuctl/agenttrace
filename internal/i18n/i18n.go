@@ -714,8 +714,8 @@ var translations = map[string]map[Lang]string{
 
 	// ── Cost alert ──
 	"cost_alert_title":    {EN: "🚨 Waste Alert", ZH: "🚨 浪费预警"},
-	"cost_alert_critical": {EN: "This session burned $%.2f/turn (%.0fx avg $%.2f/turn)", ZH: "本会话单轮烧掉 $%.2f（是平均 $%.2f 的 %.0f 倍）"},
-	"cost_alert_warning":  {EN: "Loop waste is %.0f%% of total — consider adding circuit breaker", ZH: "循环浪费占总浪费 %.0f%% — 建议添加熔断机制"},
+	"cost_alert_critical": {EN: "This session burned $%.2f/turn (avg $%.2f/turn, %.0fx)", ZH: "本会话单轮烧掉 $%.2f（平均 $%.2f，%.0f 倍）"},
+	"cost_alert_warning":  {EN: "Loop waste is $%.4f of $%.4f total (%.0f%%) — consider adding circuit breaker", ZH: "循环浪费 $%.4f / 总成本 $%.4f（%.0f%%）— 建议添加熔断机制"},
 
 	// ── Health trend ──
 	"trend_title":      {EN: "Health Trend", ZH: "健康趋势"},
@@ -937,7 +937,7 @@ var translations = map[string]map[Lang]string{
 	"insight_confidence":            {EN: "Confidence: ", ZH: "置信度: "},
 	"diag_for":                      {EN: "Diagnostics for: %s", ZH: "诊断对象: %s"},
 	"diag_simple_loop":              {EN: "⚠ Simple loop detected (cost $%.4f) — see Detail view", ZH: "⚠ 检测到简单循环 (成本 $%.4f) — 查看详情视图"},
-	"diag_score":                    {EN: "Score %d/100", ZH: "评分 %d/100"},
+	"diag_score":                    {EN: "Diagnostic score %d/100", ZH: "诊断评分 %d/100"},
 	"diag_all_clear":                {EN: "All Clear", ZH: "全部正常"},
 	"diag_issues_found":             {EN: "Issues Found", ZH: "发现问题"},
 	"diag_no_latency":               {EN: "No latency data available", ZH: "暂无延迟数据"},
