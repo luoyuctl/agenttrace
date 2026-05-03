@@ -116,7 +116,7 @@ Open PRs:
 - awesome_ai_agents: https://github.com/jim-schwoebel/awesome_ai_agents/pull/250
 - awesome-ai-agents-2026: https://github.com/caramaschiHG/awesome-ai-agents-2026/pull/207
 - Awesome-AI-Agents: https://github.com/Jenqyang/Awesome-AI-Agents/pull/204
-- Awesome-LLMOps: https://github.com/InftyAI/Awesome-LLMOps/pull/418
+- Awesome-LLMOps: https://github.com/InftyAI/Awesome-LLMOps/pull/420
 - awesome-ai: https://github.com/hemanthgk10/awesome-ai/pull/7
 - awesome-terminals-ai: https://github.com/BNLNPPS/awesome-terminals-ai/pull/6
 - awesome-llmops: https://github.com/KennethanCeyer/awesome-llmops/pull/10
@@ -165,6 +165,7 @@ Manual-only submission:
 - Terminal Trove: submit through https://terminaltrove.com/post/ after confirming the author contact email. Suggested categories: `macos`, `linux`, `windows`, `monitoring`, `observability`, `tui`, `json`, `ai`, `cli`, `debugging`, `cross-platform`. Preview PNG: `https://luoyuctl.github.io/agenttrace/assets/tui-preview.png`; GIF: `https://luoyuctl.github.io/agenttrace/assets/agenttrace-demo.gif`.
 - Terminal Apps: submitted suggestion issue https://github.com/scmmishra/terminal-apps.dev/issues/55. Name: `agenttrace`; GitHub URL: `https://github.com/luoyuctl/agenttrace`.
 - awesome-ai-coding-techniques: submitted technique suggestion https://github.com/inmve/awesome-ai-coding-techniques/issues/37. Suggested technique: inspect AI agent session traces after a run.
+- InftyAI/Awesome-LLMOps: closed duplicate PR https://github.com/InftyAI/Awesome-LLMOps/pull/418 in favor of workflow-generated PR https://github.com/InftyAI/Awesome-LLMOps/pull/420.
 
 Terminal Trove draft:
 
