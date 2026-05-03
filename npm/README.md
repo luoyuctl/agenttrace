@@ -58,7 +58,7 @@ agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-
 
 ## Supported Sources
 
-agenttrace auto-detects local sessions from Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Hermes Agent, and Aider chat history.
+agenttrace auto-detects local sessions from Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Oh My Pi, Kimi CLI, Hermes Agent, and Aider chat history.
 
 For Aider repositories, run:
 

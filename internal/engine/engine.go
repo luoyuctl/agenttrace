@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agenttrace.
-// Pure Go. Supports 10 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Aider, Cursor.
+// Pure Go. Supports 11 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Oh My Pi, Aider, Cursor.
 package engine
 
 import (
@@ -51,6 +51,7 @@ var ToolDisplayNames = map[string]string{
 	"openclaw":          "OpenClaw",
 	"copilot_cli":       "Copilot CLI",
 	"kimi_cli":          "Kimi CLI",
+	"oh_my_pi":          "Oh My Pi",
 	"aider":             "Aider",
 	"cursor":            "Cursor",
 	"generic":           "Generic JSON/JSONL",
@@ -502,6 +503,10 @@ func DetectFormat(path string) FormatInfo {
 		}
 		// Claude Code transcript JSONL: top-level "type" + "sessionId"
 		typ, _ := firstLineObj["type"].(string)
+		if isOhMyPiSessionHeader(firstLineObj) {
+			fi.Format = "oh_my_pi"
+			return fi
+		}
 		if typ != "" {
 			if _, hasSess := firstLineObj["sessionId"]; hasSess {
 				fi.Format = "claude_code_jsonl"
@@ -679,6 +684,8 @@ func Parse(path string) ([]Event, error) {
 		return parseCopilotCLI(string(fi.Raw))
 	case "kimi_cli":
 		return parseKimiCLI(fi.Doc)
+	case "oh_my_pi":
+		return parseOhMyPiSessionJSONL(string(fi.Raw))
 	case "aider_chat_history":
 		return parseAiderChatHistory(string(fi.Raw))
 	case "cursor":
@@ -2035,6 +2042,7 @@ func KnownSessionDirs() []KnownSessionDir {
 		{Name: "Codex CLI archived", Path: filepath.Join(home, ".codex", "archived_sessions")},
 		{Name: "Gemini CLI", Path: filepath.Join(home, ".gemini", "sessions")},
 		{Name: "Claude Code", Path: filepath.Join(home, ".claude", "projects")},
+		{Name: "Oh My Pi", Path: filepath.Join(home, ".omp", "agent", "sessions")},
 	}
 }
 
