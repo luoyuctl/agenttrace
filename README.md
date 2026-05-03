@@ -48,7 +48,7 @@ agenttrace is not a hosted tracing backend or another chat client. It is a local
 |---|---|
 | Local-first privacy | Inspect sessions without uploading prompts, code, or tool logs |
 | Fast terminal triage | Open a TUI, sort bad sessions, and jump into detail/diagnostics |
-| Cross-agent comparison | Compare Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, Hermes, OpenCode, Oh My Pi, Kimi, and more |
+| Cross-agent comparison | Compare Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes, OpenCode, Oh My Pi, Kimi, and more |
 | Cost and token evidence | See cost, token usage, cache usage, retries, loops, latency, and health in one place |
 | CI guardrails | Export JSON/Markdown/HTML and fail builds on low health or high tool failure rates |
 
@@ -60,7 +60,7 @@ agenttrace is not a hosted tracing backend or another chat client. It is a local
 | Silent tool loops | repeated tool calls, retry loops, long gaps, hanging sessions |
 | Slow agents | P50/P95/P99 latency, per-tool latency ranking, timeout-like gaps |
 | Quality regressions | health score, anomaly types, shallow reasoning, redacted thinking |
-| Hard-to-compare tools | session diff across Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, Oh My Pi, and more |
+| Hard-to-compare tools | session diff across Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Oh My Pi, and more |
 | CI blind spots | JSON reports and health gates for average health, critical sessions, and tool failure rate |
 
 ## ✨ Features
@@ -72,7 +72,7 @@ agenttrace is not a hosted tracing backend or another chat client. It is a local
 | ⚡ **Persistent Cache** | Incremental session cache avoids a full disk parse on every startup |
 | 🩺 **Doctor Mode** | `--doctor` checks detected agent dirs, cache health, and next steps |
 | ⌨️ **Command Mode** | `:health <80`, `:cost >0.1`, `:sort cost desc`, `:anomalies` |
-| 🔍 **Multi-Format Auto-Detect** | Claude Code / Codex CLI / Gemini CLI / Aider / Cursor exports / Hermes / OpenCode / OpenClaw / Oh My Pi / Kimi / Copilot-style logs |
+| 🔍 **Multi-Format Auto-Detect** | Claude Code / Codex CLI / Gemini CLI / Qwen Code / Aider / Cursor exports / Hermes / OpenCode / OpenClaw / Oh My Pi / Kimi / Copilot-style logs |
 | 💸 **Cost & Time Waste** | How much 💰 you burned + ⏱️ time lost to loops, retries, failures |
 | 🚨 **6 Anomaly Types** | Hanging, tool failures, latency spikes, shallow thinking, redaction, zero-tool sessions |
 | 📊 **Multi-Session Comparison** | Compare across sessions and tools in one table |

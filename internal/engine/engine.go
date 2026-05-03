@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agenttrace.
-// Pure Go. Supports 11 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Oh My Pi, Aider, Cursor.
+// Pure Go. Supports 12 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, Qwen Code, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Oh My Pi, Aider, Cursor.
 package engine
 
 import (
@@ -47,6 +47,7 @@ var ToolDisplayNames = map[string]string{
 	"codex_cli":         "Codex CLI",
 	"codex_rollout":     "Codex CLI (Rollout)",
 	"gemini_cli":        "Gemini CLI",
+	"qwen_code":         "Qwen Code",
 	"opencode":          "OpenCode",
 	"openclaw":          "OpenClaw",
 	"copilot_cli":       "Copilot CLI",
@@ -503,6 +504,10 @@ func DetectFormat(path string) FormatInfo {
 		}
 		// Claude Code transcript JSONL: top-level "type" + "sessionId"
 		typ, _ := firstLineObj["type"].(string)
+		if isQwenCodeEvent(firstLineObj) {
+			fi.Format = "qwen_code"
+			return fi
+		}
 		if isOhMyPiSessionHeader(firstLineObj) {
 			fi.Format = "oh_my_pi"
 			return fi
@@ -538,6 +543,10 @@ func DetectFormat(path string) FormatInfo {
 }
 
 func detectSingleJSON(doc map[string]interface{}) string {
+	if isQwenCodeEvent(doc) || isQwenCodeJSONOutput(doc) {
+		return "qwen_code"
+	}
+
 	// OpenClaw: provider="openclaw" distinguishes from other message wrappers.
 	if provider, _ := doc["provider"].(string); provider == "openclaw" {
 		return "openclaw"
@@ -639,6 +648,9 @@ func detectJSONArray(arr []interface{}) string {
 	if isCursorGenerationArray(arr) || isCursorPromptArray(arr) {
 		return "cursor"
 	}
+	if isQwenCodeArray(arr) {
+		return "qwen_code"
+	}
 	for _, item := range arr {
 		if m, ok := item.(map[string]interface{}); ok {
 			if _, hasRole := m["role"]; hasRole {
@@ -676,6 +688,8 @@ func Parse(path string) ([]Event, error) {
 		return parseCodexRollout(string(fi.Raw))
 	case "gemini_cli":
 		return parseGeminiCLI(fi.Doc, string(fi.Raw))
+	case "qwen_code":
+		return parseQwenCode(fi.Doc, fi.Arr, string(fi.Raw))
 	case "opencode":
 		return parseOpenCode(fi.Doc)
 	case "openclaw":
@@ -2041,6 +2055,7 @@ func KnownSessionDirs() []KnownSessionDir {
 		{Name: "Codex CLI", Path: filepath.Join(home, ".codex", "sessions")},
 		{Name: "Codex CLI archived", Path: filepath.Join(home, ".codex", "archived_sessions")},
 		{Name: "Gemini CLI", Path: filepath.Join(home, ".gemini", "sessions")},
+		{Name: "Qwen Code", Path: filepath.Join(home, ".qwen", "projects")},
 		{Name: "Claude Code", Path: filepath.Join(home, ".claude", "projects")},
 		{Name: "Oh My Pi", Path: filepath.Join(home, ".omp", "agent", "sessions")},
 	}
@@ -2077,12 +2092,7 @@ func collectSessionFiles(dir string) []string {
 		t    time.Time
 	}
 	var items []entryInfo
-	base := filepath.Base(dir)
-
-	maxDepth := 4
-	if base == "projects" {
-		maxDepth = 1
-	}
+	maxDepth := maxSessionDirDepth(dir)
 
 	var walk func(string, int)
 	walk = func(d string, depth int) {
@@ -2145,6 +2155,13 @@ func ScanAllDirs() []Session {
 		return sessions[i].Metrics.SessionStart > sessions[j].Metrics.SessionStart
 	})
 	return sessions
+}
+
+func maxSessionDirDepth(dir string) int {
+	if filepath.Base(dir) == "projects" && strings.Contains(filepath.ToSlash(dir), "/.claude/") {
+		return 1
+	}
+	return 4
 }
 
 // ═══════════════════════════════════════════════════════════════
