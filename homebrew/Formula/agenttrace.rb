@@ -2,7 +2,7 @@ class Agenttrace < Formula
   desc "TUI observability for AI coding agent sessions, cost, latency, and anomalies"
   homepage "https://github.com/luoyuctl/agenttrace"
   url "https://github.com/luoyuctl/agenttrace.git", branch: "master"
-  version "0.3.47"
+  version "0.3.48"
   license "MIT"
 
   depends_on "go" => :build
@@ -12,6 +12,6 @@ class Agenttrace < Formula
   end
 
   test do
-    assert_match "agenttrace v0.3.47", shell_output("#{bin}/agenttrace --version")
+    assert_match "agenttrace v0.3.48", shell_output("#{bin}/agenttrace --version")
   end
 end
