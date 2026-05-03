@@ -129,7 +129,6 @@ Open PRs:
 - awesome-mac: https://github.com/jaywcjlove/awesome-mac/pull/2026
 - awesome-ChatGPT-repositories: https://github.com/taishi-i/awesome-ChatGPT-repositories/pull/130
 - awesome-agent-harness: https://github.com/Picrew/awesome-agent-harness/pull/5
-- awesome-cli-apps: https://github.com/agarrharr/awesome-cli-apps/pull/1032
 - awesome-AI-driven-development: https://github.com/eltociear/awesome-AI-driven-development/pull/48
 - command-line-tools: https://github.com/linsa-io/command-line-tools/pull/35
 - awesome-cli-coding-agents: https://github.com/bradAGI/awesome-cli-coding-agents/pull/73
@@ -157,6 +156,7 @@ Manual-only submission:
 - e2b-dev/awesome-ai-agents: submit through the Google Form linked from the README; the repo asks for product submissions through the form instead of direct README edits.
 - awesome-claude-skills: skip automated PRs unless submitted manually by a human; its contribution guide asks that PRs are not AI-assisted and generally expects social proof.
 - awesome-go: defer until the project is older and has the required quality links; contribution checks expect repository maturity, pkg.go.dev, Go Report Card, and coverage evidence.
+- awesome-cli-apps: PR https://github.com/agarrharr/awesome-cli-apps/pull/1032 was closed without maintainer feedback. Revisit after more external adoption or a clearer category fit.
 - awesome-tuis: deferred until the repo is at least 6 months old; its PR template requires repos to be at least 6 months old, and PR #658 was closed after reviewer feedback.
 - Terminal Trove: submit through https://terminaltrove.com/post/ after confirming the author contact email. Suggested categories: `macos`, `linux`, `windows`, `monitoring`, `observability`, `tui`, `json`, `ai`, `cli`, `debugging`, `cross-platform`. Preview PNG: `https://luoyuctl.github.io/agenttrace/assets/tui-preview.png`; GIF: `https://luoyuctl.github.io/agenttrace/assets/agenttrace-demo.gif`.
 - Terminal Apps: submitted suggestion issue https://github.com/scmmishra/terminal-apps.dev/issues/55. Name: `agenttrace`; GitHub URL: `https://github.com/luoyuctl/agenttrace`.
