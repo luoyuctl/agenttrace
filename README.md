@@ -50,6 +50,7 @@ agenttrace is not a hosted tracing backend or another chat client. It is a local
 | Fast terminal triage | Open a TUI, sort bad sessions, and jump into detail/diagnostics |
 | Cross-agent comparison | Compare Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes, OpenCode, Oh My Pi, Kimi, and more |
 | Cost and token evidence | See cost, token usage, cache usage, retries, loops, latency, and health in one place |
+| Workflow improvement | Mine local sessions for repeated tool failures, hanging gaps, and costly loops before updating prompts, skills, or project instructions |
 | CI guardrails | Export JSON/Markdown/HTML and fail builds on low health or high tool failure rates |
 
 ## What it catches
@@ -61,6 +62,7 @@ agenttrace is not a hosted tracing backend or another chat client. It is a local
 | Slow agents | P50/P95/P99 latency, per-tool latency ranking, timeout-like gaps |
 | Quality regressions | health score, anomaly types, shallow reasoning, redacted thinking |
 | Hard-to-compare tools | session diff across Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Oh My Pi, and more |
+| Brittle prompts or skills | `tool_fail_rate`, anomaly mix, and expensive sessions that point to the workflow note, skill, or command wrapper to fix next |
 | CI blind spots | JSON reports and health gates for average health, critical sessions, and tool failure rate |
 
 ## ✨ Features
