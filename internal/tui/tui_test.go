@@ -1038,7 +1038,7 @@ func TestOverviewShowsActionHint(t *testing.T) {
 	}
 }
 
-func TestOverviewShowsBenchmarkTriagePanel(t *testing.T) {
+func TestOverviewShowsTriagePanel(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 120, 36)
 	m.view = viewOverview
 
@@ -1051,22 +1051,6 @@ func TestOverviewShowsBenchmarkTriagePanel(t *testing.T) {
 	}
 	if got := maxRenderedWidth(rendered); got > 120 {
 		t.Fatalf("overview triage panel too wide: got=%d line=%q", got, widestLine(rendered))
-	}
-}
-
-func TestOverviewUsesShortMetricTitlesAtStandardWidth(t *testing.T) {
-	m := resizeForTest(t, sampleModelForTest(), 120, 36)
-	m.view = viewOverview
-
-	rendered := m.View()
-
-	if strings.Contains(rendered, "TOTAL COST") || strings.Contains(rendered, "(USD)") {
-		t.Fatalf("standard overview should use short metric labels to avoid wrapping:\n%s", rendered)
-	}
-	for _, want := range []string{"TOKENS", "COST", "ERRORS", "HEALTH"} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("standard overview missing compact metric label %q:\n%s", want, rendered)
-		}
 	}
 }
 

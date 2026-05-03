@@ -2679,18 +2679,6 @@ func (m Model) renderDashboardMetrics(width int) string {
 	if cardW < 16 {
 		cardW = (width - 4) / 3
 	}
-	tokenTitle := i18n.T("metric_total_tokens")
-	costTitle := i18n.T("metric_total_cost_usd")
-	errorTitle := i18n.T("metric_error_rate")
-	p95Title := i18n.T("metric_p95_latency")
-	healthTitle := i18n.T("metric_health_score")
-	if cardW < 20 {
-		tokenTitle = i18n.T("metric_tokens")
-		costTitle = i18n.T("metric_cost")
-		errorTitle = i18n.T("metric_errors")
-		p95Title = i18n.T("metric_p95")
-		healthTitle = i18n.T("metric_health")
-	}
 	totalTokens := m.costSummary.TotalTokensIn + m.costSummary.TotalTokensOut
 	toolTotal, toolFail := aggregateToolCounts(m.sessions)
 	errorRate := 0.0
@@ -2704,12 +2692,12 @@ func (m Model) renderDashboardMetrics(width int) string {
 	}
 
 	cards := []string{
-		metricCard(tokenTitle, compactInt(totalTokens), i18n.T("metric_live"), cardW, "82"),
-		metricCard(costTitle, money2(m.costSummary.TotalCost), i18n.T("metric_estimated"), cardW, "82"),
+		metricCard(i18n.T("metric_total_tokens"), compactInt(totalTokens), i18n.T("metric_live"), cardW, "82"),
+		metricCard(i18n.T("metric_total_cost_usd"), money2(m.costSummary.TotalCost), i18n.T("metric_estimated"), cardW, "82"),
 		metricCard(i18n.T("metric_sessions"), fmt.Sprintf("%d", len(m.sessions)), i18n.T("metric_loaded"), cardW, "82"),
-		metricCard(errorTitle, fmt.Sprintf("%.2f%%", errorRate), fmt.Sprintf(i18n.T("metric_failed"), toolFail), cardW, "82"),
-		metricCard(p95Title, fmt.Sprintf("%.2fs", p95), i18n.T("metric_tool_gaps"), cardW, "39"),
-		metricCard(healthTitle, fmt.Sprintf("%d%%", health), healthLabel(health), cardW, "82"),
+		metricCard(i18n.T("metric_error_rate"), fmt.Sprintf("%.2f%%", errorRate), fmt.Sprintf(i18n.T("metric_failed"), toolFail), cardW, "82"),
+		metricCard(i18n.T("metric_p95_latency"), fmt.Sprintf("%.2fs", p95), i18n.T("metric_tool_gaps"), cardW, "39"),
+		metricCard(i18n.T("metric_health_score"), fmt.Sprintf("%d%%", health), healthLabel(health), cardW, "82"),
 	}
 
 	if width >= 110 {
