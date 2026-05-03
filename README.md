@@ -11,7 +11,7 @@
   <a href="https://github.com/luoyuctl/agenttrace/stargazers"><img src="https://img.shields.io/github/stars/luoyuctl/agenttrace?style=social" alt="GitHub stars"></a>
   <img src="https://img.shields.io/badge/go-1.24+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.3.41-2bbc8a.svg" alt="Homebrew">
+  <img src="https://img.shields.io/badge/Homebrew-v0.3.42-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <h3 align="center">💸 Stop burning cash and hours on invisible AI agent waste</h3>
@@ -27,6 +27,8 @@ AI coding agents (Claude Code, Gemini CLI, Codex CLI) burn tokens in loops, retr
 Site: https://luoyuctl.github.io/agenttrace/
 
 Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
+
+Featured in: [Awesome Codex CLI](https://github.com/RoggeOhta/awesome-codex-cli), [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli), [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild), and [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills).
 
 <p align="center">
   <img src="assets/agenttrace-demo.gif" alt="agenttrace TUI demo" width="100%">
@@ -215,7 +217,7 @@ See [docs/cursor-import.md](docs/cursor-import.md) for details.
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AGENTTRACE v0.3.41 — AI Agent Session Performance Report
+  AGENTTRACE v0.3.42 — AI Agent Session Performance Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 💰 TOKEN COST

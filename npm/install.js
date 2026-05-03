@@ -6,6 +6,8 @@ const path = require('path');
 const https = require('https');
 
 const REPO = 'luoyuctl/agenttrace';
+const PACKAGE_VERSION = require('./package.json').version;
+const RELEASE_TAG = process.env.AGENTTRACE_RELEASE_TAG || `v${PACKAGE_VERSION}`;
 const REQUEST_TIMEOUT_MS = Number(process.env.AGENTTRACE_NPM_TIMEOUT_MS || 120000);
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 const REQUEST_OPTIONS = {
@@ -80,11 +82,11 @@ async function download(url, dest, redirects = 0) {
     });
 }
 
-async function fetchLatestRelease() {
+async function fetchRelease() {
     return new Promise((resolve, reject) => {
         const req = https.get({
             hostname: 'api.github.com',
-            path: `/repos/${REPO}/releases/latest`,
+            path: `/repos/${REPO}/releases/tags/${encodeURIComponent(RELEASE_TAG)}`,
             family: 4,
             headers: REQUEST_OPTIONS.headers,
         }, (res) => {
@@ -93,7 +95,7 @@ async function fetchLatestRelease() {
             res.on('data', (chunk) => { body += chunk; });
             res.on('end', () => {
                 if (res.statusCode !== 200) {
-                    reject(new Error(`GitHub release lookup failed: HTTP ${res.statusCode}`));
+                    reject(new Error(`GitHub release lookup failed for ${RELEASE_TAG}: HTTP ${res.statusCode}`));
                     return;
                 }
                 try {
@@ -104,7 +106,7 @@ async function fetchLatestRelease() {
             });
         });
         req.setTimeout(REQUEST_TIMEOUT_MS, () => {
-            req.destroy(new Error(`Timed out after ${REQUEST_TIMEOUT_MS}ms: GitHub release lookup`));
+            req.destroy(new Error(`Timed out after ${REQUEST_TIMEOUT_MS}ms: GitHub release lookup for ${RELEASE_TAG}`));
         });
         req.on('error', reject);
     });
@@ -113,7 +115,7 @@ async function fetchLatestRelease() {
 async function main() {
     const { goos, goarch, ext } = getPlatform();
     const binary = 'agenttrace' + ext;
-    const release = await fetchLatestRelease();
+    const release = await fetchRelease();
     const suffix = `${goos}-${goarch}${ext}`;
     const asset = (release.assets || []).find((item) => item.name === `${binary}-${suffix}` || item.name.endsWith(suffix));
     if (!asset) {
