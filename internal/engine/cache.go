@@ -216,12 +216,17 @@ func sortFilesByCache(paths []string, cache SessionCache) []string {
 	}
 	items := make([]item, 0, len(paths))
 	for _, p := range paths {
-		if entry, ok := cache.Entries[p]; ok {
-			items = append(items, item{path: p, t: time.Unix(0, entry.ModTime)})
-			continue
-		}
 		info, err := os.Stat(p)
 		if err != nil {
+			delete(cache.Entries, p)
+			continue
+		}
+		if entry, ok := cache.Entries[p]; ok {
+			if entry.ModTime == info.ModTime().UnixNano() && entry.Size == info.Size() {
+				items = append(items, item{path: p, t: time.Unix(0, entry.ModTime)})
+				continue
+			}
+			items = append(items, item{path: p, t: info.ModTime()})
 			continue
 		}
 		items = append(items, item{path: p, t: info.ModTime()})
