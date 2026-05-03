@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 // parseKimiCLI parses Kimi CLI JSON session files.
@@ -89,10 +90,17 @@ func parseKimiCLI(doc map[string]interface{}) ([]Event, error) {
 				case "tool_use":
 					id, _ := b["id"].(string)
 					name, _ := b["name"].(string)
+					args := jsonish(b["input"])
+					if args == "" {
+						args = jsonish(b["arguments"])
+					}
 					// Kimi may use "function" sub-object for tool name
 					if name == "" {
 						if fn, ok := b["function"].(map[string]interface{}); ok {
 							name, _ = fn["name"].(string)
+							if args == "" {
+								args = jsonish(fn["arguments"])
+							}
 						}
 					}
 					events = append(events, Event{
@@ -100,6 +108,7 @@ func parseKimiCLI(doc map[string]interface{}) ([]Event, error) {
 						ToolCalls: []ToolCall{{
 							ID:   id,
 							Name: name,
+							Args: args,
 						}},
 						Timestamp:  ts,
 						SourceTool: "kimi_cli",
@@ -135,6 +144,7 @@ func parseKimiCLI(doc map[string]interface{}) ([]Event, error) {
 						tcItem := ToolCall{ID: str(tcm, "id")}
 						if fn, ok := tcm["function"].(map[string]interface{}); ok {
 							tcItem.Name = str(fn, "name")
+							tcItem.Args = jsonish(fn["arguments"])
 						}
 						tcList = append(tcList, tcItem)
 					}
@@ -187,5 +197,8 @@ func parseKimiCLI(doc map[string]interface{}) ([]Event, error) {
 		})
 	}
 
+	if len(events) == 0 {
+		return nil, fmt.Errorf("kimi_cli: no parseable events")
+	}
 	return events, nil
 }
