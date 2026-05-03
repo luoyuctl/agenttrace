@@ -2,6 +2,12 @@
 
 What changed and why?
 
+## Coordination
+
+- Linked issue:
+- Protected public surface touched? no
+- Parser PR mergeability checked after latest `master`? n/a
+
 ## Validation
 
 - [ ] `go test ./...`
