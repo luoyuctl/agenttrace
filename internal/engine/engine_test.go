@@ -698,6 +698,49 @@ func TestFindSessionFilesCachedUsesDirIndexAndFindsNewFiles(t *testing.T) {
 	}
 }
 
+func TestFindSessionFilesCachedSkipsDeletedCachedFiles(t *testing.T) {
+	dir := t.TempDir()
+	stale := filepath.Join(dir, "stale.jsonl")
+	if err := os.WriteFile(stale, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fileInfo, err := os.Stat(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cache := SessionCache{
+		Entries: map[string]CacheEntry{
+			stale: {
+				ModTime: fileInfo.ModTime().UnixNano(),
+				Size:    fileInfo.Size(),
+				Session: Session{Name: "stale", Path: stale},
+			},
+		},
+		Dirs: map[string]DirCacheEntry{
+			dir: {
+				ModTime: dirInfo.ModTime().UnixNano(),
+				Files:   []string{stale},
+			},
+		},
+	}
+	if err := os.Remove(stale); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(dir, dirInfo.ModTime(), dirInfo.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+
+	files := FindSessionFilesCached(dir, cache)
+	if len(files) != 0 {
+		t.Fatalf("deleted cached files should be skipped, got %v", files)
+	}
+}
+
 func TestLoadSessionCacheSkipsOnlyBadEntries(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
