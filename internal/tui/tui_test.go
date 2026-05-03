@@ -1054,6 +1054,24 @@ func TestOverviewShowsTriagePanel(t *testing.T) {
 	}
 }
 
+func TestOverviewUsesShortMetricTitlesAtStandardWidth(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	for _, unwanted := range []string{"TOTAL TOKENS", "TOTAL COST", "(USD)", "ERROR RATE", "P95 LATENCY"} {
+		if strings.Contains(rendered, unwanted) {
+			t.Fatalf("standard overview should avoid wrapped metric title %q:\n%s", unwanted, rendered)
+		}
+	}
+	for _, want := range []string{"TOKENS", "COST", "ERRORS", "P95", "HEALTH"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("standard overview missing short metric title %q:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestChineseOverviewShowsTranslatedActionHint(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.ZH)
