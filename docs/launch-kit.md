@@ -103,6 +103,7 @@ Open PRs:
 
 - awesome-codex-cli: https://github.com/RoggeOhta/awesome-codex-cli/pull/23
 - awesome-ai-coding-tools: https://github.com/ai-for-developers/awesome-ai-coding-tools/pull/288
+- awesome-vibe-coding: https://github.com/ai-for-developers/awesome-vibe-coding/pull/56
 - awesome-claude-code-toolkit: https://github.com/rohitg00/awesome-claude-code-toolkit/pull/361
 - jqueryscript/awesome-claude-code: https://github.com/jqueryscript/awesome-claude-code/pull/252
 - awesome-go-cli: https://github.com/mantcz/awesome-go-cli/pull/4
