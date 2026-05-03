@@ -2,6 +2,15 @@
 
 Use `agenttrace --overview` as a quality gate for AI agent sessions in pull requests or nightly jobs.
 
+The goal is to catch agent workflow regressions before they become invisible cost:
+
+- a PR's agent run starts hanging or retrying tools
+- a nightly automation job burns more tokens than usual
+- a team switches agent tools and loses session health visibility
+- a local-first project wants CI evidence without uploading prompts or raw logs to a hosted trace service
+
+Start with report-only artifacts, then turn on blocking thresholds once the team knows its normal health and tool failure range.
+
 ## Local Check
 
 ```bash
@@ -12,6 +21,23 @@ agenttrace --overview \
 ```
 
 The command exits with code `2` when a gate fails. Add `-f json -o agenttrace-overview.json` when CI should upload machine-readable data, `-f markdown -o agenttrace-overview.md` when the report should be pasted into a PR comment, or `-f html -o agenttrace-overview.html` for a self-contained visual artifact.
+
+For the first few runs, keep the job non-blocking while still collecting evidence:
+
+```bash
+agenttrace --overview -f markdown -o agenttrace-overview.md || true
+agenttrace --overview -f html -o agenttrace-overview.html || true
+```
+
+When the output matches what the team cares about, enable blocking checks:
+
+```bash
+agenttrace --overview -f json \
+  --fail-under-health 80 \
+  --fail-on-critical \
+  --max-tool-fail-rate 15 \
+  -o agenttrace-overview.json
+```
 
 ## GitHub Actions
 

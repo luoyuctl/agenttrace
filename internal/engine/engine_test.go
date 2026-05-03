@@ -24,6 +24,43 @@ func makeJSONL(lines []interface{}) string {
 	return strings.Join(parts, "\n") + "\n"
 }
 
+func writeLoadableHermesSession(t *testing.T, dir, name, start string) string {
+	t.Helper()
+	startTime, err := time.Parse(time.RFC3339, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, name+".jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{
+			"role":      "user",
+			"content":   "please inspect the failing test",
+			"timestamp": startTime.Format(time.RFC3339),
+			"ModelUsed": "gpt-4.1",
+		},
+		map[string]interface{}{
+			"role":      "assistant",
+			"content":   "I will inspect it.",
+			"reasoning": strings.Repeat("reasoning ", 80),
+			"timestamp": startTime.Add(time.Second).Format(time.RFC3339),
+			"ModelUsed": "gpt-4.1",
+			"tool_calls": []interface{}{
+				map[string]interface{}{"id": "tc1", "name": "read_file", "args": "go.mod"},
+			},
+		},
+		map[string]interface{}{
+			"role":         "tool",
+			"content":      `{"success":true}`,
+			"tool_call_id": "tc1",
+			"timestamp":    startTime.Add(2 * time.Second).Format(time.RFC3339),
+		},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestParseHermesJSONL(t *testing.T) {
 	raw := makeJSONL([]interface{}{
 		map[string]interface{}{"role": "session_meta", "session_id": "s1"},
@@ -101,6 +138,57 @@ func TestParseHermesJSON(t *testing.T) {
 	}
 }
 
+func TestLoadSessionBuildsMetricsFromFile(t *testing.T) {
+	dir := t.TempDir()
+	path := writeLoadableHermesSession(t, dir, "load-session", "2026-01-02T10:00:00Z")
+
+	session, err := LoadSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.Name != "load-session" || session.Path != path {
+		t.Fatalf("bad session identity: %+v", session)
+	}
+	m := session.Metrics
+	if m.SourceTool != "hermes_jsonl" || m.ModelUsed != "gpt-4.1" {
+		t.Fatalf("bad source/model metrics: %+v", m)
+	}
+	if m.UserMessages != 1 || m.AssistantTurns != 1 || m.ToolCallsTotal != 1 || m.ToolCallsOK != 1 {
+		t.Fatalf("bad interaction metrics: %+v", m)
+	}
+	if m.SessionStart != "2026-01-02T10:00:00Z" || m.SessionEnd != "2026-01-02T10:00:02Z" || m.DurationSec != 2 {
+		t.Fatalf("bad session timing: %+v", m)
+	}
+	if session.Health <= 0 || session.Health > 100 {
+		t.Fatalf("bad health score: %d", session.Health)
+	}
+}
+
+func TestLoadAllSkipsBadFilesAndSortsBySessionStart(t *testing.T) {
+	dir := t.TempDir()
+	writeLoadableHermesSession(t, dir, "old", "2026-01-02T10:00:00Z")
+	writeLoadableHermesSession(t, dir, "new", "2026-01-02T11:00:00Z")
+	if err := os.WriteFile(filepath.Join(dir, "bad.jsonl"), []byte("not json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	subdir := filepath.Join(dir, "nested")
+	if err := os.MkdirAll(subdir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeLoadableHermesSession(t, subdir, "nested", "2026-01-02T12:00:00Z")
+
+	sessions := LoadAll(dir)
+	if len(sessions) != 2 {
+		t.Fatalf("expected two loadable top-level sessions, got %d: %+v", len(sessions), sessions)
+	}
+	if sessions[0].Name != "new" || sessions[1].Name != "old" {
+		t.Fatalf("sessions should be sorted newest first, got %+v", sessions)
+	}
+}
+
 func TestParseClaudeCode_ToolResultArray(t *testing.T) {
 	doc := map[string]interface{}{
 		"model": "claude",
@@ -119,6 +207,45 @@ func TestParseClaudeCode_ToolResultArray(t *testing.T) {
 	}
 	if !found {
 		t.Error("Bug6: tool_result array content not extracted")
+	}
+}
+
+func TestParseClaudeCodeJSONLWithPreamble(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "claude-code-preamble.jsonl")
+	if got := DetectFormat(path).Format; got != "claude_code_jsonl" {
+		t.Fatalf("claude preamble format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "claude-sonnet-4")
+	if m.SourceTool != "claude_code" || m.UserMessages != 1 || m.ToolCallsTotal != 1 || m.ToolCallsOK != 1 {
+		t.Fatalf("bad claude preamble metrics: %+v", m)
+	}
+	if m.TokensInput < 120 || m.TokensOutput != 40 || m.TokensCacheR != 10 || m.TokensCacheW != 5 {
+		t.Fatalf("bad claude preamble usage: %+v", m)
+	}
+	if m.ReasoningBlocks != 1 || m.ToolUsage["read_file"] != 1 {
+		t.Fatalf("bad claude preamble reasoning/tool usage: %+v", m)
+	}
+}
+
+func TestParseClaudeCodeJSONLWithPreambleMalformed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "broken-claude.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{"type": "file-history-snapshot", "messageId": "snapshot-1", "snapshot": map[string]interface{}{}},
+		map[string]interface{}{"type": "system", "sessionId": "session-1", "timestamp": "2026-05-03T10:00:00Z"},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectFormat(path).Format; got != "claude_code_jsonl" {
+		t.Fatalf("expected malformed claude JSONL to be detected, got %s", got)
+	}
+	if _, err := Parse(path); err == nil {
+		t.Fatalf("expected malformed claude JSONL to fail")
 	}
 }
 
@@ -695,6 +822,49 @@ func TestFindSessionFilesCachedUsesDirIndexAndFindsNewFiles(t *testing.T) {
 	}
 	if files[0] != second {
 		t.Fatalf("expected newest file first, got %v", files)
+	}
+}
+
+func TestFindSessionFilesCachedSkipsDeletedCachedFiles(t *testing.T) {
+	dir := t.TempDir()
+	stale := filepath.Join(dir, "stale.jsonl")
+	if err := os.WriteFile(stale, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fileInfo, err := os.Stat(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cache := SessionCache{
+		Entries: map[string]CacheEntry{
+			stale: {
+				ModTime: fileInfo.ModTime().UnixNano(),
+				Size:    fileInfo.Size(),
+				Session: Session{Name: "stale", Path: stale},
+			},
+		},
+		Dirs: map[string]DirCacheEntry{
+			dir: {
+				ModTime: dirInfo.ModTime().UnixNano(),
+				Files:   []string{stale},
+			},
+		},
+	}
+	if err := os.Remove(stale); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(dir, dirInfo.ModTime(), dirInfo.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+
+	files := FindSessionFilesCached(dir, cache)
+	if len(files) != 0 {
+		t.Fatalf("deleted cached files should be skipped, got %v", files)
 	}
 }
 

@@ -138,6 +138,9 @@ func FindSessionFilesCached(dir string, cache SessionCache) []string {
 	if cache.Dirs == nil {
 		cache.Dirs = make(map[string]DirCacheEntry)
 	}
+	if isClineTaskDir(dir) {
+		return []string{dir}
+	}
 
 	var roots []string
 	if dir == "" {
@@ -164,6 +167,9 @@ func collectSessionFilesCached(dir string, depth, maxDepth int, cache SessionCac
 	if depth > maxDepth {
 		return nil
 	}
+	if isClineTaskDir(dir) {
+		return []string{dir}
+	}
 	info, err := os.Stat(dir)
 	if err != nil || !info.IsDir() {
 		return nil
@@ -189,6 +195,10 @@ func collectSessionFilesCached(dir string, depth, maxDepth int, cache SessionCac
 	for _, e := range entries {
 		path := filepath.Join(dir, e.Name())
 		if e.IsDir() {
+			if isClineTaskDir(path) {
+				files = append(files, path)
+				continue
+			}
 			dirs = append(dirs, path)
 			continue
 		}
@@ -216,12 +226,17 @@ func sortFilesByCache(paths []string, cache SessionCache) []string {
 	}
 	items := make([]item, 0, len(paths))
 	for _, p := range paths {
-		if entry, ok := cache.Entries[p]; ok {
-			items = append(items, item{path: p, t: time.Unix(0, entry.ModTime)})
-			continue
-		}
 		info, err := os.Stat(p)
 		if err != nil {
+			delete(cache.Entries, p)
+			continue
+		}
+		if entry, ok := cache.Entries[p]; ok {
+			if entry.ModTime == info.ModTime().UnixNano() && entry.Size == info.Size() {
+				items = append(items, item{path: p, t: time.Unix(0, entry.ModTime)})
+				continue
+			}
+			items = append(items, item{path: p, t: info.ModTime()})
 			continue
 		}
 		items = append(items, item{path: p, t: info.ModTime()})

@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agenttrace.
-// Pure Go. Supports 12 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, Qwen Code, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Oh My Pi, Aider, Cursor.
+// Pure Go. Supports 13 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, Qwen Code, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Oh My Pi, Aider, Cursor, Cline.
 package engine
 
 import (
@@ -55,6 +55,7 @@ var ToolDisplayNames = map[string]string{
 	"oh_my_pi":          "Oh My Pi",
 	"aider":             "Aider",
 	"cursor":            "Cursor",
+	"cline":             "Cline",
 	"generic":           "Generic JSON/JSONL",
 }
 
@@ -436,6 +437,11 @@ type FormatInfo struct {
 func DetectFormat(path string) FormatInfo {
 	fi := FormatInfo{Format: "unknown"}
 
+	if isClineTaskDir(path) {
+		fi.Format = "cline"
+		return fi
+	}
+
 	// Read entire file — Parse() downstream uses fi.Raw directly for event extraction
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -448,6 +454,11 @@ func DetectFormat(path string) FormatInfo {
 	if isAiderHistoryFile(path, content) {
 		fi.Raw = data
 		fi.Format = "aider_chat_history"
+		return fi
+	}
+	if isClineTaskFile(path) {
+		fi.Raw = data
+		fi.Format = "cline"
 		return fi
 	}
 
@@ -469,77 +480,81 @@ func DetectFormat(path string) FormatInfo {
 	}
 
 	// JSONL: check first few valid lines (skip empty and comments)
-	var firstLineObj map[string]interface{}
+	var lineObjs []map[string]interface{}
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if err := json.Unmarshal([]byte(line), &firstLineObj); err == nil {
-			break
+		var obj map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &obj); err == nil {
+			lineObjs = append(lineObjs, obj)
+			if len(lineObjs) >= 20 {
+				break
+			}
 		}
 	}
-	if firstLineObj != nil {
+	if len(lineObjs) > 0 {
 		fi.Raw = data
-
-		// Hermes JSONL: role=session_meta or role with timestamp
-		if role, _ := firstLineObj["role"].(string); role == "session_meta" {
-			fi.Format = "hermes_jsonl"
-			return fi
-		}
-		if role, _ := firstLineObj["role"].(string); role == "user" || role == "assistant" || role == "tool" {
-			if _, hasTS := firstLineObj["timestamp"]; hasTS {
-				fi.Format = "hermes_jsonl"
-				return fi
-			}
-		}
-		// Gemini JSONL
-		if _, hasCand := firstLineObj["candidates"]; hasCand {
-			fi.Format = "gemini_cli"
-			return fi
-		}
-		if _, hasCont := firstLineObj["contents"]; hasCont {
-			fi.Format = "gemini_cli"
-			return fi
-		}
-		// Claude Code transcript JSONL: top-level "type" + "sessionId"
-		typ, _ := firstLineObj["type"].(string)
-		if isQwenCodeEvent(firstLineObj) {
-			fi.Format = "qwen_code"
-			return fi
-		}
-		if isOhMyPiSessionHeader(firstLineObj) {
-			fi.Format = "oh_my_pi"
-			return fi
-		}
-		if typ != "" {
-			if _, hasSess := firstLineObj["sessionId"]; hasSess {
-				fi.Format = "claude_code_jsonl"
-				return fi
-			}
-		}
-		// Copilot CLI OTel JSONL — spans have traceId + spanId
-		if _, hasTrace := firstLineObj["traceId"]; hasTrace {
-			if _, hasSpan := firstLineObj["spanId"]; hasSpan {
-				fi.Format = "copilot_cli"
-				return fi
-			}
-		}
-		// Codex CLI rollout JSONL: top-level "type"="session_meta" with nested "payload"
-		if typ == "session_meta" {
-			if _, hasPayload := firstLineObj["payload"]; hasPayload {
-				fi.Format = "codex_rollout"
-				return fi
-			}
-		}
-		// Generic JSONL with role field → try parse as generic
-		if _, hasRole := firstLineObj["role"]; hasRole {
-			fi.Format = "generic"
-			return fi
-		}
+		fi.Format = detectJSONL(lineObjs)
+		return fi
 	}
 
 	return fi
+}
+
+func detectJSONL(objs []map[string]interface{}) string {
+	hasGenericRole := false
+	for _, obj := range objs {
+		typ, _ := obj["type"].(string)
+		role, _ := obj["role"].(string)
+		if role == "session_meta" {
+			return "hermes_jsonl"
+		}
+		if role == "user" || role == "assistant" || role == "tool" {
+			if _, hasTS := obj["timestamp"]; hasTS {
+				return "hermes_jsonl"
+			}
+			hasGenericRole = true
+		}
+		if _, hasCand := obj["candidates"]; hasCand {
+			return "gemini_cli"
+		}
+		if _, hasCont := obj["contents"]; hasCont {
+			return "gemini_cli"
+		}
+		if _, hasQwenSession := obj["session_id"]; hasQwenSession && isQwenCodeEvent(obj) {
+			return "qwen_code"
+		}
+		if isOhMyPiSessionHeader(obj) {
+			return "oh_my_pi"
+		}
+		if typ != "" {
+			if _, hasSess := obj["sessionId"]; hasSess {
+				return "claude_code_jsonl"
+			}
+		}
+		if isQwenCodeEvent(obj) {
+			return "qwen_code"
+		}
+		if _, hasTrace := obj["traceId"]; hasTrace {
+			if _, hasSpan := obj["spanId"]; hasSpan {
+				return "copilot_cli"
+			}
+		}
+		if typ == "session_meta" {
+			if _, hasPayload := obj["payload"]; hasPayload {
+				return "codex_rollout"
+			}
+		}
+		if _, hasRole := obj["role"]; hasRole {
+			hasGenericRole = true
+		}
+	}
+	if hasGenericRole {
+		return "generic"
+	}
+	return "unknown"
 }
 
 func detectSingleJSON(doc map[string]interface{}) string {
@@ -704,6 +719,8 @@ func Parse(path string) ([]Event, error) {
 		return parseAiderChatHistory(string(fi.Raw))
 	case "cursor":
 		return parseCursorExport(fi.Doc, fi.Arr)
+	case "cline":
+		return parseClinePath(path)
 	default:
 		return parseGeneric(string(fi.Raw))
 	}
@@ -1325,11 +1342,38 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 		case "user":
 			ts, _ := obj["timestamp"].(string)
 			if msg, ok := obj["message"].(map[string]interface{}); ok {
-				content, _ := msg["content"].(string)
-				events = append(events, Event{
-					Role: "user", Content: content, Timestamp: ts,
-					ModelUsed: modelName, SourceTool: "claude_code",
-				})
+				switch content := msg["content"].(type) {
+				case string:
+					events = append(events, Event{
+						Role: "user", Content: content, Timestamp: ts,
+						ModelUsed: modelName, SourceTool: "claude_code",
+					})
+				case []interface{}:
+					for _, blk := range content {
+						b, ok := blk.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						bt, _ := b["type"].(string)
+						switch bt {
+						case "text":
+							text, _ := b["text"].(string)
+							events = append(events, Event{
+								Role: "user", Content: text, Timestamp: ts,
+								ModelUsed: modelName, SourceTool: "claude_code",
+							})
+						case "tool_result":
+							tid, _ := b["tool_use_id"].(string)
+							isErr, _ := b["is_error"].(bool)
+							ct := extractToolResultContent(b)
+							events = append(events, Event{
+								Role: "tool", Timestamp: ts,
+								ToolCallID: tid, Content: ct, IsError: isErr,
+								SourceTool: "claude_code",
+							})
+						}
+					}
+				}
 			}
 
 		case "assistant":
@@ -1970,6 +2014,9 @@ func LoadAll(dir string) []Session {
 }
 
 func FindSessionFiles(dir string) []string {
+	if isClineTaskDir(dir) {
+		return []string{dir}
+	}
 	if dir == "" {
 		var all []string
 		for _, d := range DiscoverSessionDirs() {
@@ -1987,7 +2034,16 @@ func FindSessionFiles(dir string) []string {
 	}
 	var items []entryInfo
 	for _, e := range entries {
+		path := filepath.Join(dir, e.Name())
 		if e.IsDir() {
+			if isClineTaskDir(path) {
+				info, err := e.Info()
+				mt := time.Time{}
+				if err == nil {
+					mt = info.ModTime()
+				}
+				items = append(items, entryInfo{path: path, t: mt})
+			}
 			continue
 		}
 		name := e.Name()
@@ -1999,7 +2055,7 @@ func FindSessionFiles(dir string) []string {
 		if err == nil {
 			mt = info.ModTime()
 		}
-		items = append(items, entryInfo{path: filepath.Join(dir, name), t: mt})
+		items = append(items, entryInfo{path: path, t: mt})
 	}
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].t.After(items[j].t)
@@ -2050,7 +2106,7 @@ func KnownSessionDirs() []KnownSessionDir {
 	if home == "" {
 		return nil
 	}
-	return []KnownSessionDir{
+	dirs := []KnownSessionDir{
 		{Name: "Hermes Agent", Path: filepath.Join(home, ".hermes", "sessions")},
 		{Name: "Codex CLI", Path: filepath.Join(home, ".codex", "sessions")},
 		{Name: "Codex CLI archived", Path: filepath.Join(home, ".codex", "archived_sessions")},
@@ -2059,6 +2115,19 @@ func KnownSessionDirs() []KnownSessionDir {
 		{Name: "Claude Code", Path: filepath.Join(home, ".claude", "projects")},
 		{Name: "Oh My Pi", Path: filepath.Join(home, ".omp", "agent", "sessions")},
 	}
+	dirs = append(dirs, clineKnownSessionDirs(home)...)
+	return dirs
+}
+
+func clineKnownSessionDirs(home string) []KnownSessionDir {
+	configDir, _ := os.UserConfigDir()
+	if configDir == "" {
+		configDir = filepath.Join(home, ".config")
+	}
+	return []KnownSessionDir{{
+		Name: "Cline",
+		Path: filepath.Join(configDir, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "tasks"),
+	}}
 }
 
 // DiscoverSessionDirs returns all well-known agent session directories found on this machine.
@@ -2087,6 +2156,9 @@ func dirExists(p string) bool {
 
 // collectSessionFiles walks dir and returns all session files.
 func collectSessionFiles(dir string) []string {
+	if isClineTaskDir(dir) {
+		return []string{dir}
+	}
 	type entryInfo struct {
 		path string
 		t    time.Time
@@ -2104,8 +2176,18 @@ func collectSessionFiles(dir string) []string {
 			return
 		}
 		for _, e := range entries {
+			path := filepath.Join(d, e.Name())
 			if e.IsDir() {
-				walk(filepath.Join(d, e.Name()), depth+1)
+				if isClineTaskDir(path) {
+					info, err := e.Info()
+					mt := time.Time{}
+					if err == nil {
+						mt = info.ModTime()
+					}
+					items = append(items, entryInfo{path: path, t: mt})
+					continue
+				}
+				walk(path, depth+1)
 				continue
 			}
 			name := e.Name()
@@ -2117,7 +2199,7 @@ func collectSessionFiles(dir string) []string {
 			if err == nil {
 				mt = info.ModTime()
 			}
-			items = append(items, entryInfo{path: filepath.Join(d, name), t: mt})
+			items = append(items, entryInfo{path: path, t: mt})
 		}
 	}
 	walk(dir, 0)

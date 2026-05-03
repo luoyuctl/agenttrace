@@ -1,0 +1,32 @@
+{
+  "composer.composerData": {
+    "allComposers": [
+      {
+        "composerId": "cmp-1",
+        "name": "Auth cleanup",
+        "lastUpdatedAt": 1710000060000,
+        "conversation": {
+          "messages": [
+            {
+              "role": "user",
+              "text": "Refactor the auth flow",
+              "timestamp": "2026-05-03T10:00:00Z"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "text": "Updated the login component."
+                },
+                {
+                  "text": "Added focused tests."
+                }
+              ],
+              "timestamp": "2026-05-03T10:01:00Z"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
