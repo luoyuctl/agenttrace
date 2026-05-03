@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "agenttrace",
     "shortDescription": "Audit local AI agent sessions",
-    "longDescription": "Use agenttrace to inspect local Claude Code, Codex CLI, Gemini CLI, Aider, Cursor, OpenCode, Kimi, Copilot-style, and generic JSON/JSONL sessions for spend, token use, tool failures, latency, health, anomalies, diffs, and CI-ready gate signals.",
+    "longDescription": "Use agenttrace to inspect local Claude Code, Codex CLI, Gemini CLI, Aider, Cursor, OpenCode, Oh My Pi, Kimi, Copilot-style, and generic JSON/JSONL sessions for spend, token use, tool failures, latency, health, anomalies, diffs, and CI-ready gate signals.",
     "developerName": "luoyuctl",
     "category": "Developer Tools",
     "capabilities": [

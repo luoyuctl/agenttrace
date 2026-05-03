@@ -198,6 +198,108 @@ All tests pass.
 	}
 }
 
+func TestParseOhMyPiSessionJSONL(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{
+			"type":      "session",
+			"version":   3,
+			"id":        "1f9d2a6b9c0d1234",
+			"timestamp": "2026-02-16T10:20:30.000Z",
+			"cwd":       "/work/pi",
+		},
+		map[string]interface{}{
+			"type":      "message",
+			"id":        "u1",
+			"parentId":  nil,
+			"timestamp": "2026-02-16T10:21:00.000Z",
+			"message": map[string]interface{}{
+				"role":      "user",
+				"content":   []interface{}{map[string]interface{}{"type": "text", "text": "Inspect the failing test"}},
+				"timestamp": float64(1771237260000),
+			},
+		},
+		map[string]interface{}{
+			"type":      "message",
+			"id":        "a1",
+			"parentId":  "u1",
+			"timestamp": "2026-02-16T10:21:10.000Z",
+			"message": map[string]interface{}{
+				"role":     "assistant",
+				"provider": "anthropic",
+				"model":    "claude-sonnet-4-5",
+				"content": []interface{}{
+					map[string]interface{}{"type": "thinking", "thinking": "Need to inspect logs first."},
+					map[string]interface{}{"type": "text", "text": "I will inspect the failure."},
+					map[string]interface{}{"type": "toolCall", "id": "tc1", "name": "read", "arguments": map[string]interface{}{"path": "go.mod"}},
+				},
+				"usage": map[string]interface{}{
+					"input":      100,
+					"output":     20,
+					"cacheRead":  7,
+					"cacheWrite": 3,
+				},
+				"timestamp": float64(1771237270000),
+			},
+		},
+		map[string]interface{}{
+			"type":      "message",
+			"id":        "t1",
+			"parentId":  "a1",
+			"timestamp": "2026-02-16T10:21:12.000Z",
+			"message": map[string]interface{}{
+				"role":       "toolResult",
+				"toolCallId": "tc1",
+				"toolName":   "read",
+				"content":    []interface{}{map[string]interface{}{"type": "text", "text": "module github.com/luoyuctl/agenttrace"}},
+				"isError":    false,
+				"timestamp":  float64(1771237272000),
+			},
+		},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DetectFormat(path).Format; got != "oh_my_pi" {
+		t.Fatalf("oh-my-pi format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "claude-sonnet-4-5")
+	if m.SourceTool != "oh_my_pi" || m.UserMessages != 1 || m.AssistantTurns != 1 || m.ToolCallsTotal != 1 || m.ToolCallsOK != 1 {
+		t.Fatalf("bad oh-my-pi metrics: %+v", m)
+	}
+	if m.ModelUsed != "claude-sonnet-4-5" || m.TokensInput != 100 || m.TokensOutput != 20 || m.TokensCacheR != 7 || m.TokensCacheW != 3 {
+		t.Fatalf("bad oh-my-pi model/usage: %+v", m)
+	}
+	if m.ReasoningBlocks != 1 || m.ToolUsage["read"] != 1 {
+		t.Fatalf("bad oh-my-pi reasoning/tool usage: %+v", m)
+	}
+}
+
+func TestParseOhMyPiSessionJSONL_InvalidHeader(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "broken.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{"type": "session", "version": 3, "cwd": "/work/pi"},
+		map[string]interface{}{"type": "message", "message": map[string]interface{}{"role": "user", "content": "hello"}},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DetectFormat(path).Format; got != "oh_my_pi" {
+		t.Fatalf("expected malformed oh-my-pi session to be detected, got %s", got)
+	}
+	if _, err := Parse(path); err == nil {
+		t.Fatalf("expected invalid oh-my-pi header to fail")
+	}
+}
+
 func TestFindSessionFilesIncludesAiderHistory(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".aider.chat.history.md")
