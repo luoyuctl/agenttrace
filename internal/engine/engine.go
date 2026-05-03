@@ -469,77 +469,81 @@ func DetectFormat(path string) FormatInfo {
 	}
 
 	// JSONL: check first few valid lines (skip empty and comments)
-	var firstLineObj map[string]interface{}
+	var lineObjs []map[string]interface{}
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if err := json.Unmarshal([]byte(line), &firstLineObj); err == nil {
-			break
+		var obj map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &obj); err == nil {
+			lineObjs = append(lineObjs, obj)
+			if len(lineObjs) >= 20 {
+				break
+			}
 		}
 	}
-	if firstLineObj != nil {
+	if len(lineObjs) > 0 {
 		fi.Raw = data
-
-		// Hermes JSONL: role=session_meta or role with timestamp
-		if role, _ := firstLineObj["role"].(string); role == "session_meta" {
-			fi.Format = "hermes_jsonl"
-			return fi
-		}
-		if role, _ := firstLineObj["role"].(string); role == "user" || role == "assistant" || role == "tool" {
-			if _, hasTS := firstLineObj["timestamp"]; hasTS {
-				fi.Format = "hermes_jsonl"
-				return fi
-			}
-		}
-		// Gemini JSONL
-		if _, hasCand := firstLineObj["candidates"]; hasCand {
-			fi.Format = "gemini_cli"
-			return fi
-		}
-		if _, hasCont := firstLineObj["contents"]; hasCont {
-			fi.Format = "gemini_cli"
-			return fi
-		}
-		// Claude Code transcript JSONL: top-level "type" + "sessionId"
-		typ, _ := firstLineObj["type"].(string)
-		if isQwenCodeEvent(firstLineObj) {
-			fi.Format = "qwen_code"
-			return fi
-		}
-		if isOhMyPiSessionHeader(firstLineObj) {
-			fi.Format = "oh_my_pi"
-			return fi
-		}
-		if typ != "" {
-			if _, hasSess := firstLineObj["sessionId"]; hasSess {
-				fi.Format = "claude_code_jsonl"
-				return fi
-			}
-		}
-		// Copilot CLI OTel JSONL — spans have traceId + spanId
-		if _, hasTrace := firstLineObj["traceId"]; hasTrace {
-			if _, hasSpan := firstLineObj["spanId"]; hasSpan {
-				fi.Format = "copilot_cli"
-				return fi
-			}
-		}
-		// Codex CLI rollout JSONL: top-level "type"="session_meta" with nested "payload"
-		if typ == "session_meta" {
-			if _, hasPayload := firstLineObj["payload"]; hasPayload {
-				fi.Format = "codex_rollout"
-				return fi
-			}
-		}
-		// Generic JSONL with role field → try parse as generic
-		if _, hasRole := firstLineObj["role"]; hasRole {
-			fi.Format = "generic"
-			return fi
-		}
+		fi.Format = detectJSONL(lineObjs)
+		return fi
 	}
 
 	return fi
+}
+
+func detectJSONL(objs []map[string]interface{}) string {
+	hasGenericRole := false
+	for _, obj := range objs {
+		typ, _ := obj["type"].(string)
+		role, _ := obj["role"].(string)
+		if role == "session_meta" {
+			return "hermes_jsonl"
+		}
+		if role == "user" || role == "assistant" || role == "tool" {
+			if _, hasTS := obj["timestamp"]; hasTS {
+				return "hermes_jsonl"
+			}
+			hasGenericRole = true
+		}
+		if _, hasCand := obj["candidates"]; hasCand {
+			return "gemini_cli"
+		}
+		if _, hasCont := obj["contents"]; hasCont {
+			return "gemini_cli"
+		}
+		if _, hasQwenSession := obj["session_id"]; hasQwenSession && isQwenCodeEvent(obj) {
+			return "qwen_code"
+		}
+		if isOhMyPiSessionHeader(obj) {
+			return "oh_my_pi"
+		}
+		if typ != "" {
+			if _, hasSess := obj["sessionId"]; hasSess {
+				return "claude_code_jsonl"
+			}
+		}
+		if isQwenCodeEvent(obj) {
+			return "qwen_code"
+		}
+		if _, hasTrace := obj["traceId"]; hasTrace {
+			if _, hasSpan := obj["spanId"]; hasSpan {
+				return "copilot_cli"
+			}
+		}
+		if typ == "session_meta" {
+			if _, hasPayload := obj["payload"]; hasPayload {
+				return "codex_rollout"
+			}
+		}
+		if _, hasRole := obj["role"]; hasRole {
+			hasGenericRole = true
+		}
+	}
+	if hasGenericRole {
+		return "generic"
+	}
+	return "unknown"
 }
 
 func detectSingleJSON(doc map[string]interface{}) string {
@@ -1325,11 +1329,38 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 		case "user":
 			ts, _ := obj["timestamp"].(string)
 			if msg, ok := obj["message"].(map[string]interface{}); ok {
-				content, _ := msg["content"].(string)
-				events = append(events, Event{
-					Role: "user", Content: content, Timestamp: ts,
-					ModelUsed: modelName, SourceTool: "claude_code",
-				})
+				switch content := msg["content"].(type) {
+				case string:
+					events = append(events, Event{
+						Role: "user", Content: content, Timestamp: ts,
+						ModelUsed: modelName, SourceTool: "claude_code",
+					})
+				case []interface{}:
+					for _, blk := range content {
+						b, ok := blk.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						bt, _ := b["type"].(string)
+						switch bt {
+						case "text":
+							text, _ := b["text"].(string)
+							events = append(events, Event{
+								Role: "user", Content: text, Timestamp: ts,
+								ModelUsed: modelName, SourceTool: "claude_code",
+							})
+						case "tool_result":
+							tid, _ := b["tool_use_id"].(string)
+							isErr, _ := b["is_error"].(bool)
+							ct := extractToolResultContent(b)
+							events = append(events, Event{
+								Role: "tool", Timestamp: ts,
+								ToolCallID: tid, Content: ct, IsError: isErr,
+								SourceTool: "claude_code",
+							})
+						}
+					}
+				}
 			}
 
 		case "assistant":
