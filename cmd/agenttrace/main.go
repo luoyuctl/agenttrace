@@ -149,18 +149,22 @@ func main() {
 
 	// Overview mode
 	if *overview {
-		files := engine.FindSessionFiles(sessionsDir)
-		if len(files) == 0 {
+		var sessions []engine.Session
+		if sessionsDir == "" {
+			sessions = engine.LoadAll("")
+		} else {
+			files := engine.FindSessionFiles(sessionsDir)
+			for _, f := range files {
+				s, err := engine.LoadSession(f)
+				if err != nil {
+					continue
+				}
+				sessions = append(sessions, *s)
+			}
+		}
+		if len(sessions) == 0 {
 			fmt.Fprintf(os.Stderr, i18n.T("no_session_files")+"\n", sessionsDir)
 			os.Exit(1)
-		}
-		var sessions []engine.Session
-		for _, f := range files {
-			s, err := engine.LoadSession(f)
-			if err != nil {
-				continue
-			}
-			sessions = append(sessions, *s)
 		}
 		ov := engine.ComputeOverview(sessions)
 		out := engine.ReportOverview(ov, sessions)
