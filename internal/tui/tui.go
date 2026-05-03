@@ -1451,7 +1451,6 @@ func (m Model) renderQuickSummary() string {
 	}
 
 	costBadge := badge(i18n.T("cost"), money4(met.CostEstimated), lipgloss.Color("39"))
-	sessionBadge := badge(i18n.T("session"), truncate(s.Name, 28), lipgloss.Color("245"))
 
 	okTools, _, totalTools, _ := normalizedToolCounts(met)
 	srStr := i18n.T("not_available")
@@ -1473,13 +1472,12 @@ func (m Model) renderQuickSummary() string {
 	}
 
 	modelBadge := badge(i18n.T("model_header"), met.ModelUsed, lipgloss.Color("99"))
-	if m.width > 0 && m.width < 140 {
+	if m.width > 0 && m.width < 100 {
 		lineW := m.frameBodyWidth()
 		issue := i18n.T("list_no_major_anomaly")
 		if len(s.Anomalies) > 0 {
 			issue = anomalyTypeLabel(s.Anomalies[0].Type)
 		}
-		line0 := fmt.Sprintf("%s %s", i18n.T("session"), s.Name)
 		line1 := fmt.Sprintf("%s %d/100  %s %s  %s %d/%d %s",
 			i18n.T("health"),
 			health,
@@ -1496,14 +1494,13 @@ func (m Model) renderQuickSummary() string {
 			issue,
 			met.ModelUsed)
 		return lipgloss.JoinVertical(lipgloss.Left,
-			cyanStyle.Render(truncate(line0, lineW)),
 			truncate(line1, lineW),
 			dimStyle.Render(truncate(line2, lineW)),
 		)
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		sessionBadge, " ", healthBadge, " ", costBadge, " ", toolBadge, " ", anomBadge, " ", modelBadge,
+		healthBadge, " ", costBadge, " ", toolBadge, " ", anomBadge, " ", modelBadge,
 	)
 }
 

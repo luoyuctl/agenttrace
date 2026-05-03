@@ -4,7 +4,7 @@ This note tracks the gap between agenttrace and production-grade TUIs such as la
 
 ## Current Position
 
-agenttrace is already past a basic CLI dashboard. It has responsive layouts, an overview/list/detail/diagnostics/diff flow, command mode, filters, cache-aware loading, machine-readable exits, and headless TUI snapshots for CI or PR review.
+agenttrace is already past a basic CLI dashboard. It has responsive layouts, an overview/list/detail/diagnostics/diff flow, command mode, filters, cache-aware loading, and machine-readable exits.
 
 Against benchmark TUIs, the remaining gap is mostly product UX, not framework capability. Bubble Tea is still a good fit; replacing it would not by itself close the gap.
 
@@ -14,8 +14,7 @@ Against benchmark TUIs, the remaining gap is mostly product UX, not framework ca
 |---|---|---|---|
 | First-screen triage | One screen shows the most urgent thing and the next action | Improved with `TRIAGE NOW` and `Next` lanes | Low |
 | Stable navigation | Vim-style movement, persistent key footer, modal help | Present | Low |
-| Headless verification | Same UI path can be rendered in non-interactive CI | Present via `--tui-view`, `--tui-command`, and `--tui-keys` | Low |
-| Command palette | Fuzzy searchable commands and contextual actions | Command mode exists and is scriptable; no fuzzy palette yet | Medium |
+| Command palette | Fuzzy searchable commands and contextual actions | Command mode exists, no fuzzy palette yet | Medium |
 | Progressive disclosure | Summary first, deep diagnostics on demand | Present across overview/detail/diagnostics/diff | Low |
 | Empty/loading states | Actionable empty states and visible progress | Present | Low |
 | Layout density | Fixed mental map, responsive panels, dense tables | Present, but no user density presets | Medium |
@@ -39,15 +38,3 @@ Against benchmark TUIs, the remaining gap is mostly product UX, not framework ca
 2. Add density/theme presets for wide terminals, small terminals, and high-contrast use.
 3. Add a keyboard-driven issue workflow: open triage item, apply filter, jump to evidence, export report.
 4. Add snapshot tests for representative terminal sizes so layout regressions are caught before release.
-
-## Headless TUI Verification
-
-Use the same TUI rendering path without opening an interactive terminal:
-
-```bash
-agenttrace --demo --tui-view all --tui-no-color
-agenttrace --demo --tui-view detail --tui-command critical --tui-width 120 --tui-height 36
-agenttrace --demo --tui-view overview --tui-keys '!;enter' --tui-no-color
-```
-
-This keeps product review, CI checks, and real terminal testing aligned with the interactive Bubble Tea implementation instead of maintaining a parallel CLI-only UI.
