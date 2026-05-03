@@ -201,6 +201,11 @@ agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-
 # Demo JSON for screenshots, CI examples, or first-time evaluation
 agenttrace --demo --overview -f json
 
+# Headless TUI verification for CI, PR review, or non-interactive terminals
+agenttrace --demo --tui-view all --tui-no-color
+agenttrace --demo --tui-view detail --tui-command critical --tui-width 120 --tui-height 36
+agenttrace --demo --tui-view overview --tui-keys '!;enter' --tui-no-color
+
 # Doctor JSON for support tickets or CI setup checks
 agenttrace --doctor -f json
 
