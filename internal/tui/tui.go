@@ -1003,9 +1003,9 @@ func (m Model) renderKeymapView() string {
 		{title: i18n.T("keymap_filters"), rows: []keymapRow{
 			{"f", i18n.T("keymap_health_filter")},
 			{"s", i18n.T("keymap_source_filter")},
-			{"h/c/t/e/a/n", i18n.T("keymap_sort")},
-			{"$", i18n.T("keymap_top_cost")},
-			{"!", i18n.T("keymap_critical")},
+			{"h/c/t", i18n.T("keymap_sort_metrics")},
+			{"e/a/n", i18n.T("keymap_sort_triage")},
+			{"$/!", i18n.T("keymap_cost_critical")},
 		}},
 		{title: i18n.T("keymap_system"), rows: []keymapRow{
 			{":", i18n.T("keymap_command")},

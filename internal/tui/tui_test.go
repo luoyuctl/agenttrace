@@ -189,8 +189,8 @@ func TestKeymapFitsDefaultTerminalAndShowsLanguageShortcut(t *testing.T) {
 		lang i18n.Lang
 		want string
 	}{
-		{lang: i18n.EN, want: "toggle language"},
-		{lang: i18n.ZH, want: "切换语言"},
+		{lang: i18n.EN, want: "language"},
+		{lang: i18n.ZH, want: "语言"},
 	} {
 		i18n.SetLang(tt.lang)
 		m := resizeForTest(t, sampleModelForTest(), 80, 24)
@@ -228,7 +228,7 @@ func TestLanguageSwitchWorksFromKeymap(t *testing.T) {
 	if !m.helpOpen {
 		t.Fatalf("language switch should keep keymap open")
 	}
-	if rendered := m.View(); !strings.Contains(rendered, "切换语言") {
+	if rendered := m.View(); !strings.Contains(rendered, "语言") {
 		t.Fatalf("expected keymap to rerender in Chinese:\n%s", rendered)
 	}
 }
@@ -1565,7 +1565,7 @@ func TestQuestionMarkOpensAndClosesKeymap(t *testing.T) {
 	m = next.(Model)
 
 	rendered := m.View()
-	if !m.helpOpen || !strings.Contains(rendered, "Keyboard Shortcuts") || !strings.Contains(rendered, "cache-aware reloads") {
+	if !m.helpOpen || !strings.Contains(rendered, "Keyboard Shortcuts") || !strings.Contains(rendered, "cache reloads") {
 		t.Fatalf("expected keymap view, got:\n%s", rendered)
 	}
 	if got := maxRenderedWidth(rendered); got > 100 {
@@ -1592,13 +1592,47 @@ func TestChineseKeymapTranslatesLabels(t *testing.T) {
 	m = next.(Model)
 
 	rendered := m.View()
-	for _, want := range []string{"快捷键", "筛选和排序", "强制重建缓存"} {
+	for _, want := range []string{"快捷键", "筛选和排序", "重建缓存"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("Chinese keymap missing %q:\n%s", want, rendered)
 		}
 	}
 	if strings.Contains(rendered, "Keyboard Shortcuts") {
 		t.Fatalf("Chinese keymap leaked English title:\n%s", rendered)
+	}
+}
+
+func TestKeymapAvoidsTruncatedLabelsAtStandardWidth(t *testing.T) {
+	for _, lang := range []i18n.Lang{i18n.EN, i18n.ZH} {
+		t.Run(string(lang), func(t *testing.T) {
+			prev := i18n.Current
+			i18n.SetLang(lang)
+			t.Cleanup(func() { i18n.SetLang(prev) })
+
+			m := resizeForTest(t, sampleModelForTest(), 80, 24)
+			m.lang = lang
+			m.refreshColumns()
+			m.view = viewList
+			m.helpOpen = true
+
+			rendered := m.View()
+			if strings.Contains(rendered, "…") {
+				t.Fatalf("standard-width keymap should avoid truncated labels:\n%s", rendered)
+			}
+			want := "cost / critical"
+			if lang == i18n.ZH {
+				want = "费用 / 严重"
+			}
+			if !strings.Contains(rendered, want) {
+				t.Fatalf("standard-width keymap should show cost and critical shortcut %q:\n%s", want, rendered)
+			}
+			if got := maxRenderedWidth(rendered); got > 80 {
+				t.Fatalf("keymap too wide: got=%d line=%q", got, widestLine(rendered))
+			}
+			if got := renderedHeight(rendered); got != 24 {
+				t.Fatalf("keymap should fill terminal height without clipping: got=%d", got)
+			}
+		})
 	}
 }
 
