@@ -34,7 +34,7 @@ Featured in: [Awesome Codex CLI](https://github.com/RoggeOhta/awesome-codex-cli)
   <img src="assets/agenttrace-demo.gif" alt="agenttrace TUI demo" width="100%">
 </p>
 
-The GIF follows the shortest first-run path: `agenttrace --demo`, `!`, `Enter`, then `w` for diagnostics.
+The GIF follows the shortest first-run path: demo data -> critical sessions -> detail -> diagnostics -> overview.
 
 > Sharing agenttrace? See [docs/demo-playbook.md](docs/demo-playbook.md) for the GIF recording script, launch storyline, and posting copy.
 

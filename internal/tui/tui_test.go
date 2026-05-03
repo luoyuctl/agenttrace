@@ -708,16 +708,20 @@ func TestViewsClampInvalidHealthScores(t *testing.T) {
 	}
 }
 
-func TestHealthCellShowsScanFriendlyBar(t *testing.T) {
+func TestHealthCellShowsScanFriendlyStatus(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
 	tests := []struct {
 		health int
 		width  int
 		want   string
 	}{
-		{health: 92, width: 9, want: "92%"},
-		{health: 64, width: 8, want: "64%"},
-		{health: -20, width: 9, want: "0%"},
-		{health: 150, width: 9, want: "100%"},
+		{health: 92, width: 9, want: "92% good"},
+		{health: 64, width: 8, want: "64% warn"},
+		{health: -20, width: 9, want: "0% crit"},
+		{health: 150, width: 9, want: "100% good"},
 		{health: 42, width: 5, want: "42%"},
 	}
 
@@ -729,8 +733,8 @@ func TestHealthCellShowsScanFriendlyBar(t *testing.T) {
 		if lipgloss.Width(got) > tt.width {
 			t.Fatalf("healthCell(%d, %d) too wide: got=%d %q", tt.health, tt.width, lipgloss.Width(got), got)
 		}
-		if tt.width >= 7 && !strings.Contains(got, "█") && !strings.Contains(got, "░") {
-			t.Fatalf("healthCell(%d, %d) should include a scan bar: %q", tt.health, tt.width, got)
+		if strings.Contains(got, "█") || strings.Contains(got, "░") {
+			t.Fatalf("healthCell(%d, %d) should avoid noisy bar glyphs: %q", tt.health, tt.width, got)
 		}
 	}
 }
@@ -968,6 +972,23 @@ func TestListViewFitsTerminalHeight(t *testing.T) {
 		rendered := m.View()
 		if got := renderedHeight(rendered); got > height {
 			t.Fatalf("list render too tall: height=%d got=%d", height, got)
+		}
+	}
+}
+
+func TestListViewShowsSelectedSessionSummary(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 120, 32)
+	m.view = viewList
+	m.table.SetCursor(1)
+
+	rendered := m.View()
+	for _, want := range []string{"SELECTED SESSION", "session_beta", "$1.2500", "tool failures"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("list summary missing %q:\n%s", want, rendered)
 		}
 	}
 }

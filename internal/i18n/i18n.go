@@ -757,8 +757,8 @@ var translations = map[string]map[Lang]string{
 		ZH: "警告: '%s' 无进展重复 %d 次",
 	},
 	"diag_no_loop_fp": {
-		EN: "No fingerprint loops detected — agent progressing normally",
-		ZH: "未检测到指纹级循环 — Agent 正常推进中",
+		EN: "No fingerprint loops detected",
+		ZH: "未检测到指纹级循环",
 	},
 	"diag_tool_latency": {
 		EN: "PER-TOOL LATENCY RANKING",
@@ -780,6 +780,7 @@ var translations = map[string]map[Lang]string{
 	"diag_ctx_history":    {EN: "Conversation History", ZH: "对话历史"},
 	"diag_ctx_sysprompt":  {EN: "System Prompt", ZH: "系统提示"},
 	"diag_ctx_available":  {EN: "Available for Task", ZH: "任务可用空间"},
+	"diag_ctx_used":       {EN: "used", ZH: "已用"},
 	"diag_ctx_suggestion": {EN: "Recommendation", ZH: "建议"},
 	"diag_large_params": {
 		EN: "LARGE PARAMETER CALLS",
@@ -833,6 +834,7 @@ var translations = map[string]map[Lang]string{
 	"cache_status":          {EN: "cache %d/%d", ZH: "缓存 %d/%d"},
 	"scroll_label":          {EN: "Scroll", ZH: "滚动"},
 	"list_filter":           {EN: "filter", ZH: "筛选"},
+	"list_selected":         {EN: "SELECTED SESSION", ZH: "当前会话"},
 	"list_issue":            {EN: "issue", ZH: "问题"},
 	"list_no_major_anomaly": {EN: "No major anomaly", ZH: "无主要异常"},
 	"list_filter_none":      {EN: "none", ZH: "无"},
@@ -1137,7 +1139,7 @@ var translations = map[string]map[Lang]string{
 	// ── Context utilization suggestion ──
 	"diag_ctx_suggestion_critical": {EN: "context nearly full — reduce MCP tools or compact conversation immediately", ZH: "上下文几乎满 — 立即减少 MCP 工具或压缩对话"},
 	"diag_ctx_suggestion_warning":  {EN: "context filling up — consider compacting or trimming rarely used tools", ZH: "上下文趋于饱和 — 考虑压缩或裁剪低频工具"},
-	"diag_ctx_suggestion_good":     {EN: "plenty of context headroom", ZH: "上下文空间充足"},
+	"diag_ctx_suggestion_good":     {EN: "context headroom OK", ZH: "上下文空间充足"},
 
 	// ── Diff summary ──
 	"diff_summary_session_vs":  {EN: "Session %s vs %s", ZH: "会话 %s vs %s"},

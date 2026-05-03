@@ -1039,6 +1039,11 @@ func (m Model) renderListView() string {
 		sections = append(sections, empty)
 		extraLines += renderedLineCount(empty)
 	}
+	if selected := m.renderSelectedSessionSummary(maxInt(1, contentW-6)); selected != "" {
+		panel := subtlePanel(i18n.T("list_selected"), selected, contentW)
+		sections = append(sections, panel)
+		extraLines += renderedLineCount(panel)
+	}
 	tableView := m.table
 	tableView.SetWidth(contentW)
 	tableView.SetHeight(m.listTableHeight(extraLines))
@@ -1203,16 +1208,22 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 			dimStyle.Render(truncate(line2, width)),
 		)
 	}
-	line := fmt.Sprintf("%s  %s %d%%  %s $%.4f  %s %s  %s %d  %s %d/%d %s  %s %s",
-		truncate(s.Name, 28),
+	nameW := minInt(32, maxInt(14, width/3))
+	line1 := fmt.Sprintf("%s  %s %d%%  %s $%.4f  %s %s",
+		truncate(s.Name, nameW),
 		i18n.T("health"), clampHealth(s.Health),
 		i18n.T("cost"), safeAmount(met.CostEstimated),
 		i18n.T("tokens"), compactInt(met.TokensInput+met.TokensOutput),
+	)
+	line2 := fmt.Sprintf("%s %d  %s %d/%d %s  %s %s",
 		i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
 		i18n.T("tools"), okTools, totalTools, success,
 		i18n.T("list_issue"), issue,
 	)
-	return dimStyle.Render(truncate(line, width))
+	return lipgloss.JoinVertical(lipgloss.Left,
+		dimStyle.Render(truncate(line1, width)),
+		dimStyle.Render(truncate(line2, width)),
+	)
 }
 
 func (m Model) selectionHint() string {
@@ -1897,25 +1908,19 @@ func (m Model) renderContextUtil(s engine.Session) string {
 	default:
 		style = greenStyle
 	}
-	barWidth := 30
-	if m.frameBodyWidth() < 70 {
-		barWidth = maxInt(8, m.frameBodyWidth()-34)
-	}
 	utilPct := cu.UtilizationPct
 	if !isFiniteNumber(utilPct) || utilPct < 0 {
 		utilPct = 0
 	} else if utilPct > 100 {
 		utilPct = 100
 	}
-	filled := int(utilPct / 100 * float64(barWidth))
-	bar := "[" + lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(strings.Repeat("█", filled)) +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(strings.Repeat("░", barWidth-filled)) + "]"
+	utilLabel := style.Render(fmt.Sprintf("(%.0f%% %s)", utilPct, i18n.T("diag_ctx_used")))
 
 	if m.frameBodyWidth() < 70 {
 		content := fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_total"), cyanStyle.Render(tokenCount(cu.EstimatedTotal)))
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_tool_defs"), dimStyle.Render(tokenCount(cu.ToolDefinitions)))
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_history"), dimStyle.Render(tokenCount(cu.ConversationHist)))
-		content += fmt.Sprintf("  %-10s %s %s\n", i18n.T("diag_ctx_available"), style.Render(fmt.Sprintf("%d", nonNegativeInt(cu.AvailableForTask))), bar)
+		content += fmt.Sprintf("  %-10s %s %s\n", i18n.T("diag_ctx_available"), style.Render(tokenCount(cu.AvailableForTask)), utilLabel)
 		content += fmt.Sprintf("  %-10s %s\n", i18n.T("diag_ctx_suggestion"), style.Render(truncate(cu.Suggestion, maxInt(8, m.frameBodyWidth()-18))))
 		return content
 	}
@@ -1926,7 +1931,7 @@ func (m Model) renderContextUtil(s engine.Session) string {
 	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_sysprompt"), dimStyle.Render(tokenCount(cu.SystemPrompt)))
 	content += fmt.Sprintf("  ─────────────────────────────\n")
 	content += fmt.Sprintf("  %-22s %s %s\n", i18n.T("diag_ctx_available"),
-		style.Render(tokenCount(cu.AvailableForTask)), bar)
+		style.Render(tokenCount(cu.AvailableForTask)), utilLabel)
 	content += fmt.Sprintf("  %-22s %s\n", i18n.T("diag_ctx_suggestion"), style.Render(cu.Suggestion))
 	return content
 }
@@ -2209,21 +2214,21 @@ func costColor(amount float64) string {
 
 func healthCell(health int, width int) string {
 	health = clampHealth(health)
-	score := fmt.Sprintf("%3d%%", health)
+	score := fmt.Sprintf("%d%%", health)
 	if width < 7 {
-		return fmt.Sprintf("%d%%", health)
+		return truncate(score, width)
 	}
-	barW := maxInt(1, width-5)
-	filled := health * barW / 100
-	if health > 0 && filled == 0 {
-		filled = 1
+	label := i18n.T("list_health_crit")
+	if health >= 80 {
+		label = i18n.T("list_health_good")
+	} else if health >= 50 {
+		label = i18n.T("list_health_warn")
 	}
-	if filled > barW {
-		filled = barW
+	text := score
+	if candidate := fmt.Sprintf("%s %s", score, label); lipgloss.Width(candidate) <= width {
+		text = candidate
 	}
-	bar := healthColor(health).Render(strings.Repeat("█", filled)) +
-		dimStyle.Render(strings.Repeat("░", barW-filled))
-	return score + " " + bar
+	return healthColor(health).Render(truncate(text, width))
 }
 
 // refreshColumns rebuilds column titles after a language switch.
@@ -2243,10 +2248,10 @@ func (m *Model) adjustColumnWidths(width int) {
 		m.setColumnsAndRefreshRows(m.wideListColumns(22, 13, 18, 5, 5, 5, 5, 8, 7, 8, 5, 9, 16))
 		return
 	} else if width > 130 {
-		m.setColumnsAndRefreshRows(m.wideListColumns(14, 8, 10, 5, 5, 5, 4, 7, 6, 5, 4, 7, 10))
+		m.setColumnsAndRefreshRows(m.wideListColumns(14, 13, 10, 5, 5, 5, 4, 7, 6, 5, 4, 9, 7))
 		return
 	} else if width >= 100 {
-		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 17, 10, 5, 5, 5, 4, 8, 7, 8
+		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 18, 20, 5, 5, 5, 4, 8, 7, 9
 	} else if width >= 92 {
 		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 10, 7, 4, 4, 4, 4, 7, 5, 7
 	} else if width >= 76 {
