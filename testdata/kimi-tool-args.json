@@ -1,0 +1,40 @@
+{
+  "model": "kimi-k2.6",
+  "metadata": {
+    "usage": {
+      "input_tokens": 120,
+      "output_tokens": 40
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Inspect the module file",
+      "timestamp": "2026-05-03T10:00:00Z"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Need to read the module file first."
+        },
+        {
+          "type": "tool_use",
+          "id": "tool-1",
+          "name": "read_file",
+          "input": {
+            "path": "go.mod"
+          }
+        }
+      ],
+      "timestamp": "2026-05-03T10:00:01Z"
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "tool-1",
+      "content": "module github.com/luoyuctl/agenttrace",
+      "timestamp": "2026-05-03T10:00:02Z"
+    }
+  ]
+}
