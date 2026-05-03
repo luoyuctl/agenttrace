@@ -138,7 +138,7 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 	w(sub)
 	if len(anoms) > 0 {
 		for _, a := range anoms {
-			wf("  %s [%s] %s: %s", a.Emoji, strings.ToUpper(a.Severity), a.Type, a.Detail)
+			wf("  %s [%s] %s: %s", a.Emoji, reportSeverityLabel(a.Severity), reportAnomalyTypeLabel(a.Type), a.Detail)
 		}
 	} else {
 		w("  " + i18n.T("no_anomalies"))
@@ -147,10 +147,10 @@ func ReportText(m Metrics, anoms []Anomaly, h int) string {
 
 	// Loop Cost
 	if m.LoopGroups > 0 {
-		w("🔄 LOOP COST")
+		w("🔄 " + i18n.T("loop_section_title"))
 		w(sub)
-		wf("  Tool Loop Cost:    $%9.4f  (%d groups)", m.LoopCostEst, m.LoopGroups)
-		wf("  Retry Events:       %d", m.LoopRetryEvents)
+		wf("  "+i18n.T("loop_tool_loop_cost"), m.LoopCostEst, m.LoopGroups)
+		wf("  "+i18n.T("loop_retry_events"), m.LoopRetryEvents)
 		w("")
 	}
 
@@ -664,6 +664,19 @@ func reportAnomalyTypeLabel(kind string) string {
 		return translated
 	}
 	return strings.ReplaceAll(kind, "_", " ")
+}
+
+func reportSeverityLabel(severity string) string {
+	switch strings.ToLower(severity) {
+	case SeverityHigh:
+		return i18n.T("severity_high")
+	case SeverityMedium:
+		return i18n.T("severity_medium")
+	case SeverityLow:
+		return i18n.T("severity_low")
+	default:
+		return strings.ToUpper(severity)
+	}
 }
 
 type overviewSummary struct {

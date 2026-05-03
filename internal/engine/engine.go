@@ -1846,6 +1846,78 @@ func LoadSession(path string) (*Session, error) {
 	}, nil
 }
 
+// LocalizeSession 为缓存命中的会话重建当前语言下的诊断文案。
+func LocalizeSession(s Session) Session {
+	if metricsHaveDiagnosticData(s.Metrics) {
+		s.Anomalies = DetectAnomalies(s.Metrics)
+		s.Health = HealthScore(s.Metrics, s.Anomalies)
+	}
+	for i := range s.LoopFingerprints {
+		fp := &s.LoopFingerprints[i]
+		if fp.ToolName != "" && fp.Count > 0 {
+			fp.Detail = fmt.Sprintf(i18n.T("diag_loop_fp_detail"), fp.ToolName, fp.Count)
+		}
+	}
+	if s.ContextUtil.RiskLevel != "" {
+		s.ContextUtil.Suggestion = contextSuggestionForRisk(s.ContextUtil.RiskLevel)
+	}
+	for i := range s.LargeParams {
+		lp := &s.LargeParams[i]
+		if lp.ToolName != "" && lp.ParamSize > 0 {
+			lp.Detail = fmt.Sprintf(i18n.T("diag_large_param_args"), lp.ToolName, lp.ParamSize)
+		}
+	}
+	for i := range s.UnusedTools {
+		ut := &s.UnusedTools[i]
+		if ut.ToolName != "" && ut.CallCount > 0 {
+			ut.Detail = fmt.Sprintf(i18n.T("diag_unused_detail"), ut.ToolName, ut.CallCount)
+		}
+	}
+	for i := range s.ToolWarnings {
+		tw := &s.ToolWarnings[i]
+		if detail := localizedToolWarningDetail(*tw); detail != "" {
+			tw.Detail = detail
+		}
+	}
+	return s
+}
+
+func metricsHaveDiagnosticData(m Metrics) bool {
+	return len(m.GapsSec) > 0 ||
+		m.ToolCallsOK > 0 ||
+		m.ToolCallsFail > 0 ||
+		m.ToolCallsTotal > 0 ||
+		len(m.ReasoningLens) > 0 ||
+		m.ReasoningRedact > 0 ||
+		m.AssistantTurns > 0
+}
+
+func contextSuggestionForRisk(risk string) string {
+	switch risk {
+	case "critical":
+		return i18n.T("diag_ctx_suggestion_critical")
+	case "warning":
+		return i18n.T("diag_ctx_suggestion_warning")
+	default:
+		return i18n.T("diag_ctx_suggestion_good")
+	}
+}
+
+func localizedToolWarningDetail(tw ToolWarning) string {
+	switch tw.Pattern {
+	case "dead_loop":
+		return fmt.Sprintf(i18n.T("tool_warn_dead_loop_detail"), tw.ToolName, tw.Count)
+	case "empty_args":
+		return fmt.Sprintf(i18n.T("tool_warn_empty_args_detail"), tw.ToolName, tw.Count)
+	case "fail_retry_chain":
+		return fmt.Sprintf(i18n.T("tool_warn_fail_retry_detail"), tw.ToolName, tw.Count)
+	case "redundant":
+		return fmt.Sprintf(i18n.T("tool_warn_redundant"), tw.ToolName, tw.Count)
+	default:
+		return ""
+	}
+}
+
 func LoadAll(dir string) []Session {
 	if dir == "" {
 		return ScanAllDirs()
@@ -3729,14 +3801,12 @@ func AnalyzeContextUtilization(events []Event, model string, mcpToolCount int) C
 	switch {
 	case cu.AvailableForTask < 20000:
 		cu.RiskLevel = "critical"
-		cu.Suggestion = i18n.T("diag_ctx_suggestion_critical")
 	case cu.AvailableForTask < 50000:
 		cu.RiskLevel = "warning"
-		cu.Suggestion = i18n.T("diag_ctx_suggestion_warning")
 	default:
 		cu.RiskLevel = "good"
-		cu.Suggestion = i18n.T("diag_ctx_suggestion_good")
 	}
+	cu.Suggestion = contextSuggestionForRisk(cu.RiskLevel)
 	return cu
 }
 
