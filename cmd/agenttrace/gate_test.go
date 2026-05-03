@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -53,5 +54,30 @@ func TestOverviewGateChineseMessage(t *testing.T) {
 	failures := evaluateOverviewGate(engine.ComputeOverview(sessions), sessions, overviewGate{FailUnderHealth: 80})
 	if len(failures) != 1 || !strings.Contains(failures[0], "平均健康分") {
 		t.Fatalf("expected Chinese gate message, got %v", failures)
+	}
+}
+
+func TestTUILaunchErrorMessageAddsDemoTTYFallback(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	msg := tuiLaunchErrorMessage(errors.New("could not open a new TTY: open /dev/tty: device not configured"), true)
+
+	for _, want := range []string{
+		"Error: could not open a new TTY",
+		"agenttrace --demo --overview -f json",
+		"agenttrace --demo --overview -f html -o agenttrace-overview.html",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("TTY fallback message missing %q:\n%s", want, msg)
+		}
+	}
+}
+
+func TestTUILaunchErrorMessageSkipsFallbackOutsideDemo(t *testing.T) {
+	msg := tuiLaunchErrorMessage(errors.New("open /dev/tty: device not configured"), false)
+	if strings.Contains(msg, "--demo --overview") {
+		t.Fatalf("non-demo TUI error should not include demo fallback:\n%s", msg)
 	}
 }

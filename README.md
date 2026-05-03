@@ -337,19 +337,18 @@ Session                   Turns  Tools   Succ     Cost  Health
 
 ## 🗺️ Roadmap
 
-- [x] `curl -sL ... | sh` install script
-- [x] Multi-platform prebuilt binaries (linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, windows/arm64)
-- [x] Homebrew distribution
-- [x] npm wrapper prepared
-- [x] GitHub Actions CI and release pipeline
-- [x] CI health gate thresholds
+**Done**
+
+- [x] Installer paths: curl script, prebuilt binaries, Homebrew, and prepared npm wrapper
+- [x] Release safety: GitHub Actions, release pipeline, and CI health gates
+- [x] Session intelligence: historical trends, cost audit, health gates, and shareable reports
+- [x] Parser coverage: Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes, OpenCode, OpenClaw, Oh My Pi, Kimi, and Copilot-style logs
+
+**Next**
+
 - [ ] Publish npm package
-- [x] Historical trend tracking
-- [ ] Web dashboard (React + Charts)
+- [ ] Web dashboard for report exploration
 - [ ] VS Code extension
-- [x] OpenCode format support
-- [x] Aider chat history support
-- [x] Cursor exported JSON support
 
 See [CI Integration](docs/ci-integration.md) for a ready-to-copy GitHub Actions health gate.
 
