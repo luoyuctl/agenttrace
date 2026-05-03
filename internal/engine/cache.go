@@ -138,6 +138,9 @@ func FindSessionFilesCached(dir string, cache SessionCache) []string {
 	if cache.Dirs == nil {
 		cache.Dirs = make(map[string]DirCacheEntry)
 	}
+	if isClineTaskDir(dir) {
+		return []string{dir}
+	}
 
 	var roots []string
 	if dir == "" {
@@ -164,6 +167,9 @@ func collectSessionFilesCached(dir string, depth, maxDepth int, cache SessionCac
 	if depth > maxDepth {
 		return nil
 	}
+	if isClineTaskDir(dir) {
+		return []string{dir}
+	}
 	info, err := os.Stat(dir)
 	if err != nil || !info.IsDir() {
 		return nil
@@ -189,6 +195,10 @@ func collectSessionFilesCached(dir string, depth, maxDepth int, cache SessionCac
 	for _, e := range entries {
 		path := filepath.Join(dir, e.Name())
 		if e.IsDir() {
+			if isClineTaskDir(path) {
+				files = append(files, path)
+				continue
+			}
 			dirs = append(dirs, path)
 			continue
 		}

@@ -1,0 +1,7 @@
+{
+  "taskId": "task-123",
+  "workspace": "/workspace/agenttrace",
+  "modelId": "claude-3-5-sonnet-latest",
+  "createdAt": 1767261600000,
+  "updatedAt": 1767261610000
+}
