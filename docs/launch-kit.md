@@ -123,12 +123,15 @@ Open PRs:
 - awesome-harness-engineering: https://github.com/ai-boost/awesome-harness-engineering/pull/14
 - Scottcjn/awesome-agents: https://github.com/Scottcjn/awesome-agents/pull/12
 - awesome-cli-apps-in-a-csv: https://github.com/toolleeo/awesome-cli-apps-in-a-csv/pull/255
+- awesome-cli-apps-in-a-csv follow-up: https://github.com/toolleeo/awesome-cli-apps-in-a-csv/pull/256
 - awesome-agent-clis: https://github.com/ComposioHQ/awesome-agent-clis/pull/8
 - awesome-code-agents: https://github.com/sorrycc/awesome-code-agents/pull/20
+- awesome-code-agents follow-up: https://github.com/sorrycc/awesome-code-agents/pull/22
 - tensorchord/Awesome-LLMOps: https://github.com/tensorchord/Awesome-LLMOps/pull/444
 - awesome-agent-cortex: https://github.com/0xNyk/awesome-agent-cortex/pull/20
 - ARUNAGIRINATHAN-K/awesome-ai-agents: https://github.com/ARUNAGIRINATHAN-K/awesome-ai-agents/pull/27
 - awesome-cli-tui-software: https://github.com/lgaggini/awesome-cli-tui-software/pull/3
+- awesome-tuis follow-up: https://github.com/rothgar/awesome-tuis/pull/659
 - LangGPT/awesome-claude-code: https://github.com/LangGPT/awesome-claude-code/pull/58
 - awesome-ChatGPT-repositories: https://github.com/taishi-i/awesome-ChatGPT-repositories/pull/130
 - awesome-agent-harness: https://github.com/Picrew/awesome-agent-harness/pull/5
@@ -144,6 +147,12 @@ Open PRs:
 - awesome-agent-skills: https://github.com/heilcheng/awesome-agent-skills/pull/216
 - awesome-ai-eval: https://github.com/Vvkmnn/awesome-ai-eval/pull/10
 - awesome-ai-dev-tools: https://github.com/PierrunoYT/awesome-ai-dev-tools/pull/20
+- awesome-devtools: https://github.com/devtoolsd/awesome-devtools/pull/213
+- awesome-ai-sdks: https://github.com/e2b-dev/awesome-ai-sdks/pull/175
+- awesome-agents follow-up: https://github.com/kyrolabs/awesome-agents/pull/440
+- awesome_ai_agents follow-up: https://github.com/jim-schwoebel/awesome_ai_agents/pull/254
+- awesome-ai-devtools follow-up: https://github.com/jamesmurdza/awesome-ai-devtools/pull/495
+- awesome-observability follow-up: https://github.com/adriannovegil/awesome-observability/pull/64
 - awesome-utils-dev: https://github.com/pegaltier/awesome-utils-dev/pull/29
 
 Merged listings:
@@ -161,7 +170,7 @@ Manual-only submission:
 - awesome-claude-skills: skip automated PRs unless submitted manually by a human; its contribution guide asks that PRs are not AI-assisted and generally expects social proof.
 - awesome-go: defer until the project is older and has the required quality links; contribution checks expect repository maturity, pkg.go.dev, Go Report Card, and coverage evidence.
 - awesome-cli-apps: PR https://github.com/agarrharr/awesome-cli-apps/pull/1032 was closed without maintainer feedback. Revisit after more external adoption or a clearer category fit.
-- awesome-tuis: deferred until the repo is at least 6 months old; its PR template requires repos to be at least 6 months old, and PR #658 was closed after reviewer feedback.
+- awesome-tuis: likely blocked until the repo is at least 6 months old; its PR template requires repos to be at least 6 months old, PR #658 was closed after reviewer feedback, and follow-up PR #659 is open.
 - Terminal Trove: submit through https://terminaltrove.com/post/ after confirming the author contact email. Suggested categories: `macos`, `linux`, `windows`, `monitoring`, `observability`, `tui`, `json`, `ai`, `cli`, `debugging`, `cross-platform`. Preview PNG: `https://luoyuctl.github.io/agenttrace/assets/tui-preview.png`; GIF: `https://luoyuctl.github.io/agenttrace/assets/agenttrace-demo.gif`.
 - Terminal Apps: submitted suggestion issue https://github.com/scmmishra/terminal-apps.dev/issues/55. Name: `agenttrace`; GitHub URL: `https://github.com/luoyuctl/agenttrace`.
 - awesome-ai-coding-techniques: submitted technique suggestion https://github.com/inmve/awesome-ai-coding-techniques/issues/37. Suggested technique: inspect AI agent session traces after a run.
