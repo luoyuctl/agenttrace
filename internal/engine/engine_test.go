@@ -1531,3 +1531,41 @@ func TestPredictCostAnomaly_Critical(t *testing.T) {
 		t.Errorf("level: %s, triggered: %v", alert.Level, alert.Triggered)
 	}
 }
+
+func TestPredictCostAnomalyEnglishMessageOrdersBaselineAndRatio(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	sessions := []Session{
+		{Metrics: Metrics{AssistantTurns: 10, CostEstimated: 0.05}},
+	}
+	current := Session{Metrics: Metrics{AssistantTurns: 10, CostEstimated: 0.25}}
+	alert := PredictCostAnomaly(sessions, current)
+
+	if !strings.Contains(alert.Message, "avg $0.01/turn, 5x") {
+		t.Fatalf("cost alert swapped baseline and ratio: %q", alert.Message)
+	}
+	if strings.Contains(alert.Message, "0x avg $5.00") {
+		t.Fatalf("cost alert kept the old misleading format: %q", alert.Message)
+	}
+}
+
+func TestPredictCostAnomalyLoopWasteMessageShowsAmountsAndPercent(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	sessions := []Session{
+		{Metrics: Metrics{AssistantTurns: 10, CostEstimated: 1.00}},
+	}
+	current := Session{
+		Metrics:  Metrics{AssistantTurns: 10, CostEstimated: 1.00},
+		LoopCost: LoopCost{TotalLoopCost: 0.80},
+	}
+	alert := PredictCostAnomaly(sessions, current)
+
+	if !alert.Triggered || !strings.Contains(alert.Message, "$0.8000 of $1.0000 total (80%)") {
+		t.Fatalf("loop waste alert should show loop cost, total cost, and percent: %+v", alert)
+	}
+}

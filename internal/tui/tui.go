@@ -676,9 +676,32 @@ func (m *Model) openDiff() {
 
 func (m *Model) prepareDetailState(s engine.Session) {
 	m.fixSuggestions = engine.GenerateFixes(s.Metrics, s.Anomalies)
-	m.costAlert = engine.PredictCostAnomaly(m.sessions, s)
+	m.costAlert = engine.PredictCostAnomaly(costBaselineSessions(m.sessions, s), s)
 	m.loopResult = s.LoopResultData
 	m.toolWarnings = s.ToolWarnings
+}
+
+func costBaselineSessions(sessions []engine.Session, current engine.Session) []engine.Session {
+	history := make([]engine.Session, 0, len(sessions))
+	for _, s := range sessions {
+		if sameSessionIdentity(s, current) {
+			continue
+		}
+		history = append(history, s)
+	}
+	return history
+}
+
+func sameSessionIdentity(a, b engine.Session) bool {
+	if a.Path != "" && b.Path != "" {
+		return a.Path == b.Path
+	}
+	if a.Name == "" && a.Metrics.SessionStart == "" && a.Metrics.SourceTool == "" {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Metrics.SessionStart == b.Metrics.SessionStart &&
+		a.Metrics.SourceTool == b.Metrics.SourceTool
 }
 
 func (m *Model) refreshDetailViewport() {
