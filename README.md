@@ -108,6 +108,30 @@ brew install luoyuctl/tap/agenttrace
 go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
 ```
 
+### 60-second value check
+
+After installing, run the shortest path before wiring agenttrace into a real workflow:
+
+```bash
+# See the TUI without needing local agent logs
+agenttrace --demo
+
+# Confirm which local session directories and cache state agenttrace can see
+agenttrace --doctor
+
+# Preview machine-readable evidence for CI, dashboards, or PR notes
+agenttrace --demo --overview -f json
+```
+
+If those outputs show the pain you care about, try the real local scan:
+
+```bash
+agenttrace --overview \
+  --fail-under-health 80 \
+  --fail-on-critical \
+  --max-tool-fail-rate 15
+```
+
 ### Codex plugin
 
 This repo includes a Codex plugin manifest and skill so Codex can use `agenttrace` to audit local AI agent session logs:
