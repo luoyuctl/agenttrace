@@ -1,0 +1,5 @@
+{
+  "aiService.prompts": "[{\"text\":\"Refactor the auth flow\",\"commandType\":1}]",
+  "aiService.generations": "[{\"unixMs\":1710000000000,\"generationUUID\":\"gen-1\",\"type\":\"composer\",\"textDescription\":\"Updated the login component and tests\"}]",
+  "composer.composerData": "{\"allComposers\":[{\"composerId\":\"cmp-1\",\"name\":\"Auth cleanup\",\"subtitle\":\"2 files changed\",\"lastUpdatedAt\":1710000060000}]}"
+}

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -99,7 +100,7 @@ func parseCursorExport(doc map[string]interface{}, arr []interface{}) ([]Event, 
 	}
 
 	addComposers := func(v interface{}) {
-		composerDoc, ok := v.(map[string]interface{})
+		composerDoc, ok := cursorObject(v)
 		if !ok {
 			return
 		}
@@ -159,7 +160,26 @@ func cursorArray(v interface{}) []interface{} {
 	if arr, ok := v.([]interface{}); ok {
 		return arr
 	}
+	if raw, ok := v.(string); ok && raw != "" {
+		var arr []interface{}
+		if err := json.Unmarshal([]byte(raw), &arr); err == nil {
+			return arr
+		}
+	}
 	return nil
+}
+
+func cursorObject(v interface{}) (map[string]interface{}, bool) {
+	if obj, ok := v.(map[string]interface{}); ok {
+		return obj, true
+	}
+	if raw, ok := v.(string); ok && raw != "" {
+		var obj map[string]interface{}
+		if err := json.Unmarshal([]byte(raw), &obj); err == nil {
+			return obj, true
+		}
+	}
+	return nil, false
 }
 
 func cursorComposerMessageEvents(composer map[string]interface{}, fallbackTS string) []Event {
