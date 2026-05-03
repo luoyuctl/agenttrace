@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -107,6 +108,11 @@ func parseCursorExport(doc map[string]interface{}, arr []interface{}) ([]Event, 
 			if !ok {
 				continue
 			}
+			fallbackTS := cursorTimestamp(cursorFirst(m["lastUpdatedAt"], m["createdAt"]))
+			if msgEvents := cursorComposerMessageEvents(m, fallbackTS); len(msgEvents) > 0 {
+				events = append(events, msgEvents...)
+				continue
+			}
 			content := str(m, "name")
 			subtitle := str(m, "subtitle")
 			if subtitle != "" && subtitle != content {
@@ -124,7 +130,7 @@ func parseCursorExport(doc map[string]interface{}, arr []interface{}) ([]Event, 
 			events = append(events, Event{
 				Role:       "assistant",
 				Content:    content,
-				Timestamp:  cursorUnixMS(cursorFirst(m["lastUpdatedAt"], m["createdAt"])),
+				Timestamp:  fallbackTS,
 				SourceTool: cursorSource,
 			})
 		}
@@ -156,6 +162,88 @@ func cursorArray(v interface{}) []interface{} {
 	return nil
 }
 
+func cursorComposerMessageEvents(composer map[string]interface{}, fallbackTS string) []Event {
+	messages := cursorComposerMessages(composer)
+	var events []Event
+	for _, item := range messages {
+		msg, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role := cursorRole(str(msg, "role"))
+		if role == "" {
+			role = cursorRole(str(msg, "speaker"))
+		}
+		if role == "" {
+			role = cursorRole(str(msg, "type"))
+		}
+		content := cursorText(cursorFirst(msg["text"], msg["content"], msg["message"], msg["markdown"], msg["rawText"]))
+		if role == "" || content == "" {
+			continue
+		}
+		ts := cursorTimestamp(cursorFirst(msg["unixMs"], msg["timestamp"], msg["createdAt"], msg["lastUpdatedAt"]))
+		if ts == "" {
+			ts = fallbackTS
+		}
+		events = append(events, Event{
+			Role:       role,
+			Content:    content,
+			Timestamp:  ts,
+			SourceTool: cursorSource,
+		})
+	}
+	return events
+}
+
+func cursorComposerMessages(composer map[string]interface{}) []interface{} {
+	for _, key := range []string{"messages", "conversationMessages"} {
+		if arr := cursorArray(composer[key]); len(arr) > 0 {
+			return arr
+		}
+	}
+	if arr := cursorArray(composer["conversation"]); len(arr) > 0 {
+		return arr
+	}
+	if conv, ok := composer["conversation"].(map[string]interface{}); ok {
+		for _, key := range []string{"messages", "conversationMessages"} {
+			if arr := cursorArray(conv[key]); len(arr) > 0 {
+				return arr
+			}
+		}
+	}
+	return nil
+}
+
+func cursorRole(role string) string {
+	switch strings.ToLower(role) {
+	case "user", "human":
+		return "user"
+	case "assistant", "ai", "bot":
+		return "assistant"
+	default:
+		return ""
+	}
+}
+
+func cursorText(v interface{}) string {
+	switch value := v.(type) {
+	case string:
+		return value
+	case map[string]interface{}:
+		return str(value, "text")
+	case []interface{}:
+		var parts []string
+		for _, item := range value {
+			if text := cursorText(item); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, "\n")
+	default:
+		return ""
+	}
+}
+
 func cursorFirst(values ...interface{}) interface{} {
 	for _, v := range values {
 		if v != nil {
@@ -163,6 +251,13 @@ func cursorFirst(values ...interface{}) interface{} {
 		}
 	}
 	return nil
+}
+
+func cursorTimestamp(v interface{}) string {
+	if ts, ok := v.(string); ok {
+		return ts
+	}
+	return cursorUnixMS(v)
 }
 
 func cursorUnixMS(v interface{}) string {
