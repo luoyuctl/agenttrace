@@ -1110,6 +1110,24 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 	if len(s.Anomalies) > 0 {
 		issue = anomalyTypeLabel(s.Anomalies[0].Type)
 	}
+	if width < 80 {
+		nameW := minInt(24, maxInt(10, width/3))
+		line1 := fmt.Sprintf("%s  %s %d%%  %s  %s",
+			truncate(s.Name, nameW),
+			i18n.T("health"), clampHealth(s.Health),
+			money4(met.CostEstimated),
+			compactInt(met.TokensInput+met.TokensOutput),
+		)
+		line2 := fmt.Sprintf("%s %d  %s %d/%d %s  %s %s",
+			i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
+			i18n.T("tools"), okTools, totalTools, success,
+			i18n.T("list_issue"), issue,
+		)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			dimStyle.Render(truncate(line1, width)),
+			dimStyle.Render(truncate(line2, width)),
+		)
+	}
 	line := fmt.Sprintf("%s  %s %d%%  %s $%.4f  %s %s  %s %d  %s %d/%d %s  %s %s",
 		truncate(s.Name, 28),
 		i18n.T("health"), clampHealth(s.Health),
@@ -1245,8 +1263,13 @@ func (m Model) renderHelp() string {
 		switch m.view {
 		case viewOverview:
 			keys = i18n.T("help_overview_modern")
+			if m.width > 0 && m.width < 100 {
+				keys = i18n.T("help_overview_short")
+			}
 		case viewList:
-			if m.filterActive {
+			if m.width > 0 && m.width < 100 {
+				keys = i18n.T("help_list_short")
+			} else if m.filterActive {
 				keys = i18n.T("help_list") + " · " + i18n.T("help_filter_clear")
 			} else {
 				keys = i18n.T("help_list") + " · " + i18n.T("help_force_reload")
@@ -2151,13 +2174,13 @@ func (m *Model) adjustColumnWidths(width int) {
 	} else if width >= 92 {
 		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 10, 7, 4, 4, 4, 4, 7, 5, 7
 	} else if width >= 76 {
-		m.setColumnsAndRefreshRows(m.compactListColumns(13, 7, 4, 4, 7, 6, 5))
+		m.setColumnsAndRefreshRows(m.compactListColumns(16, 9, 4, 4, 8, 7, 6))
 		return
 	} else if width >= 70 {
-		m.setColumnsAndRefreshRows(m.compactListColumns(11, 6, 4, 4, 6, 5, 4))
+		m.setColumnsAndRefreshRows(m.compactListColumns(13, 7, 4, 4, 7, 6, 5))
 		return
 	} else if width >= 64 {
-		m.setColumnsAndRefreshRows(m.compactListColumns(10, 5, 4, 4, 6, 5, 4))
+		m.setColumnsAndRefreshRows(m.compactListColumns(11, 6, 4, 4, 6, 5, 5))
 		return
 	} else {
 		m.setColumnsAndRefreshRows(m.compactListColumns(9, 4, 4, 4, 5, 4, 4))
@@ -2445,17 +2468,7 @@ func (m Model) renderDashboardHero(width int) string {
 		health = 0
 	}
 
-	summary := fmt.Sprintf("%d %s · %s · $%.2f %s · %.1f%% %s · %d%% %s",
-		len(m.sessions),
-		i18n.T("sessions_label"),
-		tokenCountCompact(totalTokens),
-		safeAmount(m.costSummary.TotalCost),
-		i18n.T("cost"),
-		errRate,
-		i18n.T("metric_errors"),
-		health,
-		healthLabel(health),
-	)
+	summary := m.renderDashboardHeroSummary(width, totalTokens, errRate, health)
 	if width < 70 {
 		return lipgloss.NewStyle().Width(width).Render(lipgloss.JoinVertical(lipgloss.Left,
 			renderDashboardTitle(width),
@@ -2483,6 +2496,32 @@ func renderDashboardTitle(width int) string {
 		}
 	}
 	return brandStyle.Render(brand)
+}
+
+func (m Model) renderDashboardHeroSummary(width int, totalTokens int, errRate float64, health int) string {
+	if width < 90 {
+		return fmt.Sprintf("%d · %s %s · %s · %s %.0f%% · %s %d%%",
+			len(m.sessions),
+			compactInt(totalTokens),
+			i18n.T("metric_tokens_short"),
+			money2(m.costSummary.TotalCost),
+			i18n.T("metric_errors_short"),
+			errRate,
+			i18n.T("metric_health_short"),
+			health,
+		)
+	}
+	return fmt.Sprintf("%d %s · %s · $%.2f %s · %.1f%% %s · %d%% %s",
+		len(m.sessions),
+		i18n.T("sessions_label"),
+		tokenCountCompact(totalTokens),
+		safeAmount(m.costSummary.TotalCost),
+		i18n.T("cost"),
+		errRate,
+		i18n.T("metric_errors"),
+		health,
+		healthLabel(health),
+	)
 }
 
 func dashBadge(label, color string) string {
@@ -3252,7 +3291,13 @@ func (m Model) contentWidth() int {
 	if m.width <= 0 {
 		return 100
 	}
-	w := m.width - 14
+	inset := 14
+	if m.width < 100 {
+		inset = 4
+	} else if m.width < 140 {
+		inset = 8
+	}
+	w := m.width - inset
 	if w < 40 {
 		return 40
 	}

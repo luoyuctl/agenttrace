@@ -537,6 +537,26 @@ func TestCompactListKeepsTokensAndHealthReadable(t *testing.T) {
 	}
 }
 
+func TestStandardWidthListKeepsHeadersAndHelpReadable(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 80, 24)
+	m.view = viewList
+
+	rendered := m.View()
+	for _, want := range []string{"SESSION", "SOURCE", "TOKENS", "HEALTH", "TOOLS", "? keys"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("standard-width list missing readable label %q:\n%s", want, rendered)
+		}
+	}
+	for _, clipped := range []string{"HEAL…", "TOO…", "?: key…"} {
+		if strings.Contains(rendered, clipped) {
+			t.Fatalf("standard-width list should avoid clipped core labels %q:\n%s", clipped, rendered)
+		}
+	}
+	if got := m.frameBodyWidth(); got < 68 {
+		t.Fatalf("standard-width list should use most terminal columns, body width=%d", got)
+	}
+}
+
 func TestCompactListShowsTriageSortIndicators(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 80, 30)
 	m.view = viewList
@@ -917,7 +937,7 @@ func TestFooterRemainsVisibleWhenOverviewIsTall(t *testing.T) {
 	m.view = viewOverview
 
 	rendered := m.View()
-	if !strings.Contains(rendered, "Overview") || !strings.Contains(rendered, "$: top cost") {
+	if !strings.Contains(rendered, "Overview") || !strings.Contains(rendered, "$ top") {
 		t.Fatalf("expected footer help to remain visible in clipped overview:\n%s", rendered)
 	}
 	if got := renderedHeight(rendered); got != 24 {
@@ -961,6 +981,9 @@ func TestDashboardHeroKeepsTitleSingleLineAtNarrowWidth(t *testing.T) {
 			}
 			if got := maxRenderedWidth(hero); got > 78 {
 				t.Fatalf("hero too wide: got=%d line=%q", got, widestLine(hero))
+			}
+			if strings.Contains(hero, "…") {
+				t.Fatalf("standard-width hero summary should avoid truncation:\n%s", hero)
 			}
 		})
 	}
