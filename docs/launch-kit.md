@@ -106,6 +106,7 @@ Open PRs:
 - awesome-vibe-coding: https://github.com/ai-for-developers/awesome-vibe-coding/pull/56
 - awesome-ai-coding: https://github.com/wsxiaoys/awesome-ai-coding/pull/97
 - filipecalegario/awesome-vibe-coding: https://github.com/filipecalegario/awesome-vibe-coding/pull/171
+- awesome-coding-ai: https://github.com/ohong/awesome-coding-ai/pull/6
 - awesome-claude-code-toolkit: https://github.com/rohitg00/awesome-claude-code-toolkit/pull/361
 - jqueryscript/awesome-claude-code: https://github.com/jqueryscript/awesome-claude-code/pull/252
 - awesome-go-cli: https://github.com/mantcz/awesome-go-cli/pull/4
