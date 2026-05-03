@@ -84,12 +84,18 @@ agenttrace is not a hosted tracing backend or another chat client. It is a local
 
 ## 🚀 Quick Start
 
+Not sure which install path to use? Start with the one-liner for a quick local trial. Use Homebrew when you want managed upgrades, Go install when you already live in the Go toolchain, and manual build when you want to inspect or change the source first.
+
 ### One-liner install
+
+Recommended for first-time Linux/macOS users who want to try the TUI quickly:
 
 ```bash
 # Linux / macOS
 curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
 ```
+
+Windows users can use the PowerShell installer:
 
 ```powershell
 # Windows (PowerShell)
@@ -98,11 +104,15 @@ iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.p
 
 ### Homebrew (macOS / Linux)
 
+Recommended when you prefer package-manager upgrades:
+
 ```bash
 brew install luoyuctl/tap/agenttrace
 ```
 
 ### Go install
+
+Recommended when your `$GOBIN` or `$GOPATH/bin` is already on `PATH`:
 
 ```bash
 go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
