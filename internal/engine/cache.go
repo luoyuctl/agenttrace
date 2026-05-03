@@ -125,7 +125,7 @@ func CachedSession(path string, cache SessionCache) (Session, bool) {
 	}
 	s := entry.Session
 	s.Path = path
-	return s, true
+	return LocalizeSession(s), true
 }
 
 // FindSessionFilesCached discovers session files using cached directory

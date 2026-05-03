@@ -755,7 +755,14 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 	health := clampHealth(s.Health)
 	healthWidth := 9
 	if cols := m.table.Columns(); len(cols) > 0 {
-		healthWidth = cols[len(cols)-1].Width
+		healthIdx := len(cols) - 1
+		switch len(cols) {
+		case 13:
+			healthIdx = 11
+		case 10:
+			healthIdx = 8
+		}
+		healthWidth = cols[healthIdx].Width
 	}
 	healthCol := healthCell(health, healthWidth)
 
@@ -767,6 +774,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 	}
 
 	tokensStr := compactInt(met.TokensInput + met.TokensOutput)
+	issue := sessionIssueLabel(s)
 	switch len(m.table.Columns()) {
 	case 7:
 		return table.Row{
@@ -777,6 +785,22 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			costColor(met.CostEstimated),
 			tokensStr,
 			healthCol,
+		}
+	case 13:
+		return table.Row{
+			s.Name,
+			sourceDisplay,
+			met.ModelUsed,
+			fmt.Sprintf("%d", nonNegativeInt(met.AssistantTurns)),
+			fmt.Sprintf("%d", totalToolCalls),
+			sr,
+			failStr,
+			costColor(met.CostEstimated),
+			tokensStr,
+			engine.FmtDuration(chartValue(met.DurationSec)),
+			fmt.Sprintf("%d", len(s.Anomalies)),
+			healthCol,
+			issue,
 		}
 	case 12:
 		return table.Row{
@@ -792,6 +816,19 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			engine.FmtDuration(chartValue(met.DurationSec)),
 			fmt.Sprintf("%d", len(s.Anomalies)),
 			healthCol,
+		}
+	case 10:
+		return table.Row{
+			s.Name,
+			sourceDisplay,
+			fmt.Sprintf("%d", nonNegativeInt(met.AssistantTurns)),
+			fmt.Sprintf("%d", totalToolCalls),
+			sr,
+			failStr,
+			costColor(met.CostEstimated),
+			tokensStr,
+			healthCol,
+			issue,
 		}
 	case 8:
 		return table.Row{
@@ -957,17 +994,14 @@ func (m Model) renderListView() string {
 		sections = append(sections, filterBar)
 		extraLines += renderedLineCount(filterBar)
 	}
-	if summary := m.renderSelectedSessionSummary(contentW); summary != "" {
-		sections = append(sections, summary)
-		extraLines += renderedLineCount(summary)
-	}
 	if empty := m.renderNoVisibleSessionsState(contentW); empty != "" {
 		sections = append(sections, empty)
 		extraLines += renderedLineCount(empty)
 	}
 	tableView := m.table
+	tableView.SetWidth(contentW)
 	tableView.SetHeight(m.listTableHeight(extraLines))
-	sections = append(sections, tableView.View())
+	sections = append(sections, truncateLines(tableView.View(), contentW))
 	return m.frameContent(lipgloss.JoinVertical(lipgloss.Left, sections...))
 }
 
@@ -2165,10 +2199,11 @@ func (m *Model) adjustColumnWidths(width int) {
 	var sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW int
 
 	if width >= 170 {
-		m.setColumnsAndRefreshRows(m.wideListColumns(24, 14, 18, 5, 5, 5, 5, 8, 7, 8, 5, 9))
+		m.setColumnsAndRefreshRows(m.wideListColumns(22, 13, 18, 5, 5, 5, 5, 8, 7, 8, 5, 9, 16))
 		return
 	} else if width > 130 {
-		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 20, 12, 5, 5, 5, 5, 8, 7, 9
+		m.setColumnsAndRefreshRows(m.wideListColumns(14, 8, 10, 5, 5, 5, 4, 7, 6, 5, 4, 7, 10))
+		return
 	} else if width >= 100 {
 		sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW = 17, 10, 5, 5, 5, 4, 8, 7, 8
 	} else if width >= 92 {
@@ -2190,7 +2225,7 @@ func (m *Model) adjustColumnWidths(width int) {
 	m.setColumnsAndRefreshRows(m.fullListColumns(sessW, srcW, turnsW, toolsW, succW, failW, costW, tokensW, healthW))
 }
 
-func (m *Model) wideListColumns(sessW, srcW, modelW, turnsW, toolsW, succW, failW, costW, tokensW, durationW, anomW, healthW int) []table.Column {
+func (m *Model) wideListColumns(sessW, srcW, modelW, turnsW, toolsW, succW, failW, costW, tokensW, durationW, anomW, healthW, issueW int) []table.Column {
 	return []table.Column{
 		{Title: m.sortColTitle(i18n.T("session"), "name"), Width: sessW},
 		{Title: m.sortColTitle(i18n.T("source_tool"), "source"), Width: srcW},
@@ -2204,6 +2239,7 @@ func (m *Model) wideListColumns(sessW, srcW, modelW, turnsW, toolsW, succW, fail
 		{Title: i18n.T("duration_col"), Width: durationW},
 		{Title: m.sortColTitle(i18n.T("anomaly_count_col"), "anomalies"), Width: anomW},
 		{Title: m.sortColTitle(i18n.T("health"), "health"), Width: healthW},
+		{Title: i18n.T("issue_col"), Width: issueW},
 	}
 }
 
@@ -3164,6 +3200,13 @@ func anomalyTypeLabel(kind string) string {
 		return translated
 	}
 	return strings.ReplaceAll(kind, "_", " ")
+}
+
+func sessionIssueLabel(s engine.Session) string {
+	if len(s.Anomalies) == 0 {
+		return i18n.T("list_no_major_anomaly")
+	}
+	return anomalyTypeLabel(s.Anomalies[0].Type)
 }
 
 func riskLabel(risk string) string {

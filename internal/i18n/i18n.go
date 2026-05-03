@@ -296,6 +296,10 @@ var translations = map[string]map[Lang]string{
 		EN: "ANOM",
 		ZH: "异常",
 	},
+	"issue_col": {
+		EN: "ISSUE",
+		ZH: "问题",
+	},
 	"input_per_m": {
 		EN: "Input $/M",
 		ZH: "输入$/M",
@@ -942,6 +946,7 @@ var translations = map[string]map[Lang]string{
 	"anomaly_type_tool_failures":    {EN: "tool failures", ZH: "工具失败"},
 	"anomaly_type_shallow_thinking": {EN: "shallow thinking", ZH: "浅层思考"},
 	"anomaly_type_redacted":         {EN: "redacted thinking", ZH: "思维脱敏"},
+	"anomaly_type_redaction":        {EN: "redacted thinking", ZH: "思维脱敏"},
 	"anomaly_type_no_tools":         {EN: "no tools", ZH: "未使用工具"},
 	"risk_critical":                 {EN: "critical", ZH: "严重"},
 	"risk_warning":                  {EN: "warning", ZH: "警告"},

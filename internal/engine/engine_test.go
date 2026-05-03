@@ -411,6 +411,65 @@ func TestLoadSessionCacheSkipsOnlyBadEntries(t *testing.T) {
 	}
 }
 
+func TestCachedSessionRelocalizesLanguageDependentDiagnostics(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cached.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cache := SessionCache{Entries: map[string]CacheEntry{
+		path: {
+			ModTime: info.ModTime().UnixNano(),
+			Size:    info.Size(),
+			Session: Session{
+				Name: "cached",
+				Metrics: Metrics{
+					GapsSec:        []float64{61, 302},
+					AssistantTurns: 3,
+				},
+				Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh, Detail: "2 gap(s) >60s, max=302s"}},
+				ContextUtil: ContextUtilization{
+					RiskLevel:  "warning",
+					Suggestion: "context filling up",
+				},
+				LargeParams:      []LargeParamCall{{ToolName: "terminal", ParamSize: 12000, Detail: "terminal arguments are 12000 chars"}},
+				UnusedTools:      []UnusedToolInfo{{ToolName: "terminal", CallCount: 1, Detail: "tool 'terminal' called only 1x"}},
+				LoopFingerprints: []LoopFingerprint{{ToolName: "terminal", Count: 3, Detail: "tool 'terminal' returned same result 3x"}},
+				ToolWarnings:     []ToolWarning{{ToolName: "terminal", Pattern: "empty_args", Count: 1, Detail: "terminal called with empty arguments"}},
+			},
+		},
+	}}
+
+	got, ok := CachedSession(path, cache)
+	if !ok {
+		t.Fatalf("expected cached session")
+	}
+	for _, want := range []string{"最长", "上下文", "参数", "仅调用", "参数为空"} {
+		joined := strings.Join([]string{
+			got.Anomalies[0].Detail,
+			got.ContextUtil.Suggestion,
+			got.LargeParams[0].Detail,
+			got.UnusedTools[0].Detail,
+			got.ToolWarnings[0].Detail,
+		}, "\n")
+		if !strings.Contains(joined, want) {
+			t.Fatalf("cached session missing localized text %q:\n%s", want, joined)
+		}
+	}
+	if strings.Contains(got.Anomalies[0].Detail, "gap(s)") || strings.Contains(got.ContextUtil.Suggestion, "context") {
+		t.Fatalf("cached session kept stale English diagnostics: %+v", got)
+	}
+}
+
 func TestAnalyze(t *testing.T) {
 	events := []Event{
 		{Role: "user", Content: "hello", SourceTool: "h", Timestamp: "2026-01-01T00:00:00Z"},
@@ -587,6 +646,29 @@ func TestReportOverviewMarkdownChineseLabels(t *testing.T) {
 	for _, unwanted := range []string{"Metric", "Recent sessions", "Tool failures", "| bad | hanging |"} {
 		if strings.Contains(out, unwanted) {
 			t.Fatalf("Chinese markdown report leaked English label %q:\n%s", unwanted, out)
+		}
+	}
+}
+
+func TestReportTextChineseLabelsAnomalySeverityAndLoopCost(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	out := ReportText(Metrics{
+		LoopGroups:      1,
+		LoopCostEst:     0.25,
+		LoopRetryEvents: 2,
+	}, []Anomaly{{Type: "redaction", Severity: SeverityHigh, Emoji: "!"}}, 42)
+
+	for _, want := range []string{"[严重] 思维脱敏", "循环成本", "工具循环成本", "重试事件"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Chinese report text missing %q:\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{"[HIGH]", "redaction", "LOOP COST", "Tool Loop Cost", "Retry Events"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("Chinese report text leaked English label %q:\n%s", unwanted, out)
 		}
 	}
 }

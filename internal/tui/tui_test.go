@@ -542,12 +542,12 @@ func TestStandardWidthListKeepsHeadersAndHelpReadable(t *testing.T) {
 	m.view = viewList
 
 	rendered := m.View()
-	for _, want := range []string{"SESSION", "SOURCE", "TOKENS", "HEALTH", "TOOLS", "? keys"} {
+	for _, want := range []string{"SESSION", "SOURCE", "FAIL", "ANOM", "TOKENS", "HEALTH", "? keys"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("standard-width list missing readable label %q:\n%s", want, rendered)
 		}
 	}
-	for _, clipped := range []string{"HEAL…", "TOO…", "?: key…"} {
+	for _, clipped := range []string{"HEAL…", "?: key…"} {
 		if strings.Contains(rendered, clipped) {
 			t.Fatalf("standard-width list should avoid clipped core labels %q:\n%s", clipped, rendered)
 		}
@@ -577,27 +577,30 @@ func TestCompactListShowsTriageSortIndicators(t *testing.T) {
 func TestWideListKeepsFullOperationalColumns(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 160, 36)
 	m.view = viewList
-	if got := len(m.table.Columns()); got != 9 {
+	if got := len(m.table.Columns()); got != 13 {
 		t.Fatalf("expected full columns on wide screens, got %d", got)
 	}
 	row := m.table.Rows()[0]
-	if row[2] != "8" || row[3] != "12" || row[4] != "92" || row[5] != "1" {
+	if row[3] != "8" || row[4] != "12" || row[5] != "92" || row[6] != "1" {
 		t.Fatalf("expected turns/tools/success/fail columns, got row=%v", row)
+	}
+	if row[12] != "No major anomaly" {
+		t.Fatalf("expected issue column, got row=%v", row)
 	}
 }
 
 func TestUltraWideListAddsDiagnosticColumns(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 180, 36)
 	m.view = viewList
-	if got := len(m.table.Columns()); got != 12 {
+	if got := len(m.table.Columns()); got != 13 {
 		t.Fatalf("expected diagnostic columns on ultra-wide screens, got %d", got)
 	}
 	cols := m.table.Columns()
-	if cols[2].Title != "MODEL" || cols[9].Title != "DURATION" || cols[10].Title != "ANOM" {
+	if cols[2].Title != "MODEL" || cols[9].Title != "DURATION" || cols[10].Title != "ANOM" || cols[12].Title != "ISSUE" {
 		t.Fatalf("unexpected ultra-wide column titles: %+v", cols)
 	}
 	row := m.table.Rows()[0]
-	if row[2] != "gpt-5.1" || row[10] != "0" {
+	if row[2] != "gpt-5.1" || row[10] != "0" || row[12] != "No major anomaly" {
 		t.Fatalf("expected model and anomaly count columns, got row=%v", row)
 	}
 }
@@ -613,7 +616,7 @@ func TestListAndDetailClampInvalidToolCounts(t *testing.T) {
 	m.view = viewList
 
 	row := m.table.Rows()[0]
-	if row[2] != "0" || row[3] != "0" || row[4] != "N/A" {
+	if row[3] != "0" || row[4] != "0" || row[5] != "N/A" {
 		t.Fatalf("expected invalid tool counts to be clamped in list row, got row=%v", row)
 	}
 
@@ -665,12 +668,12 @@ func TestViewsClampInvalidHealthScores(t *testing.T) {
 	m.view = viewList
 
 	rows := m.table.Rows()
-	if !strings.Contains(rows[0][8], "0%") || !strings.Contains(rows[1][8], "100%") {
+	if !strings.Contains(rows[0][11], "0%") || !strings.Contains(rows[1][11], "100%") {
 		t.Fatalf("expected health scores to be clamped in list rows, rows=%+v", rows)
 	}
 	for i, row := range rows[:2] {
-		if got, max := lipgloss.Width(row[8]), m.table.Columns()[8].Width; got > max {
-			t.Fatalf("health cell %d too wide: got=%d max=%d row=%q", i, got, max, row[8])
+		if got, max := lipgloss.Width(row[11]), m.table.Columns()[11].Width; got > max {
+			t.Fatalf("health cell %d too wide: got=%d max=%d row=%q", i, got, max, row[11])
 		}
 	}
 
@@ -873,12 +876,12 @@ func TestWideListRendersStableSingleTable(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 220, 36)
 	m.view = viewList
 	rendered := m.View()
-	for _, stale := range []string{"SESSION INSPECTOR", "Enter detail · d diff · w diagnostics"} {
+	for _, stale := range []string{"SESSION INSPECTOR", "Enter detail · d diff · w diagnostics", "Health 92%", "Cost $0.4200"} {
 		if strings.Contains(rendered, stale) {
 			t.Fatalf("list should not render stale split preview fragment %q", stale)
 		}
 	}
-	for _, want := range []string{"SESSION", "SOURCE", "MODEL", "DURATION", "ANOM", "session_alpha", "gpt-5.1", "issue"} {
+	for _, want := range []string{"SESSION", "SOURCE", "MODEL", "DURATION", "ANOM", "ISSUE", "session_alpha", "gpt-5.1"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected wide list to include %q:\n%s", want, rendered)
 		}
