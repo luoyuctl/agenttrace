@@ -110,10 +110,24 @@ go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
 
 ### Codex plugin
 
-This repo includes a Codex plugin manifest and skill so Codex can use `agenttrace` to audit local AI agent session logs:
+This repo includes a Codex plugin manifest and skill so Codex can use `agenttrace` as a local session audit tool. It helps Codex users answer the follow-up questions that raw agent output usually hides:
+
+- Which local sessions burned the most tokens or estimated cost?
+- Did tool failures, retries, or long gaps make a run unhealthy?
+- Is there JSON/Markdown/HTML evidence worth attaching to a PR, issue, or CI artifact?
+
+Plugin files:
 
 - `.codex-plugin/plugin.json`
 - `skills/agenttrace-session-audit/SKILL.md`
+
+Once `agenttrace` is installed, the same audit path works outside Codex too:
+
+```bash
+agenttrace --doctor
+agenttrace --overview -f json
+agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-rate 15
+```
 
 ### npm
 
