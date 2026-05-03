@@ -169,9 +169,10 @@ type ModelOverview struct {
 
 // AnomalyTop is a lightweight anomaly reference for the overview.
 type AnomalyTop struct {
-	Session string
-	Type    string
-	Age     string // human-readable relative time
+	Session  string
+	Type     string
+	Age      string // human-readable relative time
+	Severity string `json:"-"`
 }
 
 // Overview aggregates all sessions for the dashboard.
@@ -221,20 +222,31 @@ func ComputeOverview(sessions []Session) Overview {
 		// Anomalies
 		for _, a := range s.Anomalies {
 			ov.AnomaliesTop = append(ov.AnomaliesTop, AnomalyTop{
-				Session: s.Name,
-				Type:    a.Type,
-				Age:     "now",
+				Session:  s.Name,
+				Type:     a.Type,
+				Age:      "now",
+				Severity: a.Severity,
 			})
 		}
 	}
 	// Sort anomalies by severity (high → medium → low)
-	sort.Slice(ov.AnomaliesTop, func(i, j int) bool {
-		severityOrder := map[string]int{SeverityHigh: 0, SeverityMedium: 1, SeverityLow: 2}
-		ai := severityOrder[ov.AnomaliesTop[i].Type]
-		aj := severityOrder[ov.AnomaliesTop[j].Type]
-		return ai < aj
+	sort.SliceStable(ov.AnomaliesTop, func(i, j int) bool {
+		return anomalySeverityRank(ov.AnomaliesTop[i].Severity) < anomalySeverityRank(ov.AnomaliesTop[j].Severity)
 	})
 	return ov
+}
+
+func anomalySeverityRank(severity string) int {
+	switch severity {
+	case SeverityHigh:
+		return 0
+	case SeverityMedium:
+		return 1
+	case SeverityLow:
+		return 2
+	default:
+		return 3
+	}
 }
 
 // ── Aggregate Stats (for btop-style health panel) ──
