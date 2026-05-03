@@ -1,0 +1,14 @@
+[
+  {
+    "type": "say",
+    "say": "text",
+    "text": "Task opened in Cline UI.",
+    "ts": 1767261600000
+  },
+  {
+    "type": "say",
+    "say": "completion_result",
+    "text": "Task finished from Cline UI.",
+    "ts": 1767261610000
+  }
+]
