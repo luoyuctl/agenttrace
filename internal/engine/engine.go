@@ -1395,6 +1395,7 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 	var events []Event
 	sessionID := ""
 	modelName := "unknown"
+	seenUsageSnapshots := make(map[string]bool)
 
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -1460,11 +1461,23 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 				}
 				// Extract real token counts from API usage
 				if usage, ok := msg["usage"].(map[string]interface{}); ok {
-					ev := Event{Role: "meta", Timestamp: ts,
-						ModelUsed: modelName, SourceTool: "claude_code"}
-					ub, _ := json.Marshal(usage)
-					json.Unmarshal(ub, &ev.Usage)
-					events = append(events, ev)
+					msgID, _ := msg["id"].(string)
+					usageKey := ""
+					if msgID != "" {
+						if ub, err := json.Marshal(usage); err == nil {
+							usageKey = msgID + ":" + string(ub)
+						}
+					}
+					if usageKey == "" || !seenUsageSnapshots[usageKey] {
+						if usageKey != "" {
+							seenUsageSnapshots[usageKey] = true
+						}
+						ev := Event{Role: "meta", Timestamp: ts,
+							ModelUsed: modelName, SourceTool: "claude_code"}
+						ub, _ := json.Marshal(usage)
+						json.Unmarshal(ub, &ev.Usage)
+						events = append(events, ev)
+					}
 				}
 				if content, ok := msg["content"].([]interface{}); ok {
 					for _, blk := range content {
@@ -2295,6 +2308,9 @@ func isSessionFileName(name string) bool {
 	if name == aiderHistoryFile {
 		return true
 	}
+	if strings.HasSuffix(name, ".meta.json") {
+		return false
+	}
 	if strings.HasPrefix(name, "request_dump_") || name == "sessions.json" {
 		return false
 	}
@@ -2457,7 +2473,7 @@ func ScanAllDirs() []Session {
 
 func maxSessionDirDepth(dir string) int {
 	if filepath.Base(dir) == "projects" && strings.Contains(filepath.ToSlash(dir), "/.claude/") {
-		return 1
+		return 3
 	}
 	if filepath.Base(dir) == "tmp" && strings.Contains(filepath.ToSlash(dir), "/.gemini/") {
 		return 4

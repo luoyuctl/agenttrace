@@ -35,6 +35,9 @@ type sqliteSessionAgg struct {
 	outputTokens    int
 	cacheReadTokens int
 	cacheWriteToken int
+	messageTokens   int
+	usageCost       float64
+	usageCostSet    bool
 	sourceTool      string
 	path            string
 }
@@ -227,6 +230,9 @@ func addOpenCodeSQLiteMessages(db *sql.DB, aggs map[string]*sqliteSessionAgg) {
 		if model := openCodeSQLiteMessageModel(doc); model != "" {
 			agg.model = model
 		}
+		if addOpenCodeSQLiteMessageTokens(agg, doc) {
+			agg.messageTokens++
+		}
 	}
 }
 
@@ -252,7 +258,9 @@ func addOpenCodeSQLiteParts(db *sql.DB, aggs map[string]*sqliteSessionAgg) {
 		}
 		switch str(doc, "type") {
 		case "step-finish":
-			addOpenCodeStepFinishTokens(agg, doc)
+			if agg.messageTokens == 0 {
+				addOpenCodeStepFinishTokens(agg, doc)
+			}
 		case "tool":
 			agg.toolCallsTotal++
 			if openCodeToolFailed(doc) {
@@ -264,18 +272,46 @@ func addOpenCodeSQLiteParts(db *sql.DB, aggs map[string]*sqliteSessionAgg) {
 	}
 }
 
+func addOpenCodeSQLiteMessageTokens(agg *sqliteSessionAgg, doc map[string]interface{}) bool {
+	tokens, ok := doc["tokens"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	input, output, cacheRead, cacheWrite := addOpenCodeTokensFromMap(agg, tokens)
+	model := openCodeSQLiteMessageModel(doc)
+	if model == "" {
+		model = agg.model
+	}
+	if model != "" {
+		agg.usageCost += tokenCostRaw(input, output, cacheWrite, cacheRead, model)
+		agg.usageCostSet = true
+	}
+	return true
+}
+
 func addOpenCodeStepFinishTokens(agg *sqliteSessionAgg, doc map[string]interface{}) {
 	tokens, ok := doc["tokens"].(map[string]interface{})
 	if !ok {
 		return
 	}
+	input, output, cacheRead, cacheWrite := addOpenCodeTokensFromMap(agg, tokens)
+	if agg.model != "" {
+		agg.usageCost += tokenCostRaw(input, output, cacheWrite, cacheRead, agg.model)
+		agg.usageCostSet = true
+	}
+}
+
+func addOpenCodeTokensFromMap(agg *sqliteSessionAgg, tokens map[string]interface{}) (int, int, int, int) {
 	cache, _ := tokens["cache"].(map[string]interface{})
+	input := numberAsInt(tokens["input"])
+	output := numberAsInt(tokens["output"]) + numberAsInt(tokens["reasoning"])
 	cacheRead := numberAsInt(cache["read"])
-	input := max(0, numberAsInt(tokens["input"])-cacheRead)
+	cacheWrite := numberAsInt(cache["write"])
 	agg.inputTokens += input
-	agg.outputTokens += numberAsInt(tokens["output"]) + numberAsInt(tokens["reasoning"])
+	agg.outputTokens += output
 	agg.cacheReadTokens += cacheRead
-	agg.cacheWriteToken += numberAsInt(cache["write"])
+	agg.cacheWriteToken += cacheWrite
+	return input, output, cacheRead, cacheWrite
 }
 
 func openCodeToolFailed(doc map[string]interface{}) bool {
@@ -329,6 +365,10 @@ func sessionFromSQLiteAgg(agg sqliteSessionAgg) Session {
 	if model == "" {
 		model = "default"
 	}
+	costEstimated := estimateTokenCost(agg.inputTokens, agg.outputTokens, agg.cacheWriteToken, agg.cacheReadTokens, model)
+	if agg.usageCostSet {
+		costEstimated = round4(agg.usageCost)
+	}
 	m := Metrics{
 		EventsTotal:    agg.events,
 		UserMessages:   agg.userMessages,
@@ -346,7 +386,7 @@ func sessionFromSQLiteAgg(agg sqliteSessionAgg) Session {
 		SourceTool:     agg.sourceTool,
 		SessionStart:   unixSecondsRFC3339(agg.startUnix),
 		SessionEnd:     unixSecondsRFC3339(agg.endUnix),
-		CostEstimated:  estimateTokenCost(agg.inputTokens, agg.outputTokens, agg.cacheWriteToken, agg.cacheReadTokens, model),
+		CostEstimated:  costEstimated,
 	}
 	if agg.endUnix > agg.startUnix {
 		m.DurationSec = agg.endUnix - agg.startUnix
@@ -366,13 +406,15 @@ func sessionFromSQLiteAgg(agg sqliteSessionAgg) Session {
 }
 
 func estimateTokenCost(input, output, cacheWrite, cacheRead int, model string) float64 {
+	return round4(tokenCostRaw(input, output, cacheWrite, cacheRead, model))
+}
+
+func tokenCostRaw(input, output, cacheWrite, cacheRead int, model string) float64 {
 	pricing := LookupPrice(model)
-	return round4(
-		float64(input)/1e6*pricing.Input +
-			float64(output)/1e6*pricing.Output +
-			float64(cacheWrite)/1e6*pricing.CW +
-			float64(cacheRead)/1e6*pricing.CR,
-	)
+	return float64(input)/1e6*pricing.Input +
+		float64(output)/1e6*pricing.Output +
+		float64(cacheWrite)/1e6*pricing.CW +
+		float64(cacheRead)/1e6*pricing.CR
 }
 
 func unixSecondsRFC3339(v float64) string {

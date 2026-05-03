@@ -96,6 +96,38 @@ func TestParseOpenCodeStorageSessionMissingMessages(t *testing.T) {
 	}
 }
 
+func TestOpenCodeSQLiteMessageTokensUseMessageUsage(t *testing.T) {
+	agg := &sqliteSessionAgg{}
+	doc := map[string]interface{}{
+		"tokens": map[string]interface{}{
+			"input":     float64(100),
+			"output":    float64(20),
+			"reasoning": float64(5),
+			"cache": map[string]interface{}{
+				"read":  float64(7),
+				"write": float64(3),
+			},
+		},
+		"modelID": "glm-5",
+	}
+	if !addOpenCodeSQLiteMessageTokens(agg, doc) {
+		t.Fatal("expected message tokens to be detected")
+	}
+	if agg.inputTokens != 100 || agg.outputTokens != 25 || agg.cacheReadTokens != 7 || agg.cacheWriteToken != 3 {
+		t.Fatalf("bad sqlite message tokens: %+v", agg)
+	}
+	if !agg.usageCostSet || agg.usageCost <= 0 {
+		t.Fatalf("expected sqlite message cost to be tracked: %+v", agg)
+	}
+
+	addOpenCodeStepFinishTokens(agg, map[string]interface{}{
+		"tokens": map[string]interface{}{"input": float64(50), "output": float64(10)},
+	})
+	if agg.inputTokens != 150 || agg.outputTokens != 35 {
+		t.Fatalf("bad step-finish fallback tokens: %+v", agg)
+	}
+}
+
 func TestFindSessionFilesIncludesOpenCodeStorageSessions(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
