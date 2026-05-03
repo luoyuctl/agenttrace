@@ -1,6 +1,6 @@
 {
   "name": "agenttrace",
-  "version": "0.3.42",
+  "version": "0.3.43",
   "description": "High-signal TUI observability for AI coding agent sessions, cost, tools, latency, and anomalies",
   "main": "install.js",
   "bin": {
