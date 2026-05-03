@@ -1181,6 +1181,7 @@ var translations = map[string]map[Lang]string{
 	"cli_saved":                  {EN: "Saved: %s\n", ZH: "已保存: %s\n"},
 	"cli_no_session_files":       {EN: "No session files found.\n", ZH: "未找到会话文件。\n"},
 	"cli_error_loading":          {EN: "Error loading %s: %v\n", ZH: "加载 %s 时出错: %v\n"},
+	"cli_demo_tty_hint":          {EN: "This shell cannot open an interactive TUI. Try one of these non-interactive demo commands instead:\n  agenttrace --demo --overview -f json\n  agenttrace --demo --overview -f html -o agenttrace-overview.html\n", ZH: "当前 shell 无法打开交互式 TUI。可以改用这些非交互式演示命令：\n  agenttrace --demo --overview -f json\n  agenttrace --demo --overview -f html -o agenttrace-overview.html\n"},
 	"cli_retry_events":           {EN: "Retry Events:       %d", ZH: "重试事件:          %d"},
 	"doctor_title":               {EN: "AGENTTRACE Doctor", ZH: "AGENTTRACE 诊断"},
 	"doctor_mode":                {EN: "Mode", ZH: "模式"},

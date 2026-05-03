@@ -140,7 +140,7 @@ func main() {
 		m := tui.New(sessionsDir)
 		p := tea.NewProgram(m, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
+			fmt.Fprint(os.Stderr, tuiLaunchErrorMessage(err, *demo))
 			os.Exit(1)
 		}
 		return
@@ -309,4 +309,22 @@ func main() {
 // to discover sessions from ~/.hermes, ~/.claude, ~/.codex, ~/.gemini simultaneously.
 func resolveDefaultDir() string {
 	return ""
+}
+
+func tuiLaunchErrorMessage(err error, demo bool) string {
+	msg := fmt.Sprintf(i18n.T("cli_error"), err)
+	if demo && isTTYOpenError(err) {
+		msg += i18n.T("cli_demo_tty_hint")
+	}
+	return msg
+}
+
+func isTTYOpenError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "/dev/tty") ||
+		strings.Contains(msg, "not a terminal") ||
+		strings.Contains(msg, "could not open a new tty")
 }
