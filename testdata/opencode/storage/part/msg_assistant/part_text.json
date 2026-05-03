@@ -1,0 +1,11 @@
+{
+  "id": "part_assistant_text",
+  "sessionID": "ses_abc",
+  "messageID": "msg_assistant",
+  "type": "text",
+  "text": "I will inspect the parser files.",
+  "time": {
+    "start": 1764750002000,
+    "end": 1764750002400
+  }
+}

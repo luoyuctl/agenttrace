@@ -481,6 +481,9 @@ func DetectFormat(path string) FormatInfo {
 			fi.Doc = doc
 			fi.Raw = data
 			fi.Format = detectSingleJSON(doc)
+			if fi.Format == "unknown" && isOpenCodeStorageSessionDoc(path, doc) {
+				fi.Format = "opencode"
+			}
 			return fi
 		}
 		var arr []interface{}
@@ -724,7 +727,7 @@ func Parse(path string) ([]Event, error) {
 	case "qwen_code":
 		return parseQwenCode(fi.Doc, fi.Arr, string(fi.Raw))
 	case "opencode":
-		return parseOpenCode(fi.Doc)
+		return parseOpenCode(path, fi.Doc)
 	case "openclaw":
 		return parseOpenClaw(fi.Doc)
 	case "copilot_cli":
@@ -1261,12 +1264,6 @@ func parseGeminiCLI(doc map[string]interface{}, raw string) ([]Event, error) {
 		return nil, fmt.Errorf("gemini_cli: no parseable events")
 	}
 	return events, nil
-}
-
-// ── OpenCode ──
-
-func parseOpenCode(doc map[string]interface{}) ([]Event, error) {
-	return parseAnthropicMessageWrapper(doc, "opencode")
 }
 
 // ── OpenClaw ──
@@ -2100,6 +2097,9 @@ func FindSessionFiles(dir string) []string {
 		}
 		return sortFilesByModTime(all)
 	}
+	if isOpenCodeStoragePath(dir) {
+		return collectSessionFiles(dir)
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
@@ -2192,6 +2192,7 @@ func KnownSessionDirs() []KnownSessionDir {
 		{Name: "Claude Code", Path: filepath.Join(home, ".claude", "projects")},
 		{Name: "Oh My Pi", Path: filepath.Join(home, ".omp", "agent", "sessions")},
 	}
+	dirs = append(dirs, openCodeKnownSessionDirs(home)...)
 	dirs = append(dirs, clineKnownSessionDirs(home)...)
 	return dirs
 }
@@ -2277,6 +2278,9 @@ func collectSessionFiles(dir string) []string {
 			if isGeminiTempPath(path) && !isGeminiTempSessionFile(path) {
 				continue
 			}
+			if isOpenCodeStoragePath(path) && !isOpenCodeStorageSessionFile(path) {
+				continue
+			}
 			info, err := e.Info()
 			mt := time.Time{}
 			if err == nil {
@@ -2328,6 +2332,12 @@ func maxSessionDirDepth(dir string) int {
 	}
 	if filepath.Base(dir) == "tmp" && strings.Contains(filepath.ToSlash(dir), "/.gemini/") {
 		return 4
+	}
+	if isOpenCodeStorageRoot(dir) {
+		return 2
+	}
+	if isOpenCodeStorageSessionRoot(dir) {
+		return 1
 	}
 	return 4
 }

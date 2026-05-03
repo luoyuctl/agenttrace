@@ -1,0 +1,25 @@
+{
+  "id": "msg_assistant",
+  "sessionID": "ses_abc",
+  "role": "assistant",
+  "parentID": "msg_user",
+  "modelID": "claude-sonnet-4",
+  "providerID": "anthropic",
+  "agent": "build",
+  "path": {
+    "cwd": "/repo",
+    "root": "/repo"
+  },
+  "time": {
+    "created": 1764750002000,
+    "completed": 1764750004000
+  },
+  "tokens": {
+    "input": 42,
+    "output": 17,
+    "cache": {
+      "read": 3,
+      "write": 2
+    }
+  }
+}
