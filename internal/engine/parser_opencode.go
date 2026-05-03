@@ -34,6 +34,9 @@ func openCodeKnownSessionDirs(home string) []KnownSessionDir {
 		dirs = append(dirs, KnownSessionDir{Name: name, Path: path})
 	}
 
+	if dataDir := os.Getenv("OPENCODE_DATA_DIR"); dataDir != "" {
+		add("OpenCode", dataDir)
+	}
 	if dataHome := os.Getenv("XDG_DATA_HOME"); dataHome != "" {
 		add("OpenCode", filepath.Join(dataHome, "opencode", "storage"))
 	} else {
@@ -87,6 +90,12 @@ func isOpenCodeStorageSessionDoc(path string, doc map[string]interface{}) bool {
 }
 
 func openCodeStorageRel(path string) (string, bool) {
+	for _, root := range openCodeEnvStorageRoots() {
+		if rel, ok := openCodeRelFromRoot(root, path); ok {
+			return rel, true
+		}
+	}
+
 	clean := filepath.ToSlash(filepath.Clean(path))
 	marker := "/opencode/storage"
 	idx := strings.LastIndex(clean, marker)
@@ -101,6 +110,32 @@ func openCodeStorageRel(path string) (string, bool) {
 		return "", false
 	}
 	return strings.Trim(clean[start+1:], "/"), true
+}
+
+func openCodeEnvStorageRoots() []string {
+	if root := os.Getenv("OPENCODE_DATA_DIR"); root != "" {
+		return []string{root}
+	}
+	return nil
+}
+
+func openCodeRelFromRoot(root, path string) (string, bool) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", false
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+		return "", false
+	}
+	if rel == "." {
+		return "", true
+	}
+	return filepath.ToSlash(rel), true
 }
 
 func parseOpenCodeStorageSession(path string, session map[string]interface{}) ([]Event, error) {

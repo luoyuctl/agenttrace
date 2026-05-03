@@ -100,6 +100,7 @@ func TestFindSessionFilesIncludesOpenCodeStorageSessions(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("OPENCODE_DATA_DIR", "")
 	storage := filepath.Join(home, ".local", "share", "opencode", "storage")
 	sessionDir := filepath.Join(storage, "session", "project_alpha")
 	messageDir := filepath.Join(storage, "message", "ses_abc")
@@ -139,5 +140,37 @@ func TestFindSessionFilesIncludesOpenCodeStorageSessions(t *testing.T) {
 	}
 	if containsPath(files, messagePath) || containsPath(files, partPath) {
 		t.Fatalf("expected cached discovery to skip opencode message/part files, got %v", files)
+	}
+}
+
+func TestFindSessionFilesIncludesOpenCodeDataDir(t *testing.T) {
+	storage := filepath.Join(t.TempDir(), "custom-opencode-storage")
+	t.Setenv("OPENCODE_DATA_DIR", storage)
+	sessionDir := filepath.Join(storage, "session", "project_alpha")
+	messageDir := filepath.Join(storage, "message", "ses_abc")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(messageDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sessionPath := filepath.Join(sessionDir, "ses_abc.json")
+	messagePath := filepath.Join(messageDir, "msg_user.json")
+	raw := `{"id":"ses_abc","projectID":"project_alpha","time":{"created":1764750000000}}`
+	for _, path := range []string{sessionPath, messagePath} {
+		if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got := DetectFormat(sessionPath).Format; got != "opencode" {
+		t.Fatalf("opencode data dir format: %s", got)
+	}
+	files := FindSessionFiles("")
+	if !containsPath(files, sessionPath) {
+		t.Fatalf("expected OPENCODE_DATA_DIR session file, got %v", files)
+	}
+	if containsPath(files, messagePath) {
+		t.Fatalf("expected OPENCODE_DATA_DIR discovery to skip message files, got %v", files)
 	}
 }
