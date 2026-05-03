@@ -42,6 +42,7 @@ type KnownSessionDir struct {
 var ToolDisplayNames = map[string]string{
 	"hermes_jsonl":      "Hermes Agent (JSONL)",
 	"hermes_json":       "Hermes Agent (.json)",
+	"hermes_db":         "Hermes Agent (DB)",
 	"claude_code":       "Claude Code",
 	"claude_code_jsonl": "Claude Code (JSONL)",
 	"codex_cli":         "Codex CLI",
@@ -49,6 +50,7 @@ var ToolDisplayNames = map[string]string{
 	"gemini_cli":        "Gemini CLI",
 	"qwen_code":         "Qwen Code",
 	"opencode":          "OpenCode",
+	"opencode_db":       "OpenCode (DB)",
 	"openclaw":          "OpenClaw",
 	"copilot_cli":       "Copilot CLI",
 	"kimi_cli":          "Kimi CLI",
@@ -1534,6 +1536,7 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 func parseCodexRollout(raw string) ([]Event, error) {
 	var events []Event
 	modelName := "unknown"
+	var prevTokenTotal map[string]int
 
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -1551,8 +1554,8 @@ func parseCodexRollout(raw string) ([]Event, error) {
 		switch typ {
 		case "session_meta":
 			if pl, ok := obj["payload"].(map[string]interface{}); ok {
-				if mp, ok := pl["model_provider"].(string); ok && mp != "" {
-					modelName = mp
+				if m, ok := pl["model"].(string); ok && m != "" {
+					modelName = m
 				}
 			}
 			events = append(events, Event{
@@ -1564,6 +1567,24 @@ func parseCodexRollout(raw string) ([]Event, error) {
 			if pl, ok := obj["payload"].(map[string]interface{}); ok {
 				if m, ok := pl["model"].(string); ok && m != "" {
 					modelName = m
+					events = append(events, Event{
+						Role: "meta", Timestamp: ts,
+						ModelUsed: modelName, SourceTool: "codex_cli",
+					})
+				}
+			}
+
+		case "event_msg":
+			if payload, ok := obj["payload"].(map[string]interface{}); ok {
+				pt, _ := payload["type"].(string)
+				if pt == "token_count" {
+					if usage, nextTotal, ok := codexTokenCountUsage(payload["info"], prevTokenTotal); ok {
+						prevTokenTotal = nextTotal
+						events = append(events, Event{
+							Role: "meta", Timestamp: ts,
+							Usage: usage, ModelUsed: modelName, SourceTool: "codex_cli",
+						})
+					}
 				}
 			}
 
@@ -1621,7 +1642,7 @@ func parseCodexRollout(raw string) ([]Event, error) {
 						ModelUsed: modelName, SourceTool: "codex_cli",
 					})
 
-				case "function_call_result":
+				case "function_call_output", "function_call_result":
 					callID, _ := payload["call_id"].(string)
 					output := ""
 					switch o := payload["output"].(type) {
@@ -1646,6 +1667,110 @@ func parseCodexRollout(raw string) ([]Event, error) {
 		return nil, fmt.Errorf("codex_rollout: no valid events found")
 	}
 	return events, nil
+}
+
+func codexTokenCountUsage(rawInfo interface{}, prevTotal map[string]int) (map[string]int, map[string]int, bool) {
+	info, ok := rawInfo.(map[string]interface{})
+	if !ok || info == nil {
+		return nil, prevTotal, false
+	}
+
+	total := tokenUsageMap(info["total_token_usage"])
+	var counts map[string]int
+	nextTotal := prevTotal
+	if len(total) > 0 {
+		counts = tokenUsageDelta(total, prevTotal)
+		nextTotal = total
+	} else {
+		counts = tokenUsageMap(info["last_token_usage"])
+	}
+	if len(counts) == 0 || !hasTokenUsage(counts) {
+		return nil, nextTotal, false
+	}
+
+	cacheRead := counts["cached_input_tokens"]
+	if cacheRead == 0 {
+		cacheRead = counts["cache_read_input_tokens"]
+	}
+	cacheWrite := counts["cache_creation_input_tokens"]
+	input := max(0, counts["input_tokens"]-cacheRead)
+
+	usage := map[string]int{
+		"input_tokens":                input,
+		"output_tokens":               counts["output_tokens"] + counts["reasoning_output_tokens"],
+		"cache_creation_input_tokens": cacheWrite,
+		"cache_read_input_tokens":     cacheRead,
+	}
+	return usage, nextTotal, true
+}
+
+func tokenUsageMap(raw interface{}) map[string]int {
+	src, ok := raw.(map[string]interface{})
+	if !ok || src == nil {
+		return nil
+	}
+	out := make(map[string]int)
+	for _, key := range []string{
+		"input_tokens",
+		"output_tokens",
+		"cached_input_tokens",
+		"cache_read_input_tokens",
+		"cache_creation_input_tokens",
+		"reasoning_output_tokens",
+	} {
+		if v := intFromJSON(src[key]); v > 0 {
+			out[key] = v
+		}
+	}
+	return out
+}
+
+func tokenUsageDelta(cur, prev map[string]int) map[string]int {
+	if len(cur) == 0 {
+		return nil
+	}
+	if len(prev) == 0 {
+		return cur
+	}
+	out := make(map[string]int)
+	for _, key := range []string{
+		"input_tokens",
+		"output_tokens",
+		"cached_input_tokens",
+		"cache_read_input_tokens",
+		"cache_creation_input_tokens",
+		"reasoning_output_tokens",
+	} {
+		if d := cur[key] - prev[key]; d > 0 {
+			out[key] = d
+		}
+	}
+	return out
+}
+
+func hasTokenUsage(usage map[string]int) bool {
+	for _, v := range usage {
+		if v > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func intFromJSON(v interface{}) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	case json.Number:
+		i, _ := n.Int64()
+		return int(i)
+	default:
+		return 0
+	}
 }
 
 // ── Generic fallback ──
@@ -2307,6 +2432,9 @@ func ScanAllDirs() []Session {
 	var sessions []Session
 	seen := make(map[string]bool)
 	for _, d := range dirs {
+		if skipSQLiteBackedFileDir(d) {
+			continue
+		}
 		files := collectSessionFiles(d)
 		for _, f := range files {
 			if seen[f] {
@@ -2320,6 +2448,7 @@ func ScanAllDirs() []Session {
 			sessions = append(sessions, *s)
 		}
 	}
+	sessions = append(sessions, loadSQLiteBackedSessions()...)
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].Metrics.SessionStart > sessions[j].Metrics.SessionStart
 	})

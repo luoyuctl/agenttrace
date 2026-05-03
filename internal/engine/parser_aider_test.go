@@ -15,7 +15,7 @@ func TestAiderDetectionDoesNotClaimJSONLWithEmbeddedHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := session.Metrics
-	if m.SourceTool != "codex_cli" || m.ModelUsed != "openai" || m.UserMessages != 1 || m.AssistantTurns != 1 {
+	if m.SourceTool != "codex_cli" || m.ModelUsed != "gpt-5.4" || m.UserMessages != 1 || m.AssistantTurns != 1 {
 		t.Fatalf("bad codex rollout metrics: %+v", m)
 	}
 }
