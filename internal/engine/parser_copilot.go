@@ -2,6 +2,8 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -36,19 +38,8 @@ func parseCopilotCLI(raw string) ([]Event, error) {
 		name, _ := span["name"].(string)
 
 		// Extract model from attributes
-		if attrs, ok := span["attributes"].([]interface{}); ok {
-			for _, attr := range attrs {
-				if am, ok := attr.(map[string]interface{}); ok {
-					key, _ := am["key"].(string)
-					if key == "gen_ai.request.model" {
-						if v, ok := am["value"].(map[string]interface{}); ok {
-							if sv, _ := v["stringValue"].(string); sv != "" {
-								model = sv
-							}
-						}
-					}
-				}
-			}
+		if sv := extractStringAttribute(span, "gen_ai.request.model"); sv != "" {
+			model = sv
 		}
 
 		// Extract timestamp (nanoseconds → RFC3339)
@@ -59,22 +50,17 @@ func parseCopilotCLI(raw string) ([]Event, error) {
 
 		// Extract usage from attributes
 		usage := make(map[string]int)
-		if attrs, ok := span["attributes"].([]interface{}); ok {
-			for _, attr := range attrs {
-				if am, ok := attr.(map[string]interface{}); ok {
-					key, _ := am["key"].(string)
-					switch key {
-					case "gen_ai.usage.input_tokens":
-						usage["input_tokens"] = extractIntValue(am)
-					case "gen_ai.usage.output_tokens":
-						usage["output_tokens"] = extractIntValue(am)
-					case "gen_ai.usage.cache_creation_input_tokens":
-						usage["cache_creation_input_tokens"] = extractIntValue(am)
-					case "gen_ai.usage.cache_read_input_tokens":
-						usage["cache_read_input_tokens"] = extractIntValue(am)
-					}
-				}
-			}
+		if n := extractIntAttribute(span, "gen_ai.usage.input_tokens"); n > 0 {
+			usage["input_tokens"] = n
+		}
+		if n := extractIntAttribute(span, "gen_ai.usage.output_tokens"); n > 0 {
+			usage["output_tokens"] = n
+		}
+		if n := extractIntAttribute(span, "gen_ai.usage.cache_creation_input_tokens"); n > 0 {
+			usage["cache_creation_input_tokens"] = n
+		}
+		if n := extractIntAttribute(span, "gen_ai.usage.cache_read_input_tokens"); n > 0 {
+			usage["cache_read_input_tokens"] = n
 		}
 
 		// Map span name to event
@@ -149,6 +135,9 @@ func parseCopilotCLI(raw string) ([]Event, error) {
 		}
 	}
 
+	if len(events) == 0 {
+		return nil, fmt.Errorf("copilot_cli: no valid events found")
+	}
 	return events, nil
 }
 
@@ -162,51 +151,95 @@ func extractSpanContent(span map[string]interface{}) string {
 		}
 	}
 	// Try attributes for content
-	return extractStringAttribute(span, "content")
-}
-
-func extractStringAttribute(span map[string]interface{}, targetKey string) string {
-	attrs, ok := span["attributes"].([]interface{})
-	if !ok {
-		return ""
-	}
-	for _, attr := range attrs {
-		am, ok := attr.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		key, _ := am["key"].(string)
-		if key == targetKey {
-			if v, ok := am["value"].(map[string]interface{}); ok {
-				if sv, _ := v["stringValue"].(string); sv != "" {
-					return sv
-				}
-			}
+	for _, key := range []string{"content", "message", "body", "gen_ai.response.text"} {
+		if content := extractStringAttribute(span, key); content != "" {
+			return content
 		}
 	}
 	return ""
 }
 
+func extractStringAttribute(span map[string]interface{}, targetKey string) string {
+	return copilotStringValue(copilotAttributeValue(span, targetKey))
+}
+
 func extractBoolAttribute(span map[string]interface{}, targetKey string) bool {
-	attrs, ok := span["attributes"].([]interface{})
-	if !ok {
-		return false
-	}
-	for _, attr := range attrs {
-		am, ok := attr.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		key, _ := am["key"].(string)
-		if key == targetKey {
-			if v, ok := am["value"].(map[string]interface{}); ok {
-				if bv, _ := v["boolValue"].(bool); bv {
-					return true
-				}
+	return copilotBoolValue(copilotAttributeValue(span, targetKey))
+}
+
+func extractIntAttribute(span map[string]interface{}, targetKey string) int {
+	return copilotIntValue(copilotAttributeValue(span, targetKey))
+}
+
+func copilotAttributeValue(span map[string]interface{}, targetKey string) interface{} {
+	switch attrs := span["attributes"].(type) {
+	case []interface{}:
+		for _, attr := range attrs {
+			am, ok := attr.(map[string]interface{})
+			if !ok {
+				continue
 			}
+			key, _ := am["key"].(string)
+			if key == targetKey {
+				return am["value"]
+			}
+		}
+	case map[string]interface{}:
+		return attrs[targetKey]
+	}
+	return nil
+}
+
+func copilotStringValue(v interface{}) string {
+	switch value := v.(type) {
+	case string:
+		return value
+	case map[string]interface{}:
+		if sv, _ := value["stringValue"].(string); sv != "" {
+			return sv
+		}
+	}
+	return ""
+}
+
+func copilotBoolValue(v interface{}) bool {
+	switch value := v.(type) {
+	case bool:
+		return value
+	case map[string]interface{}:
+		if bv, _ := value["boolValue"].(bool); bv {
+			return true
 		}
 	}
 	return false
+}
+
+func copilotIntValue(v interface{}) int {
+	switch value := v.(type) {
+	case float64:
+		return int(value)
+	case int:
+		return value
+	case json.Number:
+		val, _ := value.Int64()
+		return int(val)
+	case string:
+		val, err := strconv.ParseInt(value, 10, 64)
+		if err == nil {
+			return int(val)
+		}
+	case map[string]interface{}:
+		if iv, ok := value["intValue"]; ok {
+			return copilotIntValue(iv)
+		}
+		if sv, ok := value["stringValue"]; ok {
+			return copilotIntValue(sv)
+		}
+		if dv, ok := value["doubleValue"]; ok {
+			return copilotIntValue(dv)
+		}
+	}
+	return 0
 }
 
 func extractIntValue(attr map[string]interface{}) int {
@@ -253,6 +286,9 @@ func toFloat64(v interface{}) (float64, bool) {
 		return n, true
 	case json.Number:
 		f, err := n.Float64()
+		return f, err == nil
+	case string:
+		f, err := strconv.ParseFloat(n, 64)
 		return f, err == nil
 	}
 	return 0, false
