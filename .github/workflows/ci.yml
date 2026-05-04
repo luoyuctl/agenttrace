@@ -4,6 +4,9 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
 
 jobs:
   test:
@@ -18,8 +21,18 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Check Go formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Go vet
+        run: go vet ./...
+
       - name: Go tests
         run: go test ./...
+
+      - name: Race tests
+        if: github.event_name != 'pull_request'
+        run: go test -race ./...
 
       - name: Build CLI
         run: go build -o /tmp/agenttrace ./cmd/agenttrace
@@ -34,8 +47,46 @@ jobs:
           node --check npm/install.js
           node --check npm/run.js
 
+      - name: Demo and report output contract
+        run: |
+          AGENTTRACE_BIN=/tmp/agenttrace \
+          AGENTTRACE_CI_OUT=ci-artifacts \
+            scripts/ci/check-output-contract.sh
+
+      - name: Deterministic demo output
+        run: |
+          AGENTTRACE_BIN=/tmp/agenttrace \
+          AGENTTRACE_CI_OUT=ci-artifacts \
+            scripts/ci/check-deterministic-output.sh
+
+      - name: Report semantic consistency
+        run: |
+          AGENTTRACE_BIN=/tmp/agenttrace \
+          AGENTTRACE_CI_OUT=ci-artifacts \
+            scripts/ci/check-report-semantics.sh
+
+      - name: Release surface drift
+        run: scripts/ci/check-release-surfaces.sh
+
+      - name: Documented command smoke tests
+        run: |
+          AGENTTRACE_BIN=/tmp/agenttrace \
+          AGENTTRACE_CI_OUT=ci-artifacts \
+            scripts/ci/check-docs-commands.sh
+
+      - name: Pages source artifact check
+        run: scripts/ci/check-pages-artifact.sh site
+
+      - name: Upload demo report artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: agenttrace-ci-reports
+          path: ci-artifacts
+          if-no-files-found: warn
+
       - name: Validate Homebrew formula syntax
         run: ruby -c homebrew/Formula/agenttrace.rb
 
       - name: Validate helper scripts
-        run: bash -n scripts/record-demo.sh
+        run: bash -n scripts/record-demo.sh scripts/ci/*.sh
