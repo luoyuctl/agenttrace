@@ -28,7 +28,7 @@ Site: https://luoyuctl.github.io/agenttrace/
 
 Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
-Featured in: [Awesome Codex CLI](https://github.com/RoggeOhta/awesome-codex-cli), [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli), [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild), and [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills).
+Featured in: [Awesome Codex CLI](https://github.com/RoggeOhta/awesome-codex-cli), [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli), [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild), [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills), and [Awesome AI Agents](https://github.com/ARUNAGIRINATHAN-K/awesome-ai-agents).
 
 <p align="center">
   <img src="assets/agenttrace-demo.gif" alt="agenttrace TUI demo" width="100%">
