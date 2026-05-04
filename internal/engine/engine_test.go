@@ -1016,6 +1016,27 @@ func TestSessionCachePathUsesOverride(t *testing.T) {
 	}
 }
 
+func TestWasteReportTextLocalizesSuggestionLabel(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.ZH)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	out := WasteReportText(WasteReport{
+		WasteScore: 22,
+		WasteLevel: "yellow",
+		Cache: CacheEfficiency{
+			Rating:           "none",
+			TotalInputTokens: 28000,
+			Suggestion:       i18n.T("cache_suggestion_none"),
+		},
+		Bloat:      ToolBloatAnalysis{BloatLevel: "low"},
+		TopActions: []string{i18n.T("cache_suggestion_none")},
+	})
+	if strings.Contains(out, "Suggestion:") || !strings.Contains(out, "建议:") || strings.Contains(out, "%%") {
+		t.Fatalf("waste report should localize suggestion label and percent signs:\n%s", out)
+	}
+}
+
 func TestSaveSessionCachePreservesUnhydratedRawEntries(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

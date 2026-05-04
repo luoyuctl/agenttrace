@@ -3850,7 +3850,7 @@ func WasteReportText(wr WasteReport) string {
 	if wr.Cache.WastedCost > 0 {
 		wf("  "+i18n.T("waste_cache_waste"), wr.Cache.WastedCost)
 	}
-	wf("  Suggestion: %s", wr.Cache.Suggestion)
+	wf("  %s: %s", i18n.T("waste_suggestion_label"), wr.Cache.Suggestion)
 	w("")
 	w("  " + i18n.T("waste_bloat_header"))
 	wf("  "+i18n.T("waste_bloat_detail"), i18n.T("bloat_level_"+wr.Bloat.BloatLevel), wr.Bloat.ToolsPerTurn)
