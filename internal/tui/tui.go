@@ -796,7 +796,7 @@ func (m Model) renderDetailViewportContent(s engine.Session) string {
 	sections := []string{
 		m.renderDiagnosticSummary(),
 		"",
-		engine.ReportText(safeReportMetrics(s.Metrics), s.Anomalies, clampHealth(s.Health)),
+		m.renderDetailMetricChips(s),
 	}
 	if loopSection := m.renderLoopAnalysis(); loopSection != "" {
 		sections = append(sections, "", loopSection)
@@ -810,6 +810,11 @@ func (m Model) renderDetailViewportContent(s engine.Session) string {
 	if costAlertSection := m.renderCostAlert(); costAlertSection != "" {
 		sections = append(sections, "", costAlertSection)
 	}
+	sections = append(sections,
+		"",
+		boldStyle.Render(i18n.T("detail_raw_report_title")),
+		engine.ReportText(safeReportMetrics(s.Metrics), s.Anomalies, clampHealth(s.Health)),
+	)
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
@@ -1779,6 +1784,67 @@ func (m Model) renderQuickSummary() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		healthBadge, " ", costBadge, " ", toolBadge, " ", anomBadge, " ", modelBadge,
 	)
+}
+
+func (m Model) renderDetailMetricChips(s engine.Session) string {
+	met := safeReportMetrics(s.Metrics)
+	okTools, failTools, _, totalTools := normalizedToolCounts(met)
+	chips := []struct {
+		label string
+		value string
+		color lipgloss.Color
+	}{
+		{i18n.T("cost"), money4(met.CostEstimated), lipgloss.Color("39")},
+		{i18n.T("tokens"), compactInt(metricsTotalTokens(met)), lipgloss.Color("45")},
+		{i18n.T("duration_col"), engine.FmtDuration(met.DurationSec), lipgloss.Color("214")},
+		{i18n.T("tools"), fmt.Sprintf(i18n.T("detail_tools_metric"), okTools, totalTools, failTools), lipgloss.Color("42")},
+		{i18n.T("diff_field_anomalies"), fmt.Sprintf("%d", len(s.Anomalies)), anomalyMetricColor(s)},
+	}
+
+	innerW := minInt(maxInt(20, m.detailViewportWidth()), 140)
+	var rows []string
+	var row []string
+	rowW := 0
+	for _, chip := range chips {
+		rendered := detailMetricChip(chip.label, chip.value, chip.color, innerW)
+		chipW := lipgloss.Width(rendered)
+		if len(row) > 0 && rowW+1+chipW > innerW {
+			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, row...))
+			row = nil
+			rowW = 0
+		}
+		if len(row) > 0 {
+			row = append(row, " ")
+			rowW++
+		}
+		row = append(row, rendered)
+		rowW += chipW
+	}
+	if len(row) > 0 {
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, row...))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left,
+		boldStyle.Render(i18n.T("detail_metric_title")),
+		lipgloss.JoinVertical(lipgloss.Left, rows...),
+	)
+}
+
+func detailMetricChip(label, value string, color lipgloss.Color, maxW int) string {
+	chipW := minInt(maxInt(14, lipgloss.Width(label)+lipgloss.Width(value)+5), maxInt(14, maxW))
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(color).
+		Padding(0, 1)
+	contentW := maxInt(4, chipW-4)
+	content := truncate(dimStyle.Render(label)+" "+boldStyle.Render(value), contentW)
+	return styleForOuterWidth(style, chipW).Render(content)
+}
+
+func anomalyMetricColor(s engine.Session) lipgloss.Color {
+	if len(s.Anomalies) == 0 {
+		return lipgloss.Color("42")
+	}
+	return lipgloss.Color("196")
 }
 
 // renderLoopAnalysis 渲染循环成本分析 section
