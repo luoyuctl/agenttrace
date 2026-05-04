@@ -2240,10 +2240,12 @@ func localizedToolWarningDetail(tw ToolWarning) string {
 		return fmt.Sprintf(i18n.T("tool_warn_dead_loop_detail"), tw.ToolName, tw.Count)
 	case "empty_args":
 		return fmt.Sprintf(i18n.T("tool_warn_empty_args_detail"), tw.ToolName, tw.Count)
+	case "invalid_args":
+		return fmt.Sprintf(i18n.T("tool_warn_invalid_args_detail"), tw.ToolName, tw.Count)
 	case "fail_retry_chain":
 		return fmt.Sprintf(i18n.T("tool_warn_fail_retry_detail"), tw.ToolName, tw.Count)
 	case "redundant":
-		return fmt.Sprintf(i18n.T("tool_warn_redundant"), tw.ToolName, tw.Count)
+		return fmt.Sprintf(i18n.T("tool_warn_redundant_detail"), tw.ToolName, tw.Count)
 	default:
 		return ""
 	}
@@ -3219,7 +3221,7 @@ func AnalyzeHealthTrend(sessions []Session) HealthTrend {
 // ToolWarning 工具使用警告
 type ToolWarning struct {
 	ToolName string
-	Pattern  string // "dead_loop"/"empty_args"/"fail_retry_chain"/"redundant"
+	Pattern  string // "dead_loop"/"empty_args"/"invalid_args"/"fail_retry_chain"/"redundant"
 	Count    int    // 出现次数
 	Detail   string // 详细描述
 	Severity string
@@ -3228,114 +3230,126 @@ type ToolWarning struct {
 // ValidateToolPatterns 分析事件流中的工具调用模式，检测异常使用模式。
 func ValidateToolPatterns(events []Event) []ToolWarning {
 	var warnings []ToolWarning
-
-	// dead_loop: 同一 tool 连续调用 5+ 次（不管参数）
-	type consecKey struct {
-		name string
+	addWarning := func(name, pattern string, count int, severity string) {
+		if strings.TrimSpace(name) == "" || count <= 0 {
+			return
+		}
+		warning := ToolWarning{ToolName: name, Pattern: pattern, Count: count, Severity: severity}
+		warning.Detail = localizedToolWarningDetail(warning)
+		warnings = append(warnings, warning)
 	}
-	var lastTool string
+
+	// dead_loop: 同一 tool 用同一参数连续调用，才认为可能卡住。
+	var lastKey, lastTool string
 	consecutive := 0
+	flushLoop := func() {
+		if consecutive >= 4 && lastTool != "" {
+			addWarning(lastTool, "dead_loop", consecutive, "high")
+		}
+	}
 	for _, ev := range events {
+		if ev.Role == "user" {
+			flushLoop()
+			lastKey, lastTool = "", ""
+			consecutive = 0
+			continue
+		}
 		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 {
 			for _, tc := range ev.ToolCalls {
-				if tc.Name == lastTool {
+				key := toolCallPatternKey(tc)
+				if key == lastKey {
 					consecutive++
 				} else {
-					if consecutive >= 5 {
-						warnings = append(warnings, ToolWarning{
-							ToolName: lastTool,
-							Pattern:  "dead_loop",
-							Count:    consecutive,
-							Detail:   fmt.Sprintf(i18n.T("tool_warn_dead_loop_detail"), lastTool, consecutive),
-							Severity: "high",
-						})
-					}
+					flushLoop()
 					consecutive = 1
+					lastKey = key
 					lastTool = tc.Name
 				}
 			}
 		}
 	}
-	// 检查最后一段
-	if consecutive >= 5 && lastTool != "" {
-		warnings = append(warnings, ToolWarning{
-			ToolName: lastTool,
-			Pattern:  "dead_loop",
-			Count:    consecutive,
-			Detail:   fmt.Sprintf(i18n.T("tool_warn_dead_loop_detail"), lastTool, consecutive),
-			Severity: "high",
-		})
-	}
+	flushLoop()
 
-	// empty_args: tool call 时 content 为空或 "{}"（近似检测）
+	// args: 只看真实 tool args，不再用 assistant content 近似推断。
 	emptyCounts := make(map[string]int)
+	invalidCounts := make(map[string]int)
 	for _, ev := range events {
 		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 {
-			if ev.Content == "" || ev.Content == "{}" {
-				for _, tc := range ev.ToolCalls {
+			for _, tc := range ev.ToolCalls {
+				args := strings.TrimSpace(tc.Args)
+				if (args == "" || args == "{}") && toolRequiresArgs(tc.Name) {
 					emptyCounts[tc.Name]++
+					continue
+				}
+				if looksLikeStructuredArgs(args) && !json.Valid([]byte(args)) {
+					invalidCounts[tc.Name]++
 				}
 			}
 		}
 	}
 	for name, count := range emptyCounts {
-		if count > 0 {
-			warnings = append(warnings, ToolWarning{
-				ToolName: name,
-				Pattern:  "empty_args",
-				Count:    count,
-				Detail:   fmt.Sprintf(i18n.T("tool_warn_empty_args_detail"), name, count),
-				Severity: "medium",
-			})
-		}
+		addWarning(name, "empty_args", count, "medium")
+	}
+	for name, count := range invalidCounts {
+		addWarning(name, "invalid_args", count, "medium")
 	}
 
-	// fail_retry_chain: 失败后立即重试同一 tool 3+ 次
-	type failRetry struct {
-		lastFail string
-		chain    int
-		started  bool
+	// fail_retry_chain: 同一 tool 连续产生失败结果，才算失败重试链。
+	toolByID := make(map[string]string)
+	lastFailedTool := ""
+	failureChain := 0
+	flushFailureChain := func() {
+		if failureChain >= 3 && lastFailedTool != "" {
+			addWarning(lastFailedTool, "fail_retry_chain", failureChain, "high")
+		}
 	}
-	var fr failRetry
 	for _, ev := range events {
-		if ev.Role == "tool" && ev.IsError {
-			// 尝试找到关联的 tool call（通过 ToolCallID 或最近的 tool call）
-			fr.lastFail = ""
-			fr.chain = 0
-			fr.started = true
-		} else if ev.Role == "assistant" && len(ev.ToolCalls) > 0 && fr.started {
+		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 {
 			for _, tc := range ev.ToolCalls {
-				if tc.Name == fr.lastFail || fr.lastFail == "" {
-					fr.lastFail = tc.Name
-					fr.chain++
-				} else {
-					if fr.chain >= 3 {
-						warnings = append(warnings, ToolWarning{
-							ToolName: fr.lastFail,
-							Pattern:  "fail_retry_chain",
-							Count:    fr.chain,
-							Detail:   fmt.Sprintf(i18n.T("tool_warn_fail_retry_detail"), fr.lastFail, fr.chain),
-							Severity: "high",
-						})
-					}
-					fr.lastFail = tc.Name
-					fr.chain = 1
+				if strings.TrimSpace(tc.ID) != "" {
+					toolByID[tc.ID] = tc.Name
 				}
 			}
+			continue
+		}
+		if ev.Role == "user" {
+			flushFailureChain()
+			lastFailedTool = ""
+			failureChain = 0
+			continue
+		}
+		if ev.Role != "tool" || strings.TrimSpace(ev.ToolCallID) == "" {
+			continue
+		}
+		name := toolByID[ev.ToolCallID]
+		if name == "" {
+			continue
+		}
+		if ev.IsError {
+			if name == lastFailedTool {
+				failureChain++
+			} else {
+				flushFailureChain()
+				lastFailedTool = name
+				failureChain = 1
+			}
+			continue
+		}
+		if name == lastFailedTool {
+			flushFailureChain()
+			lastFailedTool = ""
+			failureChain = 0
 		}
 	}
-	if fr.chain >= 3 && fr.lastFail != "" {
-		warnings = append(warnings, ToolWarning{
-			ToolName: fr.lastFail,
-			Pattern:  "fail_retry_chain",
-			Count:    fr.chain,
-			Detail:   fmt.Sprintf(i18n.T("tool_warn_fail_retry_detail"), fr.lastFail, fr.chain),
-			Severity: "high",
-		})
-	}
+	flushFailureChain()
 
-	// redundant: 在不同轮次调用同一 tool 多次（如 read_file 同一文件多次）
-	toolCallTurns := make(map[string][]int) // toolName → turn indices
+	// redundant: 多轮反复调用同一 tool 且参数相同，才算冗余。
+	type redundantStat struct {
+		name  string
+		count int
+		turns map[int]bool
+	}
+	redundant := make(map[string]*redundantStat)
 	turnIdx := 0
 	for _, ev := range events {
 		if ev.Role == "user" {
@@ -3343,30 +3357,110 @@ func ValidateToolPatterns(events []Event) []ToolWarning {
 		}
 		if ev.Role == "assistant" && len(ev.ToolCalls) > 0 {
 			for _, tc := range ev.ToolCalls {
-				toolCallTurns[tc.Name] = append(toolCallTurns[tc.Name], turnIdx)
+				args := normalizeToolArgs(tc.Args)
+				if args == "" {
+					continue
+				}
+				key := toolCallPatternKey(tc)
+				stat := redundant[key]
+				if stat == nil {
+					stat = &redundantStat{name: tc.Name, turns: make(map[int]bool)}
+					redundant[key] = stat
+				}
+				stat.count++
+				stat.turns[turnIdx] = true
 			}
 		}
 	}
-	for name, turns := range toolCallTurns {
-		if len(turns) >= 4 {
-			// 检查是否在多个不同轮次中调用
-			uniqueTurns := make(map[int]bool)
-			for _, t := range turns {
-				uniqueTurns[t] = true
-			}
-			if len(uniqueTurns) >= 3 {
-				warnings = append(warnings, ToolWarning{
-					ToolName: name,
-					Pattern:  "redundant",
-					Count:    len(turns),
-					Detail:   fmt.Sprintf(i18n.T("tool_warn_redundant_detail"), name, len(uniqueTurns), len(turns)),
-					Severity: "low",
-				})
-			}
+	for _, stat := range redundant {
+		if stat.count >= 4 && len(stat.turns) >= 3 {
+			addWarning(stat.name, "redundant", stat.count, "low")
 		}
 	}
 
+	sort.SliceStable(warnings, func(i, j int) bool {
+		if warnings[i].Severity != warnings[j].Severity {
+			return severityRank(warnings[i].Severity) > severityRank(warnings[j].Severity)
+		}
+		if warnings[i].ToolName != warnings[j].ToolName {
+			return warnings[i].ToolName < warnings[j].ToolName
+		}
+		return warnings[i].Pattern < warnings[j].Pattern
+	})
 	return warnings
+}
+
+func severityRank(severity string) int {
+	switch severity {
+	case "high":
+		return 3
+	case "medium":
+		return 2
+	case "low":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func toolCallPatternKey(tc ToolCall) string {
+	return tc.Name + "\x00" + normalizeToolArgs(tc.Args)
+}
+
+func normalizeToolArgs(args string) string {
+	args = strings.TrimSpace(args)
+	if args == "" {
+		return ""
+	}
+	var v interface{}
+	if json.Unmarshal([]byte(args), &v) == nil {
+		if normalized, err := json.Marshal(v); err == nil {
+			return string(normalized)
+		}
+	}
+	return strings.Join(strings.Fields(args), " ")
+}
+
+func looksLikeStructuredArgs(args string) bool {
+	args = strings.TrimSpace(args)
+	return strings.HasPrefix(args, "{") || strings.HasPrefix(args, "[")
+}
+
+func toolRequiresArgs(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return false
+	}
+	required := []string{
+		"apply_patch",
+		"bash",
+		"click",
+		"edit",
+		"exec_command",
+		"fetch",
+		"find",
+		"grep",
+		"image",
+		"open",
+		"patch",
+		"read",
+		"replace",
+		"rg",
+		"run_command",
+		"scrape",
+		"search",
+		"shell",
+		"terminal",
+		"view",
+		"web",
+		"write",
+	}
+	for _, token := range required {
+		if strings.Contains(name, token) {
+			return true
+		}
+	}
+	return false
 }
 
 // ═══════════════════════════════════════════════════════════════

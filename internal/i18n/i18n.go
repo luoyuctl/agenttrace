@@ -724,11 +724,12 @@ var translations = map[string]map[Lang]string{
 	"trend_improving":  {EN: "Improving: %s", ZH: "持续上升: %s"},
 
 	// ── Tool warnings ──
-	"tool_warn_title":      {EN: "⚠️ Tool Warnings", ZH: "⚠️ 工具调用警告"},
-	"tool_warn_dead_loop":  {EN: "%s called %dx consecutively — possible dead loop", ZH: "%s 连续调用 %d 次 — 疑似死循环"},
-	"tool_warn_empty_args": {EN: "%s called with empty arguments", ZH: "%s 调用参数为空"},
-	"tool_warn_retry":      {EN: "%s retried %dx after failures", ZH: "%s 失败后重试 %d 次"},
-	"tool_warn_redundant":  {EN: "%s called %dx with same args — redundant", ZH: "%s 重复调用 %d 次 — 冗余"},
+	"tool_warn_title":        {EN: "⚠️ Tool Warnings", ZH: "⚠️ 工具调用警告"},
+	"tool_warn_dead_loop":    {EN: "%s called %dx consecutively — possible dead loop", ZH: "%s 连续调用 %d 次 — 疑似死循环"},
+	"tool_warn_empty_args":   {EN: "%s called with empty arguments", ZH: "%s 调用参数为空"},
+	"tool_warn_invalid_args": {EN: "%s called with malformed arguments", ZH: "%s 调用参数格式错误"},
+	"tool_warn_retry":        {EN: "%s retried %dx after failures", ZH: "%s 失败后重试 %d 次"},
+	"tool_warn_redundant":    {EN: "%s called %dx with same args — redundant", ZH: "%s 重复调用 %d 次 — 冗余"},
 
 	// ── Prompt impact ──
 	"prompt_impact_title":     {EN: "📝 Prompt Impact", ZH: "📝 Prompt 影响"},
@@ -1101,10 +1102,11 @@ var translations = map[string]map[Lang]string{
 	"fix_no_tools_action":           {EN: "Currently in chat-only mode, consider configuring tools for the agent", ZH: "当前为纯对话模式，考虑为 agent 配置工具以提升效率"},
 
 	// ── Tool pattern validation details ──
-	"tool_warn_dead_loop_detail":  {EN: "Tool '%s' called %dx consecutively — possible dead loop", ZH: "工具 '%s' 连续调用 %d 次，可能存在死循环"},
-	"tool_warn_empty_args_detail": {EN: "Tool '%s' had %d call(s) with empty arguments", ZH: "工具 '%s' 有 %d 次调用参数为空"},
-	"tool_warn_fail_retry_detail": {EN: "Tool '%s' retried %dx after failures", ZH: "工具 '%s' 失败后连续重试 %d 次"},
-	"tool_warn_redundant_detail":  {EN: "Tool '%s' called %dx across %d turns — possibly redundant", ZH: "工具 '%s' 在 %d 个轮次中被调用 %d 次，可能存在冗余调用"},
+	"tool_warn_dead_loop_detail":    {EN: "Tool '%s' called %dx consecutively — possible dead loop", ZH: "工具 '%s' 连续调用 %d 次，可能存在死循环"},
+	"tool_warn_empty_args_detail":   {EN: "Tool '%s' had %d call(s) with empty arguments", ZH: "工具 '%s' 有 %d 次调用参数为空"},
+	"tool_warn_invalid_args_detail": {EN: "Tool '%s' had %d call(s) with malformed arguments", ZH: "工具 '%s' 有 %d 次调用参数格式错误"},
+	"tool_warn_fail_retry_detail":   {EN: "Tool '%s' retried %dx after failures", ZH: "工具 '%s' 失败后连续重试 %d 次"},
+	"tool_warn_redundant_detail":    {EN: "Tool '%s' called %dx with the same arguments — possibly redundant", ZH: "工具 '%s' 用相同参数调用 %d 次，可能存在冗余调用"},
 
 	// ── Cost alert ──
 	"cost_alert_no_history":       {EN: "No historical data for comparison", ZH: "无历史数据用于比较"},
