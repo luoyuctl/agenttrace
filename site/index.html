@@ -3,21 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>agenttrace - local observability for AI coding agents</title>
+    <title>agenttrace - AI coding agent observability for local session logs</title>
     <meta
       name="description"
-      content="A local TUI and report generator that finds token waste, tool loops, failures, latency, anomalies, health regressions, diffs, and CI evidence across AI coding agent sessions."
+      content="Local-first AI coding agent observability for Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and more. Find token cost, tool failures, latency, anomalies, health regressions, diffs, and CI gates from local session logs."
     />
+    <meta name="keywords" content="AI coding agent observability, agent observability, Claude Code logs, Codex CLI logs, Gemini CLI sessions, Cursor agent traces, Aider chat history, token cost tracking, tool failure analysis, local-first developer tools, CI health gates" />
     <link rel="canonical" href="https://luoyuctl.github.io/agenttrace/" />
-    <meta property="og:title" content="agenttrace - local observability for AI coding agents" />
-    <meta property="og:description" content="Find token waste, tool loops, failures, latency, anomalies, health regressions, diffs, and CI evidence in local AI coding agent sessions." />
+    <meta property="og:title" content="agenttrace - AI coding agent observability for local session logs" />
+    <meta property="og:description" content="Find token cost, tool failures, latency, anomalies, health regressions, diffs, and CI evidence in local Claude Code, Codex CLI, Gemini CLI, Cursor, and Aider sessions." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://luoyuctl.github.io/agenttrace/" />
     <meta property="og:image" content="https://luoyuctl.github.io/agenttrace/assets/hero-banner.png" />
     <meta property="og:image:alt" content="agenttrace terminal dashboard showing AI coding agent session metrics" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="agenttrace - local observability for AI coding agents" />
-    <meta name="twitter:description" content="Trace cost, tokens, tool failures, latency, anomalies, health, diffs, and CI gates from local AI coding agent logs." />
+    <meta name="twitter:title" content="agenttrace - AI coding agent observability for local session logs" />
+    <meta name="twitter:description" content="Trace token cost, tool failures, latency, anomalies, health, diffs, and CI gates from local AI coding agent logs." />
     <meta name="twitter:image" content="https://luoyuctl.github.io/agenttrace/assets/hero-banner.png" />
     <link rel="icon" href="assets/logo-icon.png" />
     <link rel="stylesheet" href="styles.css" />
@@ -27,12 +28,25 @@
         "@type": "SoftwareApplication",
         "name": "agenttrace",
         "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "AI agent observability",
         "operatingSystem": "macOS, Linux, Windows",
         "softwareVersion": "0.4.0",
         "description": "Local TUI and report generator for AI coding agent sessions across Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes, OpenCode, OpenClaw, Oh My Pi, Kimi, and Copilot-style logs.",
+        "keywords": "AI coding agent observability, Claude Code logs, Codex CLI logs, Gemini CLI sessions, Cursor agent traces, Aider chat history, token cost tracking, tool failure analysis, local-first TUI, CI health gates",
+        "featureList": [
+          "Token and cost tracking for AI coding agent sessions",
+          "Tool failure, loop, latency, anomaly, and health analysis",
+          "Local-first TUI for Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and other session logs",
+          "JSON, Markdown, and HTML reports for CI gates and review evidence"
+        ],
         "url": "https://luoyuctl.github.io/agenttrace/",
         "codeRepository": "https://github.com/luoyuctl/agenttrace",
         "license": "https://github.com/luoyuctl/agenttrace/blob/master/LICENSE",
+        "sameAs": [
+          "https://github.com/luoyuctl/agenttrace",
+          "https://pkg.go.dev/github.com/luoyuctl/agenttrace",
+          "https://goreportcard.com/report/github.com/luoyuctl/agenttrace"
+        ],
         "offers": {
           "@type": "Offer",
           "price": "0",
@@ -50,6 +64,7 @@
       <nav aria-label="Primary navigation">
         <a href="#evidence">Evidence</a>
         <a href="#workflow">Workflow</a>
+        <a href="ai-agent-observability.html">Guide</a>
         <a href="demo-report.html">Report</a>
         <a href="#install">Install</a>
         <a href="https://github.com/luoyuctl/agenttrace/discussions/2">Feedback</a>
@@ -62,16 +77,18 @@
         <img class="hero-bg" src="assets/hero-banner.png" alt="agenttrace dashboard showing AI agent observability metrics" />
         <div class="hero-shade"></div>
         <div class="hero-copy">
-          <h1>Your AI agents already leave traces. Read them.</h1>
+          <h1>Local AI coding agent observability.</h1>
           <p>
-            agenttrace turns local coding-agent logs into a fast TUI, shareable HTML reports,
-            health scores, anomaly evidence, and CI gates. No hosted backend. No prompt upload.
+            agenttrace turns local Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and
+            OpenCode logs into a fast TUI, shareable HTML reports, health scores, anomaly
+            evidence, token cost breakdowns, and CI gates. No hosted backend. No prompt upload.
           </p>
           <div class="hero-actions">
             <button class="copy-btn" data-copy="curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh">
               Copy install
             </button>
             <a href="demo-report.html">View sample report</a>
+            <a href="ai-agent-observability.html">Read the guide</a>
             <a href="https://github.com/luoyuctl/agenttrace/releases/latest">Latest release</a>
           </div>
           <div class="hero-terminal" aria-label="Quick start terminal">
@@ -126,7 +143,7 @@ health: 58.7  critical: 1  tool_fail_rate: 60%</code></pre>
           </p>
         </div>
         <div class="demo-frame">
-          <img src="assets/tui-preview.png" alt="agenttrace TUI session list with health filtering and cost metrics" />
+          <img src="assets/readme-real-overview.png" alt="agenttrace TUI overview with real local session health, cost, token, and error metrics" />
         </div>
       </section>
 
@@ -194,6 +211,7 @@ health: 58.7  critical: 1  tool_fail_rate: 60%</code></pre>
           <a href="https://github.com/luoyuctl/agenttrace">View source</a>
           <a href="https://github.com/luoyuctl/agenttrace/discussions/2">Share feedback</a>
           <a href="https://github.com/luoyuctl/agenttrace/blob/master/docs/launch-kit.md">Launch kit</a>
+          <a href="ai-agent-observability.html">AI observability guide</a>
           <a href="https://github.com/luoyuctl/agenttrace/releases/latest">Release notes</a>
         </div>
       </section>
@@ -203,6 +221,7 @@ health: 58.7  critical: 1  tool_fail_rate: 60%</code></pre>
       <span>MIT licensed</span>
       <a href="https://github.com/luoyuctl/agenttrace">GitHub</a>
       <a href="demo-report.html">Sample report</a>
+      <a href="ai-agent-observability.html">AI observability guide</a>
       <a href="https://github.com/luoyuctl/agenttrace/blob/master/docs/launch-kit.md">Launch kit</a>
       <a href="https://github.com/luoyuctl/agenttrace/discussions/2">Feedback</a>
     </footer>

@@ -2,11 +2,18 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://luoyuctl.github.io/agenttrace/</loc>
+    <lastmod>2026-05-04</lastmod>
+  </url>
+  <url>
+    <loc>https://luoyuctl.github.io/agenttrace/ai-agent-observability.html</loc>
+    <lastmod>2026-05-04</lastmod>
   </url>
   <url>
     <loc>https://luoyuctl.github.io/agenttrace/demo-report.html</loc>
+    <lastmod>2026-05-04</lastmod>
   </url>
   <url>
     <loc>https://luoyuctl.github.io/agenttrace/llms.txt</loc>
+    <lastmod>2026-05-04</lastmod>
   </url>
 </urlset>

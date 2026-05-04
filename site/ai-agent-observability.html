@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI coding agent observability - local logs, token cost, tool failures, and CI gates</title>
+    <meta
+      name="description"
+      content="A practical guide to local AI coding agent observability with agenttrace: inspect Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and OpenCode logs for token cost, tool failures, latency, health, diffs, and CI gates."
+    />
+    <meta name="keywords" content="AI coding agent observability, Claude Code logs, Codex CLI session logs, Gemini CLI observability, Cursor agent traces, Aider chat history, token cost tracking, tool failure analysis, agent health score, CI gates for AI agents" />
+    <link rel="canonical" href="https://luoyuctl.github.io/agenttrace/ai-agent-observability.html" />
+    <meta property="og:title" content="AI coding agent observability with local session logs" />
+    <meta property="og:description" content="Learn how agenttrace turns local coding-agent logs into token cost, tool failure, latency, health, diff, and CI evidence." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://luoyuctl.github.io/agenttrace/ai-agent-observability.html" />
+    <meta property="og:image" content="https://luoyuctl.github.io/agenttrace/assets/hero-banner.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AI coding agent observability with local session logs" />
+    <meta name="twitter:description" content="Inspect Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and OpenCode logs for token cost, tool failures, health, and CI gates." />
+    <meta name="twitter:image" content="https://luoyuctl.github.io/agenttrace/assets/hero-banner.png" />
+    <link rel="icon" href="assets/logo-icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "AI coding agent observability with local session logs",
+        "description": "A practical guide to local-first observability for AI coding agent sessions with agenttrace.",
+        "author": {
+          "@type": "Organization",
+          "name": "agenttrace contributors"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "agenttrace"
+        },
+        "mainEntityOfPage": "https://luoyuctl.github.io/agenttrace/ai-agent-observability.html",
+        "about": [
+          "AI coding agent observability",
+          "Claude Code logs",
+          "Codex CLI session logs",
+          "token cost tracking",
+          "tool failure analysis",
+          "CI gates for AI agents"
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="agenttrace home">
+        <img src="assets/logo-icon.png" alt="" />
+        <span>agenttrace</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="index.html#evidence">Evidence</a>
+        <a href="index.html#workflow">Workflow</a>
+        <a href="demo-report.html">Report</a>
+        <a href="https://github.com/luoyuctl/agenttrace">GitHub</a>
+        <a class="nav-cta" href="index.html#install">Install</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <img class="hero-bg" src="assets/hero-banner.png" alt="agenttrace AI coding agent observability dashboard" />
+        <div class="hero-shade"></div>
+        <div class="hero-copy">
+          <h1>AI coding agent observability starts with local logs.</h1>
+          <p>
+            agenttrace reads the session files your coding agents already write and turns them into
+            token cost, tool failure, latency, anomaly, health, diff, and CI evidence without a hosted backend.
+          </p>
+          <div class="hero-actions">
+            <a href="index.html#install">Install agenttrace</a>
+            <a href="demo-report.html">View sample report</a>
+            <a href="https://github.com/luoyuctl/agenttrace">View source</a>
+          </div>
+        </div>
+        <aside class="hero-card" aria-label="Observability signals">
+          <strong>Signals agenttrace reads</strong>
+          <dl>
+            <div><dt>Tokens</dt><dd>Input, output, cache, and estimated cost.</dd></div>
+            <div><dt>Tools</dt><dd>Failures, retries, loops, and slow calls.</dd></div>
+            <div><dt>Health</dt><dd>Critical sessions, warnings, anomalies, and regressions.</dd></div>
+            <div><dt>CI</dt><dd>JSON, Markdown, HTML, and failure gates.</dd></div>
+          </dl>
+        </aside>
+      </section>
+
+      <section class="proof-strip" aria-label="Supported AI coding agent logs">
+        <article>
+          <strong>Claude Code</strong>
+          <span>Inspect local Claude Code sessions for cost, latency, tool calls, and health drops.</span>
+        </article>
+        <article>
+          <strong>Codex CLI</strong>
+          <span>Turn Codex CLI logs into reviewable session summaries and CI evidence.</span>
+        </article>
+        <article>
+          <strong>Gemini CLI</strong>
+          <span>Compare Gemini CLI sessions across tokens, models, anomalies, and tool behavior.</span>
+        </article>
+        <article>
+          <strong>Cursor + Aider</strong>
+          <span>Bring exported Cursor traces and Aider chat history into the same local TUI.</span>
+        </article>
+      </section>
+
+      <section class="workflow">
+        <div class="section-copy">
+          <h2>What AI agent observability should answer.</h2>
+          <p>
+            Traditional logs show that something happened. Coding-agent observability should show
+            why a run got expensive, where tools failed, how long the agent stalled, and whether
+            the next pull request should trust the result.
+          </p>
+        </div>
+        <div class="command-stack">
+          <article>
+            <span>Token cost tracking</span>
+            <code>agenttrace --overview -f json</code>
+          </article>
+          <article>
+            <span>Tool failure analysis</span>
+            <code>agenttrace --overview -f html -o agenttrace-overview.html</code>
+          </article>
+          <article>
+            <span>CI health gate</span>
+            <code>agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-rate 15</code>
+          </article>
+        </div>
+      </section>
+
+      <section class="formats">
+        <h2>Local-first, framework-light, source-aware.</h2>
+        <p>
+          agenttrace is built for developers who want AI coding agent observability without sending
+          prompts, code, or private logs to a hosted dashboard. It supports Claude Code, Codex CLI,
+          Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw,
+          Oh My Pi, Kimi CLI, Copilot-style logs, and generic JSON/JSONL traces.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <span>MIT licensed</span>
+      <a href="index.html">Home</a>
+      <a href="demo-report.html">Sample report</a>
+      <a href="https://github.com/luoyuctl/agenttrace">GitHub</a>
+    </footer>
+  </body>
+</html>
