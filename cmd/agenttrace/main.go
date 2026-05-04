@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/luoyuctl/agenttrace/internal/engine"
@@ -239,14 +240,17 @@ func main() {
 			fmt.Fprintf(os.Stderr, i18n.T("no_session_files")+"\n", sessionsDir)
 			os.Exit(1)
 		}
-		s, err := engine.LoadSession(files[0])
+		targetPath := latestSessionFile(files)
+		if targetPath == "" {
+			fmt.Fprint(os.Stderr, i18n.T("cli_no_session_files"))
+			os.Exit(1)
+		}
+		s, err := engine.LoadSession(targetPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, i18n.T("cli_error"), err)
 			os.Exit(1)
 		}
-		events, _ := engine.Parse(s.Path)
-		loopResult := engine.AnalyzeLoops(events)
-		wr := engine.ComputeWasteReport(s.Metrics, events, loopResult)
+		wr := engine.ComputeWasteReportFromSession(s)
 		fmt.Print(engine.WasteReportText(wr))
 		return
 	}
@@ -259,20 +263,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, i18n.T("no_session_files")+"\n", sessionsDir)
 			os.Exit(1)
 		}
-		// Find latest by mtime
-		var latestFile string
-		var latestTime int64
-		for _, f := range files {
-			info, err := os.Stat(f)
-			if err != nil {
-				continue
-			}
-			if info.ModTime().Unix() > latestTime {
-				latestTime = info.ModTime().Unix()
-				latestFile = f
-			}
-		}
-		targetPath = latestFile
+		targetPath = latestSessionFile(files)
 	}
 
 	if targetPath == "" {
@@ -314,6 +305,23 @@ func main() {
 // to discover sessions from ~/.hermes, ~/.claude, ~/.codex, ~/.gemini simultaneously.
 func resolveDefaultDir() string {
 	return ""
+}
+
+func latestSessionFile(files []string) string {
+	var latestFile string
+	var latestTime time.Time
+	for _, f := range files {
+		info, err := os.Stat(f)
+		if err != nil {
+			continue
+		}
+		modTime := info.ModTime()
+		if latestFile == "" || modTime.After(latestTime) || (modTime.Equal(latestTime) && f > latestFile) {
+			latestFile = f
+			latestTime = modTime
+		}
+	}
+	return latestFile
 }
 
 func tuiLaunchErrorMessage(err error, demo bool) string {

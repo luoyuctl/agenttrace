@@ -2,8 +2,11 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/luoyuctl/agenttrace/internal/engine"
 	"github.com/luoyuctl/agenttrace/internal/i18n"
@@ -79,5 +82,41 @@ func TestTUILaunchErrorMessageSkipsFallbackOutsideDemo(t *testing.T) {
 	msg := tuiLaunchErrorMessage(errors.New("open /dev/tty: device not configured"), false)
 	if strings.Contains(msg, "--demo --overview") {
 		t.Fatalf("non-demo TUI error should not include demo fallback:\n%s", msg)
+	}
+}
+
+func TestLatestSessionFileUsesPreciseMtimeAndTieBreak(t *testing.T) {
+	dir := t.TempDir()
+	older := filepath.Join(dir, "01-old.jsonl")
+	newer := filepath.Join(dir, "02-new.jsonl")
+	tieWinner := filepath.Join(dir, "03-tie.jsonl")
+	for _, path := range []string{older, newer, tieWinner} {
+		if err := os.WriteFile(path, []byte("{}\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	base := time.Unix(1700000000, 0)
+	newest := base.Add(250 * time.Millisecond)
+	for path, ts := range map[string]time.Time{
+		older:     base,
+		newer:     newest,
+		tieWinner: newest,
+	} {
+		if err := os.Chtimes(path, ts, ts); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := latestSessionFile([]string{"/missing/session.jsonl", newer, older, tieWinner})
+	if got != tieWinner {
+		t.Fatalf("expected lexicographic tie winner %q, got %q", tieWinner, got)
+	}
+}
+
+func TestCacheSuggestionUsesSinglePercent(t *testing.T) {
+	got := i18n.T("cache_suggestion_none")
+	if strings.Contains(got, "%%") || !strings.Contains(got, "90%") {
+		t.Fatalf("cache suggestion should render a single percent sign: %q", got)
 	}
 }
