@@ -1987,6 +1987,13 @@ func (m Model) renderWaste() string {
 	var sections []string
 	sections = append(sections, sessionLabel, "")
 
+	if summary := m.renderSlowRunSummary(s); summary != "" {
+		sections = append(sections, summary, "")
+	}
+	if slowPath := m.renderSlowPathEvidence(s); slowPath != "" {
+		sections = append(sections, slowPath, "")
+	}
+
 	// Waste Score Summary
 	scoreCard := m.renderWasteScoreCard(s)
 	if scoreCard != "" {
@@ -1994,8 +2001,8 @@ func (m Model) renderWaste() string {
 	}
 
 	cards := []string{
-		pCard("196", i18n.T("diag_loop_fingerprint"), m.renderFingerprintLoops(s)),
 		pCard("39", i18n.T("diag_tool_latency"), m.renderToolLatency(s)),
+		pCard("196", i18n.T("diag_loop_fingerprint"), m.renderFingerprintLoops(s)),
 		pCard("220", i18n.T("diag_context_util"), m.renderContextUtil(s)),
 		pCard("208", i18n.T("diag_large_params"), m.renderLargeParams(s)),
 		pCard("42", i18n.T("diag_unused_tools"), m.renderUnusedTools(s)),
@@ -2019,6 +2026,130 @@ func (m Model) renderWaste() string {
 	}
 	sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, cards...))
 	return m.frameContent(lipgloss.JoinVertical(lipgloss.Left, sections...))
+}
+
+func (m Model) renderSlowRunSummary(s engine.Session) string {
+	panelW := m.frameBodyWidth()
+	primary, detail, color := slowRunPrimarySignal(s)
+	lines := []string{
+		boldStyle.Render(i18n.T("diag_slow_summary_title")),
+		lipgloss.NewStyle().Foreground(color).Bold(true).Render(truncate(primary, maxInt(8, panelW-6))),
+		dimStyle.Render(truncate(detail, maxInt(8, panelW-6))),
+	}
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(color).
+		Padding(1, 2)
+	return styleForOuterWidth(style, panelW).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
+func (m Model) renderSlowPathEvidence(s engine.Session) string {
+	panelW := m.frameBodyWidth()
+	bodyW := maxInt(8, panelW-8)
+	var lines []string
+	for _, line := range slowPathLines(s, bodyW) {
+		lines = append(lines, truncate(line, bodyW))
+	}
+	if len(lines) == 0 {
+		lines = append(lines, dimStyle.Render(i18n.T("diag_slow_no_evidence")))
+	}
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")).
+		Padding(1, 2)
+	return styleForOuterWidth(style, panelW).Render(lipgloss.JoinVertical(lipgloss.Left,
+		boldStyle.Render(i18n.T("diag_slow_path_title")),
+		"",
+		lipgloss.JoinVertical(lipgloss.Left, lines...),
+	))
+}
+
+func slowRunPrimarySignal(s engine.Session) (string, string, lipgloss.Color) {
+	if tl, ok := topSlowTool(s); ok {
+		return i18n.T("diag_slow_primary_tool_latency"),
+			fmt.Sprintf(i18n.T("diag_slow_tool_detail"), tl.ToolName, chartValue(tl.P95Sec), chartValue(tl.MaxSec)),
+			lipgloss.Color("196")
+	}
+	if maxGap := maxGapSeconds(s.Metrics.GapsSec); maxGap >= 60 {
+		return i18n.T("diag_slow_primary_gap"),
+			fmt.Sprintf(i18n.T("diag_slow_gap_detail"), maxGap),
+			lipgloss.Color("196")
+	}
+	if len(s.LoopFingerprints) > 0 || s.LoopCost.TotalLoopCost > 0 {
+		return i18n.T("diag_slow_primary_loop"),
+			i18n.T("diag_slow_loop_detail"),
+			lipgloss.Color("220")
+	}
+	if len(s.LargeParams) > 0 {
+		return i18n.T("diag_slow_primary_params"),
+			i18n.T("diag_slow_params_detail"),
+			lipgloss.Color("208")
+	}
+	if s.ContextUtil.RiskLevel == "critical" || s.ContextUtil.RiskLevel == "warning" {
+		return i18n.T("diag_slow_primary_context"),
+			s.ContextUtil.Suggestion,
+			lipgloss.Color("220")
+	}
+	return i18n.T("diag_slow_primary_clear"), i18n.T("diag_slow_clear_detail"), lipgloss.Color("42")
+}
+
+func slowPathLines(s engine.Session, width int) []string {
+	var lines []string
+	if tl, ok := topSlowTool(s); ok {
+		lines = append(lines, fmt.Sprintf(i18n.T("diag_slow_path_tool"), tl.ToolName, chartValue(tl.P95Sec), chartValue(tl.MaxSec)))
+	}
+	if maxGap := maxGapSeconds(s.Metrics.GapsSec); maxGap > 0 {
+		lines = append(lines, fmt.Sprintf(i18n.T("diag_slow_path_gap"), maxGap))
+	}
+	if len(s.LoopFingerprints) > 0 || s.LoopCost.TotalLoopCost > 0 {
+		lines = append(lines, i18n.T("diag_slow_path_loop"))
+	}
+	if len(s.LargeParams) > 0 {
+		lines = append(lines, fmt.Sprintf(i18n.T("diag_slow_path_params"), len(s.LargeParams)))
+	}
+	if s.ContextUtil.RiskLevel == "critical" || s.ContextUtil.RiskLevel == "warning" {
+		lines = append(lines, fmt.Sprintf(i18n.T("diag_slow_path_context"), s.ContextUtil.RiskLevel))
+	}
+	for i, line := range lines {
+		lines[i] = fmt.Sprintf("%d. %s", i+1, truncate(line, width-3))
+	}
+	return lines
+}
+
+func topSlowTool(s engine.Session) (engine.ToolLatencyItem, bool) {
+	latencies := sortedToolLatencies(s.ToolLatencies)
+	if len(latencies) == 0 {
+		return engine.ToolLatencyItem{}, false
+	}
+	for _, tl := range latencies {
+		if tl.IsSlow {
+			return tl, true
+		}
+	}
+	return latencies[0], chartValue(latencies[0].MaxSec) > 0
+}
+
+func sortedToolLatencies(items []engine.ToolLatencyItem) []engine.ToolLatencyItem {
+	rows := append([]engine.ToolLatencyItem(nil), items...)
+	sort.SliceStable(rows, func(i, j int) bool {
+		left := chartValue(rows[i].P95Sec)
+		right := chartValue(rows[j].P95Sec)
+		if left != right {
+			return left > right
+		}
+		return chartValue(rows[i].MaxSec) > chartValue(rows[j].MaxSec)
+	})
+	return rows
+}
+
+func maxGapSeconds(gaps []float64) float64 {
+	maxGap := 0.0
+	for _, gap := range gaps {
+		if v := chartValue(gap); v > maxGap {
+			maxGap = v
+		}
+	}
+	return maxGap
 }
 
 func (m Model) renderFingerprintLoops(s engine.Session) string {
@@ -2158,13 +2289,14 @@ func (m Model) renderToolLatency(s engine.Session) string {
 	if len(s.ToolLatencies) == 0 {
 		return dimStyle.Render(i18n.T("diag_no_latency"))
 	}
+	latencies := sortedToolLatencies(s.ToolLatencies)
 	if m.frameBodyWidth() < 70 {
 		var lines []string
 		lines = append(lines, dimStyle.Render(fmt.Sprintf("  %-18s %5s %5s",
 			i18n.T("diag_tool_lat_col_name"),
 			i18n.T("diag_tool_lat_col_avg"),
 			i18n.T("diag_tool_lat_col_max"))))
-		for i, tl := range s.ToolLatencies {
+		for i, tl := range latencies {
 			if i >= 6 {
 				break
 			}
@@ -2189,7 +2321,7 @@ func (m Model) renderToolLatency(s engine.Session) string {
 			i18n.T("diag_tool_lat_col_timeout")))
 	var rows []string
 	rows = append(rows, header)
-	for i, tl := range s.ToolLatencies {
+	for i, tl := range latencies {
 		if i >= 8 {
 			break
 		}
