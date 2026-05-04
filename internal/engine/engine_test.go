@@ -191,6 +191,24 @@ func TestLoadAllSkipsBadFilesAndSortsBySessionStart(t *testing.T) {
 	}
 }
 
+func TestFindSessionFilesCustomDirIncludesNestedSessionRoots(t *testing.T) {
+	dir := t.TempDir()
+	nested := filepath.Join(dir, "2026", "05", "04")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	top := writeLoadableHermesSession(t, dir, "top", "2026-01-02T10:00:00Z")
+	deep := writeLoadableHermesSession(t, nested, "deep", "2026-01-02T11:00:00Z")
+
+	files := FindSessionFiles(dir)
+	if !containsPath(files, top) || !containsPath(files, deep) {
+		t.Fatalf("expected explicit dir discovery to include top and nested sessions, got %v", files)
+	}
+	if files[0] != deep {
+		t.Fatalf("expected nested newer session first, got %v", files)
+	}
+}
+
 func TestParseClaudeCode_ToolResultArray(t *testing.T) {
 	doc := map[string]interface{}{
 		"model": "claude",
