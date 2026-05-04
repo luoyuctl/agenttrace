@@ -181,6 +181,11 @@ func main() {
 			for _, failure := range failures {
 				fmt.Fprintf(os.Stderr, i18n.T("gate_failed"), failure)
 			}
+			fmt.Fprint(os.Stderr, renderOverviewGateEvidence(ov, sessions, overviewGateEvidenceOptions{
+				OutputPath:  *output,
+				SessionsDir: sessionsDir,
+				Demo:        *demo,
+			}))
 			os.Exit(2)
 		}
 		return
