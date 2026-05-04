@@ -1,6 +1,7 @@
 __pycache__/
 go/agenttrace
 dist/
+ci-artifacts/
 agentwaste
 .claude/settings.local.json
 .playwright-mcp/

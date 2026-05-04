@@ -18,15 +18,17 @@ section{border:1px solid var(--line);background:rgba(16,20,25,.78);padding:20px;
 <main>
 <header>
 <div><div class="brand">agenttrace</div><h1>AI agent session overview</h1><p>Static report generated from local coding-agent traces.</p></div>
-<div class="meta">v0.3.48<br>3 sessions<br><code>agenttrace --overview -f html</code></div>
+<div class="meta">v0.3.48<br>3 Sessions<br><code>agenttrace --overview -f html</code></div>
 </header>
 <div class="grid" aria-label="summary metrics">
-<div class="metric"><span>Sessions</span><strong>3</strong><p>1 healthy / 1 warning / 1 critical</p></div>
+<div class="metric"><span>Sessions</span><strong>3</strong><p>1 Healthy / 1 Warning / 1 Critical</p></div>
+<div class="metric"><span>Total tokens</span><strong>278200</strong><p>+ live</p></div>
 <div class="metric"><span>Average health</span><strong>58.7</strong><p>Fleet quality score</p></div>
-<div class="metric"><span>Total cost</span><strong>$0.81</strong><p>Estimated session cost</p></div>
+<div class="metric"><span>Money Wasted</span><strong>$0.81</strong><p>Estimated session cost</p></div>
 <div class="metric bad"><span>Tool failures</span><strong>3/5</strong><p>60.0% failure rate</p></div>
 </div>
-<section><h2>Recent sessions</h2><table><thead><tr><th>Session</th><th>Source</th><th>Model</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Health</th><th class="num">Anomalies</th></tr></thead><tbody>
+<section><h2>Health Trend</h2><p>Declining: 100→66</p></section>
+<section><h2>Recent sessions</h2><table><thead><tr><th>Session</th><th>Source</th><th>Model</th><th class="num">Total tokens</th><th class="num">Cost</th><th class="num">Health</th><th class="num">Anomalies</th></tr></thead><tbody>
 <tr><td>03-shallow-chat</td><td>Hermes Agent (JSONL)</td><td>gemini-2.5-pro</td><td class="num">30200</td><td class="num">$0.0570</td><td class="num health-warn">66</td><td class="num">2</td></tr>
 <tr><td>02-hanging-loop</td><td>Hermes Agent (JSONL)</td><td>gpt-5.1</td><td class="num">233000</td><td class="num">$0.7113</td><td class="num health-bad">10</td><td class="num">3</td></tr>
 <tr><td>01-healthy-ship</td><td>Hermes Agent (JSONL)</td><td>claude-sonnet-4</td><td class="num">15000</td><td class="num">$0.0423</td><td class="num health-good">100</td><td class="num">0</td></tr>
@@ -41,11 +43,11 @@ section{border:1px solid var(--line);background:rgba(16,20,25,.78);padding:20px;
 </tbody></table></section>
 <section><h2>Recent anomalies</h2>
 <table><thead><tr><th>Session</th><th>Type</th><th>Age</th></tr></thead><tbody>
-<tr><td>03-shallow-chat</td><td>shallow_thinking</td><td>now</td></tr>
-<tr><td>03-shallow-chat</td><td>no_tools</td><td>now</td></tr>
 <tr><td>02-hanging-loop</td><td>hanging</td><td>now</td></tr>
-<tr><td>02-hanging-loop</td><td>tool_failures</td><td>now</td></tr>
-<tr><td>02-hanging-loop</td><td>shallow_thinking</td><td>now</td></tr>
+<tr><td>02-hanging-loop</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>02-hanging-loop</td><td>tool failures</td><td>now</td></tr>
+<tr><td>03-shallow-chat</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>03-shallow-chat</td><td>no tools</td><td>now</td></tr>
 </tbody></table>
 </section>
 </main>

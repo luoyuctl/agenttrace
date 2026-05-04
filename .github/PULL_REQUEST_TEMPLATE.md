@@ -10,8 +10,16 @@ What changed and why?
 
 ## Validation
 
+- [ ] `test -z "$(gofmt -l .)"`
+- [ ] `go vet ./...`
 - [ ] `go test ./...`
 - [ ] `go build ./cmd/agenttrace`
+- [ ] `scripts/ci/check-output-contract.sh`
+- [ ] `scripts/ci/check-deterministic-output.sh`
+- [ ] `scripts/ci/check-report-semantics.sh`
+- [ ] `scripts/ci/check-release-surfaces.sh`
+- [ ] `scripts/ci/check-docs-commands.sh`
+- [ ] `scripts/ci/check-pages-artifact.sh site`
 - [ ] `node --check npm/install.js && node --check npm/run.js`
 - [ ] `ruby -c homebrew/Formula/agenttrace.rb`
 

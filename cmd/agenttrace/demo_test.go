@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/luoyuctl/agenttrace/internal/engine"
@@ -28,5 +29,9 @@ func TestWriteDemoSessionsProducesUsableData(t *testing.T) {
 	ov := engine.ComputeOverview(sessions)
 	if ov.TotalSessions != 3 || len(ov.AnomaliesTop) == 0 {
 		t.Fatalf("demo overview should show multiple sessions and anomalies: %+v", ov)
+	}
+	latest := latestSessionFile(files)
+	if !strings.HasSuffix(latest, "03-shallow-chat.jsonl") {
+		t.Fatalf("demo latest session should be deterministic, got %q", latest)
 	}
 }

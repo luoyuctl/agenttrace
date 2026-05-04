@@ -30,6 +30,9 @@ jobs:
           cp -R site/. public/
           cp assets/agenttrace-demo.gif assets/hero-banner.png assets/logo-icon.png assets/tui-preview.png public/assets/
 
+      - name: Validate Pages artifact
+        run: scripts/ci/check-pages-artifact.sh public
+
       - name: Configure Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d
         with:

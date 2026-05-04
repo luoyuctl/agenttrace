@@ -308,20 +308,52 @@ func resolveDefaultDir() string {
 }
 
 func latestSessionFile(files []string) string {
-	var latestFile string
-	var latestTime time.Time
+	type candidate struct {
+		path           string
+		sessionTime    time.Time
+		hasSessionTime bool
+		modTime        time.Time
+	}
+
+	var latest candidate
 	for _, f := range files {
 		info, err := os.Stat(f)
 		if err != nil {
 			continue
 		}
-		modTime := info.ModTime()
-		if latestFile == "" || modTime.After(latestTime) || (modTime.Equal(latestTime) && f > latestFile) {
-			latestFile = f
-			latestTime = modTime
+		current := candidate{path: f, modTime: info.ModTime()}
+		if session, err := engine.LoadSession(f); err == nil && session.Metrics.SessionStart != "" {
+			if ts, err := time.Parse(time.RFC3339, session.Metrics.SessionStart); err == nil {
+				current.sessionTime = ts
+				current.hasSessionTime = true
+			}
+		}
+		if latest.path == "" || newerSessionCandidate(current, latest) {
+			latest = current
 		}
 	}
-	return latestFile
+	return latest.path
+}
+
+func newerSessionCandidate(a, b struct {
+	path           string
+	sessionTime    time.Time
+	hasSessionTime bool
+	modTime        time.Time
+}) bool {
+	if a.hasSessionTime != b.hasSessionTime {
+		return a.hasSessionTime
+	}
+	if a.hasSessionTime {
+		if !a.sessionTime.Equal(b.sessionTime) {
+			return a.sessionTime.After(b.sessionTime)
+		}
+		return a.path > b.path
+	}
+	if !a.modTime.Equal(b.modTime) {
+		return a.modTime.After(b.modTime)
+	}
+	return a.path > b.path
 }
 
 func tuiLaunchErrorMessage(err error, demo bool) string {
