@@ -907,6 +907,37 @@ func TestFindSessionFilesCachedSkipsDeletedCachedFiles(t *testing.T) {
 	}
 }
 
+func TestValidCachedSessionCountUsesCurrentFileMetadata(t *testing.T) {
+	dir := t.TempDir()
+	fresh := filepath.Join(dir, "fresh.jsonl")
+	stale := filepath.Join(dir, "stale.jsonl")
+	if err := os.WriteFile(fresh, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	freshInfo, err := os.Stat(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleInfo, err := os.Stat(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := SessionCache{Entries: map[string]CacheEntry{
+		fresh: {ModTime: freshInfo.ModTime().UnixNano(), Size: freshInfo.Size(), Session: Session{Name: "fresh"}},
+		stale: {ModTime: staleInfo.ModTime().Add(-time.Hour).UnixNano(), Size: staleInfo.Size(), Session: Session{Name: "stale"}},
+	}}
+
+	if got := ValidCachedSessionCount([]string{fresh, stale}, cache); got != 1 {
+		t.Fatalf("expected one valid cached session, got %d", got)
+	}
+	if _, ok := cache.Entries[stale]; ok {
+		t.Fatalf("stale cache entry should be evicted")
+	}
+}
+
 func TestFindReportableSessionFilesCachedSkipsSQLiteBackedDirs(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

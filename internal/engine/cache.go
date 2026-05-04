@@ -80,6 +80,16 @@ func (sc SessionCache) EntryCount() int {
 	return len(seen)
 }
 
+func ValidCachedSessionCount(paths []string, cache SessionCache) int {
+	valid := 0
+	for _, path := range paths {
+		if isCachedSessionFresh(path, cache) {
+			valid++
+		}
+	}
+	return valid
+}
+
 // LoadSessionCache 从磁盘读取会话缓存，完整 Session 会按需解码。
 func LoadSessionCache() SessionCache {
 	data, err := os.ReadFile(sessionCachePath())
@@ -154,17 +164,11 @@ func ClearSessionCache() error {
 
 // CachedSession returns a parsed session only when file metadata still matches.
 func CachedSession(path string, cache SessionCache) (Session, bool) {
+	if !isCachedSessionFresh(path, cache) {
+		return Session{}, false
+	}
 	entry, ok := cachedEntry(path, cache)
 	if !ok {
-		return Session{}, false
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		deleteCachedSession(cache, path)
-		return Session{}, false
-	}
-	if entry.ModTime != info.ModTime().UnixNano() || entry.Size != info.Size() {
-		deleteCachedSession(cache, path)
 		return Session{}, false
 	}
 	s := entry.Session
@@ -354,6 +358,23 @@ func cachedEntryHeader(path string, cache SessionCache) (CacheEntry, bool) {
 		return CacheEntry{}, false
 	}
 	return entry, true
+}
+
+func isCachedSessionFresh(path string, cache SessionCache) bool {
+	entry, ok := cachedEntryHeader(path, cache)
+	if !ok {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		deleteCachedSession(cache, path)
+		return false
+	}
+	if entry.ModTime != info.ModTime().UnixNano() || entry.Size != info.Size() {
+		deleteCachedSession(cache, path)
+		return false
+	}
+	return true
 }
 
 func decodeCacheEntryHeader(raw json.RawMessage) (CacheEntry, bool) {

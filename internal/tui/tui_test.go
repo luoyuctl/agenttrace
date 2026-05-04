@@ -2210,8 +2210,8 @@ func TestStartReloadDiscoversThenLoadsCachedSessions(t *testing.T) {
 	if len(m.sessions) != 1 || m.sessions[0].Name != "cached" {
 		t.Fatalf("cached sessions not hydrated: %+v", m.sessions)
 	}
-	if m.loadedFromCache != 1 || len(m.loadQueue) != 1 {
-		t.Fatalf("bad cache load state: fromCache=%d queue=%d", m.loadedFromCache, len(m.loadQueue))
+	if m.loadedFromCache != 1 || m.cacheEntries != 1 || m.cacheValid != 1 || len(m.loadQueue) != 1 {
+		t.Fatalf("bad cache load state: fromCache=%d entries=%d valid=%d queue=%d", m.loadedFromCache, m.cacheEntries, m.cacheValid, len(m.loadQueue))
 	}
 }
 
@@ -2240,6 +2240,9 @@ func TestDefaultDiscoveryUsesReportableSQLiteBackedSource(t *testing.T) {
 	}
 	if len(msg.files) != 0 {
 		t.Fatalf("default TUI discovery should skip sqlite-backed legacy files: %v", msg.files)
+	}
+	if msg.cacheEntries != 0 || msg.cacheValid != 0 {
+		t.Fatalf("sqlite-only discovery should not report unrelated file cache stats: entries=%d valid=%d", msg.cacheEntries, msg.cacheValid)
 	}
 	if len(msg.sessions) != 1 || msg.sessions[0].session.Metrics.SourceTool != "hermes_db" {
 		t.Fatalf("expected one sqlite-backed Hermes session, got %+v", msg.sessions)
@@ -2324,11 +2327,28 @@ func TestFooterShowsCacheStatusAfterLoad(t *testing.T) {
 	m.view = viewList
 	m.loadTotal = 3
 	m.loadedFromCache = 2
+	m.cacheEntries = 3
+	m.cacheValid = 2
 
 	rendered := m.View()
 
-	if !strings.Contains(rendered, "cache 2/3") {
+	if !strings.Contains(rendered, "cache hits 2/2 valid (3 entries)") {
 		t.Fatalf("footer should expose cache hit status:\n%s", rendered)
+	}
+}
+
+func TestFooterShowsUncachedStateWithValidCacheTerms(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 30)
+	m.view = viewList
+	m.loadTotal = 3
+
+	rendered := m.View()
+
+	if !strings.Contains(rendered, "cache hits 0/0 valid (0 entries)") {
+		t.Fatalf("footer should distinguish hits, valid entries, and cache entries:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "cache 0/3") {
+		t.Fatalf("footer should not map cache misses to discovered session total:\n%s", rendered)
 	}
 }
 
@@ -2343,10 +2363,12 @@ func TestChineseFooterShowsCacheStatus(t *testing.T) {
 	m.view = viewList
 	m.loadTotal = 3
 	m.loadedFromCache = 5
+	m.cacheEntries = 4
+	m.cacheValid = 3
 
 	rendered := m.View()
 
-	if !strings.Contains(rendered, "缓存 3/3") {
+	if !strings.Contains(rendered, "缓存命中 3/3 有效（4 条）") {
 		t.Fatalf("footer should expose translated clamped cache status:\n%s", rendered)
 	}
 }
