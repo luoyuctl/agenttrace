@@ -1854,3 +1854,41 @@ func TestPredictCostAnomalyLoopWasteMessageShowsAmountsAndPercent(t *testing.T) 
 		t.Fatalf("loop waste alert should show loop cost, total cost, and percent: %+v", alert)
 	}
 }
+
+func TestPredictCostAnomalyClampsLoopWasteToTotal(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	sessions := []Session{
+		{Metrics: Metrics{AssistantTurns: 1, CostEstimated: 0.0008}},
+	}
+	current := Session{
+		Metrics:  Metrics{AssistantTurns: 1, CostEstimated: 0.0008},
+		LoopCost: LoopCost{TotalLoopCost: 0.0750},
+	}
+	alert := PredictCostAnomaly(sessions, current)
+
+	if !alert.Triggered || !strings.Contains(alert.Message, "$0.0008 of $0.0008 total (100%)") {
+		t.Fatalf("loop waste alert should clamp loop cost to total: %+v", alert)
+	}
+	if strings.Contains(alert.Message, "$0.0750") || strings.Contains(alert.Message, "9375%") {
+		t.Fatalf("loop waste alert kept impossible cost relationship: %q", alert.Message)
+	}
+}
+
+func TestWasteReportClampsLoopWasteToTotal(t *testing.T) {
+	s := Session{
+		Metrics:  Metrics{CostEstimated: 0.0008},
+		LoopCost: LoopCost{ToolLoopCost: 0.0450, RetryCost: 0.0300, TotalLoopCost: 0.0750},
+	}
+
+	report := ComputeWasteReportFromSession(&s)
+
+	if report.LoopCost != 0.0008 || report.LoopPercent != 100 {
+		t.Fatalf("waste report should clamp loop waste to total, got cost=%f percent=%f", report.LoopCost, report.LoopPercent)
+	}
+	if report.TotalWasted > s.Metrics.CostEstimated {
+		t.Fatalf("total wasted should not exceed total cost for loop-only waste: got %.4f total %.4f", report.TotalWasted, s.Metrics.CostEstimated)
+	}
+}

@@ -1550,6 +1550,10 @@ func (m Model) renderLoopAnalysis() string {
 	}
 	lr := m.loopResult
 	if lr.HasLoop {
+		loopCost := safeAmount(lr.LoopCost)
+		if idx := m.findSessionIndex(); idx >= 0 && idx < len(m.sessions) {
+			loopCost = engine.ClampLoopWaste(loopCost, m.sessions[idx].Metrics.CostEstimated)
+		}
 		loopCard := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("196")).
@@ -1561,7 +1565,7 @@ func (m Model) renderLoopAnalysis() string {
 			lr.Turns,
 			i18n.T("loop_turns"),
 			i18n.T("loop_cost"),
-			lr.LoopCost)
+			loopCost)
 		return loopCard.Render(content)
 	}
 	loopCard := lipgloss.NewStyle().
@@ -1716,7 +1720,7 @@ func (m Model) renderWaste() string {
 func (m Model) renderFingerprintLoops(s engine.Session) string {
 	if len(s.LoopFingerprints) == 0 {
 		if s.LoopCost.TotalLoopCost > 0 {
-			return yellowStyle.Render(fmt.Sprintf(i18n.T("diag_simple_loop"), s.LoopCost.TotalLoopCost))
+			return yellowStyle.Render(fmt.Sprintf(i18n.T("diag_simple_loop"), engine.ClampLoopWaste(s.LoopCost.TotalLoopCost, s.Metrics.CostEstimated)))
 		}
 		return greenStyle.Render(i18n.T("diag_no_loop_fp"))
 	}
