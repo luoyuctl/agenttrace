@@ -25,7 +25,10 @@ for asset in \
   assets/agenttrace-demo.gif \
   assets/hero-banner.png \
   assets/logo-icon.png \
-  assets/readme-real-overview.png; do
+  assets/readme-real-overview.png \
+  assets/readme-real-critical.png \
+  assets/readme-real-detail.png \
+  assets/readme-real-diagnostics.png; do
   if [[ ! -f "$page_dir/$asset" && ! -f "$repo_root/$asset" ]]; then
     fail "missing Pages asset: $asset"
   fi

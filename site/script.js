@@ -7,7 +7,7 @@ if (copyButton) {
       await navigator.clipboard.writeText(value);
       copyButton.textContent = "Copied";
       setTimeout(() => {
-        copyButton.textContent = "Copy install";
+        copyButton.textContent = "Copy";
       }, 1600);
     } catch {
       copyButton.textContent = value;
