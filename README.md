@@ -20,7 +20,7 @@
   <a href="https://goreportcard.com/report/github.com/luoyuctl/agenttrace"><img src="https://goreportcard.com/badge/github.com/luoyuctl/agenttrace" alt="Go Report Card"></a>
   <img src="https://img.shields.io/badge/go-1.25+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.4.0-2bbc8a.svg" alt="Homebrew">
+  <img src="https://img.shields.io/badge/Homebrew-v0.4.1-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <p align="center">
@@ -63,15 +63,15 @@ agenttrace
 That local run found:
 
 ```text
-AGENTTRACE v0.4.0
+AGENTTRACE v0.4.1
 ```
 
 | Signal | What agenttrace found |
 |---|---:|
-| Analyzed sessions | 1,707 |
-| Total tokens | 8.68B |
-| Estimated cost | $4,716.31 |
-| Tool failure rate | 1.54% |
+| Analyzed sessions | 1,714 |
+| Total tokens | 8.89B |
+| Estimated cost | $4,867.99 |
+| Tool failure rate | 1.49% |
 | Critical sessions | 35 |
 | Average health | 90% |
 

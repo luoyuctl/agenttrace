@@ -1,6 +1,6 @@
 {
   "name": "agenttrace",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Local-first AI coding agent session history for cost, tokens, time, and slow-run diagnosis",
   "main": "install.js",
   "bin": {
