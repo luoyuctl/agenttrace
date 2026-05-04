@@ -2686,10 +2686,45 @@ func TestLoadingRenderWithinTerminalWidth(t *testing.T) {
 		m.loading = true
 		m.loadProgress = 3
 		m.loadTotal = 10
+		m.cacheValid = 4
+		m.cacheEntries = 6
+		m.loadedFromCache = 2
+		m.loadSourceCounts = map[string]int{"claude_code": 7, "codex_cli": 3, "gemini_cli": 1}
 		rendered := m.View()
 		if got := maxRenderedWidth(rendered); got > width {
 			t.Fatalf("loading render too wide: width=%d got=%d line=%q", width, got, widestLine(rendered))
 		}
+	}
+}
+
+func TestLoadingRenderShowsPhaseCacheAndSourceCounts(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 120, 30)
+	m.loading = true
+	m.loadProgress = 5
+	m.loadTotal = 10
+	m.loadedFromCache = 2
+	m.cacheValid = 4
+	m.cacheEntries = 8
+	m.loadSourceCounts = map[string]int{"claude_code": 6, "codex_cli": 3, "gemini_cli": 1}
+
+	rendered := m.View()
+	for _, want := range []string{
+		"Phase cache restore",
+		"parsed 3/10",
+		"cache hits 2/4 valid (8 entries)",
+		"sources Claude Code 6",
+		"Codex CLI 3",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("loading screen missing %q:\n%s", want, rendered)
+		}
+	}
+	if got := maxRenderedWidth(rendered); got > 120 {
+		t.Fatalf("loading render too wide: got=%d line=%q", got, widestLine(rendered))
 	}
 }
 
@@ -2701,8 +2736,36 @@ func TestLoadingRenderClampsProgressPastTotal(t *testing.T) {
 
 	rendered := m.View()
 
-	if !strings.Contains(rendered, "2/2") || !strings.Contains(rendered, "100%") {
+	if !strings.Contains(rendered, "2/2") || !strings.Contains(rendered, "100%") || !strings.Contains(rendered, "aggregation") {
 		t.Fatalf("expected clamped loading progress, got:\n%s", rendered)
+	}
+}
+
+func TestLoadingSourceCountsUsesCacheAndPathFallback(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := engine.SessionCache{Entries: map[string]engine.CacheEntry{
+		path: {
+			ModTime: info.ModTime().UnixNano(),
+			Size:    info.Size(),
+			Session: engine.Session{Metrics: engine.Metrics{SourceTool: "claude_code"}},
+		},
+	}}
+	counts := loadingSourceCounts(
+		[]string{path, "/Users/test/.gemini/tmp/b.jsonl"},
+		[]loadedSession{{session: engine.Session{Metrics: engine.Metrics{SourceTool: "hermes_jsonl"}}}},
+		cache,
+	)
+
+	if counts["claude_code"] != 1 || counts["gemini_cli"] != 1 || counts["hermes_jsonl"] != 1 {
+		t.Fatalf("bad source counts: %#v", counts)
 	}
 }
 
