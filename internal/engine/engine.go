@@ -2824,6 +2824,9 @@ func DiffSessions(a, b Session) SessionDiff {
 	// cost (低更好)
 	diff.Entries = append(diff.Entries, compareFloat("cost", a.Metrics.CostEstimated, b.Metrics.CostEstimated, "lower"))
 
+	// tokens (少更好, 代表上下文压力)
+	diff.Entries = append(diff.Entries, compareInt("tokens", diffTotalTokens(a.Metrics), diffTotalTokens(b.Metrics), "lower"))
+
 	// health (高更好)
 	diff.Entries = append(diff.Entries, compareInt("health", a.Health, b.Health, "higher"))
 
@@ -2846,6 +2849,10 @@ func DiffSessions(a, b Session) SessionDiff {
 	diff.Summary = buildDiffSummary(a, b)
 
 	return diff
+}
+
+func diffTotalTokens(m Metrics) int {
+	return m.TokensInput + m.TokensOutput + m.TokensCacheR + m.TokensCacheW
 }
 
 // compareInt 比较整数字段并返回 DiffEntry
