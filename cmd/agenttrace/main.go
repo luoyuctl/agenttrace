@@ -62,7 +62,9 @@ func main() {
 		}
 		fmt.Printf(i18n.T("cli_loaded_pricing"), n)
 		fmt.Printf(i18n.T("cli_cache_saved"), engine.CachePath())
-		// Fall through to allow --list-models after update
+		if !hasPostPricingAction(flag.Arg(0), *listModels, *testMatch, *doctor, *latest, *compare, *overview, *wasteFlag) {
+			return
+		}
 	}
 
 	// Test fuzzy matching (dev helper)
@@ -367,4 +369,8 @@ func isTTYOpenError(err error) bool {
 	return strings.Contains(msg, "/dev/tty") ||
 		strings.Contains(msg, "not a terminal") ||
 		strings.Contains(msg, "could not open a new tty")
+}
+
+func hasPostPricingAction(path string, listModels, testMatch, doctor, latest, compare, overview, waste bool) bool {
+	return path != "" || listModels || testMatch || doctor || latest || compare || overview || waste
 }
