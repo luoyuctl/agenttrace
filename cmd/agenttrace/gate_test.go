@@ -60,6 +60,59 @@ func TestOverviewGateChineseMessage(t *testing.T) {
 	}
 }
 
+func TestOverviewGateEvidenceIncludesLocalFailureFacts(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	sessions := []engine.Session{
+		{
+			Name:   "healthier",
+			Path:   "/tmp/agenttrace/b-healthier.jsonl",
+			Health: 70,
+			Metrics: engine.Metrics{
+				ToolCallsOK:   9,
+				ToolCallsFail: 1,
+			},
+		},
+		{
+			Name:   "critical",
+			Path:   "/tmp/agenttrace/a-critical.jsonl",
+			Health: 20,
+			Metrics: engine.Metrics{
+				ToolCallsOK:   1,
+				ToolCallsFail: 4,
+			},
+		},
+	}
+
+	got := renderOverviewGateEvidence(engine.ComputeOverview(sessions), sessions, overviewGateEvidenceOptions{
+		OutputPath:  "agenttrace-overview.json",
+		SessionsDir: "/tmp/agenttrace",
+	})
+
+	for _, want := range []string{
+		"Local evidence:",
+		"- avg health: 45.0",
+		"- critical sessions: 1",
+		"- tool fail rate: 33.3%",
+		"- report: agenttrace-overview.json",
+		"- lowest-health session: /tmp/agenttrace/a-critical.jsonl",
+		"- inspect: `agenttrace -d /tmp/agenttrace --overview -f json`",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("gate evidence missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestOverviewGateEvidenceUsesDemoInspectCommand(t *testing.T) {
+	got := renderOverviewGateEvidence(engine.ComputeOverview([]engine.Session{{Health: 40}}), []engine.Session{{Health: 40}}, overviewGateEvidenceOptions{Demo: true})
+	if !strings.Contains(got, "agenttrace --demo --overview -f json") {
+		t.Fatalf("demo gate evidence should show a reusable demo command:\n%s", got)
+	}
+}
+
 func TestTUILaunchErrorMessageAddsDemoTTYFallback(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.EN)
