@@ -1495,6 +1495,33 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 	}
 }
 
+func TestReportOverviewCostLabelUsesEstimatedTotalCost(t *testing.T) {
+	sessions := []Session{{
+		Name:   "demo",
+		Health: 88,
+		Metrics: Metrics{
+			SourceTool:    "codex_cli",
+			ModelUsed:     "gpt-5.1",
+			TokensInput:   1000,
+			TokensOutput:  500,
+			CostEstimated: 0.42,
+		},
+	}}
+	ov := ComputeOverview(sessions)
+	for name, out := range map[string]string{
+		"text":     ReportOverview(ov, sessions),
+		"markdown": ReportOverviewMarkdown(ov, sessions),
+		"html":     ReportOverviewHTML(ov, sessions),
+	} {
+		if !strings.Contains(out, "Total estimated cost") {
+			t.Fatalf("%s overview missing estimated total cost label:\n%s", name, out)
+		}
+		if strings.Contains(out, "Money Wasted") {
+			t.Fatalf("%s overview kept old waste wording:\n%s", name, out)
+		}
+	}
+}
+
 func assertOrderedSubstrings(t *testing.T, haystack string, needles []string) {
 	t.Helper()
 	last := -1

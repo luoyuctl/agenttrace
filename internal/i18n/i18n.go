@@ -572,8 +572,8 @@ var translations = map[string]map[Lang]string{
 		ZH: "检测到异常",
 	},
 	"total_cost": {
-		EN: "Money Wasted",
-		ZH: "烧掉的钱",
+		EN: "Total estimated cost",
+		ZH: "估算总费用",
 	},
 	"health_trend": {
 		EN: "Health Trend",

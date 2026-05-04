@@ -3,7 +3,7 @@ set -euo pipefail
 
 bin="${AGENTTRACE_BIN:-/tmp/agenttrace}"
 out_dir="${AGENTTRACE_CI_OUT:-/tmp/agenttrace-ci}"
-expected_cost_label="${AGENTTRACE_EXPECTED_COST_LABEL:-Money Wasted}"
+expected_cost_label="${AGENTTRACE_EXPECTED_COST_LABEL:-Total estimated cost}"
 
 fail() {
   echo "check-report-semantics: $*" >&2
