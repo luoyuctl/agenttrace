@@ -958,6 +958,7 @@ var translations = map[string]map[Lang]string{
 	"risk_normal":                   {EN: "normal", ZH: "正常"},
 	"risk_rare":                     {EN: "rare", ZH: "低频"},
 	"diff_need_two":                 {EN: "Need at least two visible sessions to compare.", ZH: "至少需要两个可见会话才能对比。"},
+	"diff_recovery_hint":            {EN: "Clear filters, return to the list, or select another visible session.", ZH: "清除筛选、返回列表，或选择另一个可见会话。"},
 	"diff_select_neighbor":          {EN: "Select a session and press d to compare nearby sessions.", ZH: "选择会话后按 d 对比相邻会话。"},
 	"diff_comparison":               {EN: "COMPARISON", ZH: "对比"},
 	"diff_winner_label":             {EN: "Winner: %s", ZH: "胜出: %s"},

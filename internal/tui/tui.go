@@ -227,7 +227,7 @@ func (m Model) Init() tea.Cmd {
 
 const (
 	cacheSaveInterval = 10
-	loadBatchSize     = 32
+	loadBatchSize     = 8
 )
 
 // startReload 启动渐进式缓存加载。
@@ -418,6 +418,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			switch msg.String() {
 			case "q", "ctrl+c":
+				m.loading = false
+				m.loadQueue = nil
 				return m, tea.Quit
 			}
 			return m, nil
@@ -1034,6 +1036,8 @@ func (m Model) View() string {
 	}
 	if m.commandActive {
 		content = lipgloss.JoinVertical(lipgloss.Left, m.renderCommandBar(), content)
+	} else if m.commandFeedback != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, m.renderCommandFeedbackBar(), content)
 	}
 
 	help := m.renderHelp()
@@ -1048,6 +1052,16 @@ func (m Model) renderCommandBar() string {
 		BorderForeground(lipgloss.Color("39")).
 		Padding(0, 1)
 	body := truncate(fmt.Sprintf(": %s_", m.commandInput), maxInt(1, width-4))
+	return styleForOuterWidth(style, width).Render(body)
+}
+
+func (m Model) renderCommandFeedbackBar() string {
+	width := m.contentWidth()
+	body := truncate(m.commandFeedback, maxInt(1, width-4))
+	style := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("63")).
+		Padding(0, 1)
 	return styleForOuterWidth(style, width).Render(body)
 }
 
@@ -2037,7 +2051,7 @@ func (m Model) renderDiff() string {
 			visibleCount = len(m.sessions)
 		}
 		if len(m.sessions) < 2 || visibleCount < 2 {
-			hint = i18n.T("diff_need_two")
+			hint = i18n.T("diff_need_two") + "\n" + i18n.T("diff_recovery_hint")
 		} else {
 			hint = i18n.T("diff_select_neighbor")
 		}

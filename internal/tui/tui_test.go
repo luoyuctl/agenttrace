@@ -1276,6 +1276,26 @@ func TestCommandModeFiltersAndSorts(t *testing.T) {
 	}
 }
 
+func TestCommandFeedbackRendersAcrossMajorViews(t *testing.T) {
+	for _, v := range []view{viewOverview, viewList, viewDetail, viewDiagnostics, viewDiff} {
+		m := resizeForTest(t, sampleModelForTest(), 100, 30)
+		m.view = v
+		if v == viewDetail {
+			m.openDetail()
+		}
+		if v == viewDiff {
+			m.diffResult = engine.DiffSessions(m.sessions[0], m.sessions[1])
+		}
+
+		m.runCommand("sort cost desc")
+
+		rendered := m.View()
+		if !strings.Contains(rendered, strings.TrimSpace(m.commandFeedback)) {
+			t.Fatalf("expected command feedback in view=%d, got:\n%s", v, rendered)
+		}
+	}
+}
+
 func TestCostFilterUsesSafeDisplayValue(t *testing.T) {
 	m := sampleModelForTest()
 	m.sessions[0].Metrics.CostEstimated = math.Inf(1)
@@ -2077,6 +2097,9 @@ func TestDiffEmptyStateExplainsSingleVisibleSession(t *testing.T) {
 	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("diff_need_two"))) {
 		t.Fatalf("expected single-visible diff hint, got:\n%s", rendered)
 	}
+	if !strings.Contains(rendered, strings.TrimSpace(i18n.T("diff_recovery_hint"))) {
+		t.Fatalf("expected diff recovery hint, got:\n%s", rendered)
+	}
 	if strings.Contains(rendered, strings.TrimSpace(i18n.T("diff_select_neighbor"))) {
 		t.Fatalf("diff empty state should not ask for a neighbor when only one row is visible:\n%s", rendered)
 	}
@@ -2168,6 +2191,25 @@ func TestAppendSessionKeepsFilteredRowsInSync(t *testing.T) {
 	}
 	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "match" {
 		t.Fatalf("appended filtered row selected wrong session: idx=%d", idx)
+	}
+}
+
+func TestLoadingQuitStopsImmediately(t *testing.T) {
+	m := resizeForTest(t, New("__missing_test_sessions__"), 100, 30)
+	m.loading = true
+	m.loadQueue = []string{"/tmp/session-a.jsonl", "/tmp/session-b.jsonl"}
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	got := next.(Model)
+
+	if cmd == nil {
+		t.Fatalf("expected quit command")
+	}
+	if got.loading {
+		t.Fatalf("loading should stop immediately after q")
+	}
+	if len(got.loadQueue) != 0 {
+		t.Fatalf("load queue should be cleared after q, got %d", len(got.loadQueue))
 	}
 }
 
