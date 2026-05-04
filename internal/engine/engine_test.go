@@ -661,6 +661,7 @@ func TestParseQwenCodeStreamJSONL_NoMessages(t *testing.T) {
 func TestFindSessionFilesIncludesQwenProjectChats(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	chatDir := filepath.Join(home, ".qwen", "projects", "repo", "chats")
 	if err := os.MkdirAll(chatDir, 0755); err != nil {
 		t.Fatal(err)
@@ -787,6 +788,7 @@ func TestDetectLargeParams_UsesToolArguments(t *testing.T) {
 func TestFindSessionFilesAutoDiscoverySortsByModTime(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	oldDir := filepath.Join(home, ".codex", "sessions")
 	newDir := filepath.Join(home, ".gemini", "sessions")
 	if err := os.MkdirAll(oldDir, 0755); err != nil {
@@ -941,6 +943,7 @@ func TestValidCachedSessionCountUsesCurrentFileMetadata(t *testing.T) {
 func TestFindReportableSessionFilesCachedSkipsSQLiteBackedDirs(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	sessionsDir := filepath.Join(home, ".hermes", "sessions")
 	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
 		t.Fatal(err)
