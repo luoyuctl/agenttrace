@@ -123,16 +123,17 @@ type Model struct {
 	overview engine.Overview
 
 	// Filter state
-	filterText      string
-	filterMode      string // "", "health", "source"
-	filterValue     string // e.g. "good", "hermes_jsonl"
-	filteredIndices []int  // maps table row → sessions index
-	filterHealth    string // good, warn, crit, <80, >=90
-	filterSource    string
-	filterModel     string
-	filterCostOp    string
-	filterCostValue float64
-	filterAnomaly   bool
+	filterText        string
+	filterMode        string // "", "health", "source"
+	filterValue       string // e.g. "good", "hermes_jsonl"
+	filteredIndices   []int  // maps table row → sessions index
+	filterHealth      string // good, warn, crit, <80, >=90
+	filterSource      string
+	filterModel       string
+	filterCostOp      string
+	filterCostValue   float64
+	filterAnomaly     bool
+	filterAnomalyType string
 
 	// 命令栏状态
 	commandActive   bool
@@ -513,6 +514,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.sortDesc = true
 				}
 				m.sortAndRefresh()
+			}
+
+		case "S":
+			if m.view == viewList && !m.filterActive {
+				m.applyTopDriverFilter("source")
+			}
+
+		case "M":
+			if m.view == viewList && !m.filterActive {
+				m.applyTopDriverFilter("model")
+			}
+
+		case "A":
+			if m.view == viewList && !m.filterActive {
+				m.applyTopDriverFilter("anomaly")
 			}
 
 		case "tab", "`":
@@ -1072,6 +1088,10 @@ func (m Model) renderListView() string {
 		sections = append(sections, empty)
 		extraLines += renderedLineCount(empty)
 	}
+	if summary := m.renderDriverSummary(contentW); summary != "" {
+		sections = append(sections, summary)
+		extraLines += renderedLineCount(summary)
+	}
 	if selected := m.renderSelectedSessionSummary(maxInt(1, contentW-6)); selected != "" {
 		panel := subtlePanel(i18n.T("list_selected"), selected, contentW)
 		sections = append(sections, panel)
@@ -1481,6 +1501,187 @@ func (m Model) cacheStatusLabel() string {
 		entries = 0
 	}
 	return fmt.Sprintf(i18n.T("cache_status"), hits, valid, entries)
+}
+
+type listDriverItem struct {
+	Label  string
+	Filter string
+	Count  int
+	Fail   int
+	Cost   float64
+}
+
+type listDriverSummary struct {
+	Total   int
+	Source  listDriverItem
+	Model   listDriverItem
+	Anomaly listDriverItem
+}
+
+func (m Model) renderDriverSummary(width int) string {
+	if len(m.sessions) < 20 && (m.loadTotal <= 0 || m.loadTotal == len(m.sessions)) && !m.hasAnyFilter() {
+		return ""
+	}
+	summary := m.buildDriverSummary()
+	if summary.Total == 0 {
+		return ""
+	}
+	lines := []string{}
+	if counts := m.parsedDiscoveryLabel(); counts != "" {
+		lines = append(lines, counts)
+	}
+	lines = append(lines,
+		m.driverSummaryLine("S", i18n.T("driver_source"), summary.Source, summary.Total, width-4),
+		m.driverSummaryLine("M", i18n.T("driver_model"), summary.Model, summary.Total, width-4),
+		m.driverSummaryLine("A", i18n.T("driver_anomaly"), summary.Anomaly, summary.Total, width-4),
+		dimStyle.Render(truncate(i18n.T("driver_jump_hint"), maxInt(1, width-4))),
+	)
+	return subtlePanel(i18n.T("driver_summary_title"), lipgloss.JoinVertical(lipgloss.Left, lines...), width)
+}
+
+func (m Model) parsedDiscoveryLabel() string {
+	parsed := len(m.sessions)
+	discovered := m.loadTotal
+	if discovered <= 0 || discovered == parsed {
+		return ""
+	}
+	visible := len(m.filteredIndices)
+	if !m.hasAnyFilter() {
+		visible = parsed
+	}
+	return dimStyle.Render(fmt.Sprintf(i18n.T("driver_counts"), visible, parsed, discovered))
+}
+
+func (m Model) driverSummaryLine(key, label string, item listDriverItem, total int, width int) string {
+	if item.Count == 0 {
+		return dimStyle.Render(truncate(fmt.Sprintf("%s %-7s %s", key, label, i18n.T("driver_none")), width))
+	}
+	pct := 0
+	if total > 0 {
+		pct = item.Count * 100 / total
+	}
+	text := fmt.Sprintf("%s %-7s %s  %d/%d %d%%  %s %d  %s %s",
+		key,
+		label,
+		item.Label,
+		item.Count,
+		total,
+		pct,
+		i18n.T("fail"),
+		item.Fail,
+		i18n.T("cost"),
+		costCell(item.Cost),
+	)
+	return truncate(text, width)
+}
+
+func (m Model) buildDriverSummary() listDriverSummary {
+	indices := m.filteredIndices
+	if len(indices) == 0 && !m.hasAnyFilter() {
+		indices = make([]int, 0, len(m.sessions))
+		for i := range m.sessions {
+			indices = append(indices, i)
+		}
+	}
+
+	sources := map[string]*listDriverItem{}
+	models := map[string]*listDriverItem{}
+	anomalies := map[string]*listDriverItem{}
+	for _, idx := range indices {
+		if idx < 0 || idx >= len(m.sessions) {
+			continue
+		}
+		s := m.sessions[idx]
+		fail := nonNegativeInt(s.Metrics.ToolCallsFail)
+		cost := safeAmount(s.Metrics.CostEstimated)
+
+		sourceFilter := s.Metrics.SourceTool
+		sourceLabel := sourceDisplayName(sourceFilter)
+		addDriverItem(sources, sourceFilter, sourceLabel, fail, cost)
+
+		modelFilter := s.Metrics.ModelUsed
+		modelLabel := modelFilter
+		if modelLabel == "" {
+			modelLabel = i18n.T("not_available")
+		}
+		addDriverItem(models, modelFilter, modelLabel, fail, cost)
+
+		if len(s.Anomalies) > 0 {
+			anomalyFilter := s.Anomalies[0].Type
+			addDriverItem(anomalies, anomalyFilter, anomalyTypeLabel(anomalyFilter), fail, cost)
+		}
+	}
+
+	return listDriverSummary{
+		Total:   len(indices),
+		Source:  topDriverItem(sources),
+		Model:   topDriverItem(models),
+		Anomaly: topDriverItem(anomalies),
+	}
+}
+
+func addDriverItem(items map[string]*listDriverItem, filter, label string, fail int, cost float64) {
+	if filter == "" {
+		filter = label
+	}
+	if label == "" {
+		label = i18n.T("not_available")
+	}
+	item := items[filter]
+	if item == nil {
+		item = &listDriverItem{Label: label, Filter: filter}
+		items[filter] = item
+	}
+	item.Count++
+	item.Fail += fail
+	item.Cost += cost
+}
+
+func topDriverItem(items map[string]*listDriverItem) listDriverItem {
+	var top listDriverItem
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		if item.Count > top.Count ||
+			(item.Count == top.Count && item.Fail > top.Fail) ||
+			(item.Count == top.Count && item.Fail == top.Fail && item.Cost > top.Cost) ||
+			(item.Count == top.Count && item.Fail == top.Fail && item.Cost == top.Cost && item.Label < top.Label) {
+			top = *item
+		}
+	}
+	return top
+}
+
+func (m *Model) applyTopDriverFilter(kind string) {
+	summary := m.buildDriverSummary()
+	switch kind {
+	case "source":
+		if summary.Source.Count == 0 {
+			return
+		}
+		m.resetFilters()
+		m.filterSource = summary.Source.Filter
+		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_filter_source"), summary.Source.Label)
+	case "model":
+		if summary.Model.Count == 0 {
+			return
+		}
+		m.resetFilters()
+		m.filterModel = summary.Model.Filter
+		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_filter_model"), summary.Model.Label)
+	case "anomaly":
+		if summary.Anomaly.Count == 0 {
+			return
+		}
+		m.resetFilters()
+		m.filterAnomalyType = summary.Anomaly.Filter
+		m.commandFeedback = fmt.Sprintf(i18n.T("cmd_filter_anomaly_type"), summary.Anomaly.Label)
+	default:
+		return
+	}
+	m.view = viewList
+	m.rebuildFilteredView()
 }
 
 func (m Model) viewName() string {
@@ -3713,6 +3914,18 @@ func (m *Model) matchesFilters(s engine.Session) bool {
 	if m.filterAnomaly && len(s.Anomalies) == 0 {
 		return false
 	}
+	if m.filterAnomalyType != "" {
+		matched := false
+		for _, a := range s.Anomalies {
+			if strings.EqualFold(a.Type, m.filterAnomalyType) || strings.Contains(strings.ToLower(anomalyTypeLabel(a.Type)), strings.ToLower(m.filterAnomalyType)) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
 	if m.filterText != "" {
 		q := strings.ToLower(m.filterText)
 		sourceDisplay := s.Metrics.SourceTool
@@ -3750,6 +3963,9 @@ func (m *Model) filterLabel() string {
 	if m.filterAnomaly {
 		parts = append(parts, i18n.T("list_filter_anomalies"))
 	}
+	if m.filterAnomalyType != "" {
+		parts = append(parts, fmt.Sprintf("%s=%q", i18n.T("driver_anomaly"), anomalyTypeLabel(m.filterAnomalyType)))
+	}
 	if m.filterText != "" {
 		parts = append(parts, fmt.Sprintf("%s=%q", i18n.T("list_filter_text"), m.filterText))
 	}
@@ -3766,7 +3982,8 @@ func (m *Model) hasAnyFilter() bool {
 		m.filterSource != "" ||
 		m.filterModel != "" ||
 		m.filterCostOp != "" ||
-		m.filterAnomaly
+		m.filterAnomaly ||
+		m.filterAnomalyType != ""
 }
 
 func (m *Model) rebuildFilteredView() {
