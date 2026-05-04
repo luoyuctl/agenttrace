@@ -2092,12 +2092,16 @@ func TestDiagnosticsClampsInvalidContextUtilization(t *testing.T) {
 
 func TestDiffRendersWinnerInsight(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 36)
+	m.sessions[0].Metrics.DurationSec = 60
+	m.sessions[1].Metrics.DurationSec = 180
 	m.diffResult = engine.DiffSessions(m.sessions[0], m.sessions[1])
 	m.view = viewDiff
 
 	rendered := m.View()
-	if !strings.Contains(rendered, "Winner:") {
-		t.Fatalf("expected diff winner insight")
+	for _, want := range []string{"DIFF VERDICT", "B is slower", "Winner:", "Cost", "Tokens", "Duration", "Fail count", "Health"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected diff explanation %q:\n%s", want, rendered)
+		}
 	}
 }
 
@@ -2241,7 +2245,7 @@ func TestWideDiffUsesFullComparisonLayout(t *testing.T) {
 	m.view = viewDiff
 
 	rendered := m.View()
-	for _, want := range []string{"COMPARISON", "A  session_alpha", "B  session_beta"} {
+	for _, want := range []string{"DIFF VERDICT", "Tokens", "A  session_alpha", "B  session_beta"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected %q in wide diff layout", want)
 		}

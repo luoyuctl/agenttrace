@@ -2326,11 +2326,20 @@ func (m Model) renderDiff() string {
 	if winner == i18n.T("diff_tie") {
 		winStyle = yellowStyle
 	}
-	insight := subtlePanel(i18n.T("diff_comparison"), winStyle.Render(fmt.Sprintf(i18n.T("diff_winner_label"), winner))+dimStyle.Render(" · ")+truncate(explanation, maxInt(8, contentW-24)), contentW)
+	verdict := buildDiffVerdict(dr)
+	insightBody := lipgloss.JoinVertical(lipgloss.Left,
+		boldStyle.Render(truncate(verdict, maxInt(8, contentW-8))),
+		winStyle.Render(fmt.Sprintf(i18n.T("diff_winner_label"), winner))+dimStyle.Render(" · ")+truncate(explanation, maxInt(8, contentW-24)),
+	)
+	insight := subtlePanel(i18n.T("diff_verdict_title"), insightBody, contentW)
+	deltas := m.renderDiffDeltaStrip(dr, contentW)
 
 	if contentW < 82 {
 		var rows []string
 		rows = append(rows, insight)
+		if deltas != "" {
+			rows = append(rows, deltas)
+		}
 		for _, e := range dr.Entries {
 			rows = append(rows, fmt.Sprintf("%s  %s → %s %s",
 				dimStyle.Render(diffFieldLabel(e.Field)),
@@ -2348,11 +2357,61 @@ func (m Model) renderDiff() string {
 	summary := greenStyle.Render(truncate(dr.Summary, contentW-4))
 	body := lipgloss.JoinVertical(lipgloss.Left,
 		insight,
+		deltas,
 		lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right),
 		"",
 		summary,
 	)
 	return m.frameContent(body)
+}
+
+func (m Model) renderDiffDeltaStrip(dr engine.SessionDiff, width int) string {
+	entryByField := map[string]engine.DiffEntry{}
+	for _, e := range dr.Entries {
+		entryByField[e.Field] = e
+	}
+	fields := []string{"cost", "tokens", "duration", "turns", "tools", "fail_count", "health"}
+	innerW := maxInt(12, width)
+	var rows []string
+	var row []string
+	rowW := 0
+	for _, field := range fields {
+		e, ok := entryByField[field]
+		if !ok {
+			continue
+		}
+		chip := diffDeltaChip(e, innerW)
+		chipW := lipgloss.Width(chip)
+		if len(row) > 0 && rowW+1+chipW > innerW {
+			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, row...))
+			row = nil
+			rowW = 0
+		}
+		if len(row) > 0 {
+			row = append(row, " ")
+			rowW++
+		}
+		row = append(row, chip)
+		rowW += chipW
+	}
+	if len(row) > 0 {
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, row...))
+	}
+	if len(rows) == 0 {
+		return ""
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+func diffDeltaChip(e engine.DiffEntry, maxW int) string {
+	label := diffFieldLabel(e.Field)
+	value := fmt.Sprintf("%s %s→%s %s", label, e.ValueA, e.ValueB, e.Delta)
+	chipW := minInt(maxInt(16, lipgloss.Width(value)+4), maxInt(16, maxW))
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(diffDeltaColor(e)).
+		Padding(0, 1)
+	return styleForOuterWidth(style, chipW).Render(diffDeltaStyle(e).Render(truncate(value, maxInt(4, chipW-4))))
 }
 
 func (m Model) renderDiffSessionPanel(label, name string, entries []engine.DiffEntry, leftSide bool, width int) string {
@@ -2388,6 +2447,17 @@ func diffDeltaStyle(e engine.DiffEntry) lipgloss.Style {
 		return yellowStyle
 	default:
 		return dimStyle
+	}
+}
+
+func diffDeltaColor(e engine.DiffEntry) lipgloss.Color {
+	switch e.Better {
+	case "B":
+		return lipgloss.Color("42")
+	case "A":
+		return lipgloss.Color("220")
+	default:
+		return lipgloss.Color("245")
 	}
 }
 
@@ -3614,6 +3684,8 @@ func diffFieldLabel(field string) string {
 		return i18n.T("diff_field_health")
 	case "cost":
 		return i18n.T("diff_field_cost")
+	case "tokens":
+		return i18n.T("diff_field_tokens")
 	case "turns":
 		return i18n.T("diff_field_turns")
 	case "tools":

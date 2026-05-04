@@ -120,3 +120,42 @@ func buildDiffInsight(dr engine.SessionDiff) (winner string, explanation string)
 	}
 	return winner, explanation
 }
+
+func buildDiffVerdict(dr engine.SessionDiff) string {
+	entries := map[string]engine.DiffEntry{}
+	for _, e := range dr.Entries {
+		entries[e.Field] = e
+	}
+	if e, ok := entries["duration"]; ok {
+		switch e.Delta {
+		case "↑":
+			return i18n.T("diff_verdict_slower_duration")
+		case "↓":
+			return i18n.T("diff_verdict_faster_duration")
+		}
+	}
+	if e, ok := entries["cost"]; ok {
+		switch e.Delta {
+		case "↑":
+			return i18n.T("diff_verdict_costlier")
+		case "↓":
+			return i18n.T("diff_verdict_cheaper")
+		}
+	}
+	if e, ok := entries["fail_count"]; ok && e.Delta == "↑" {
+		return i18n.T("diff_verdict_failures")
+	}
+	if e, ok := entries["tokens"]; ok && e.Delta == "↑" {
+		return i18n.T("diff_verdict_tokens")
+	}
+	if e, ok := entries["tools"]; ok && e.Delta == "↑" {
+		return i18n.T("diff_verdict_tools")
+	}
+	if e, ok := entries["model"]; ok && e.Delta != "→" {
+		return i18n.T("diff_verdict_model")
+	}
+	if e, ok := entries["health"]; ok && e.Delta == "↓" {
+		return i18n.T("diff_verdict_health")
+	}
+	return i18n.T("diff_verdict_similar")
+}
