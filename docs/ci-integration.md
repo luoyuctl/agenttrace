@@ -22,6 +22,10 @@ agenttrace --overview \
 
 The command exits with code `2` when a gate fails. Add `-f json -o agenttrace-overview.json` when CI should upload machine-readable data, `-f markdown -o agenttrace-overview.md` when the report should be pasted into a PR comment, or `-f html -o agenttrace-overview.html` for a self-contained visual artifact.
 
+With `-o`, agenttrace keeps the report body on stdout while also writing the file.
+Saved-file confirmations and gate diagnostics are written to stderr; this keeps JSON stdout
+machine-readable and lets Markdown or HTML output remain useful for logs and previews.
+
 For the first few runs, keep the job non-blocking while still collecting evidence:
 
 ```bash

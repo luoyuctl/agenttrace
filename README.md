@@ -231,6 +231,10 @@ agenttrace --update-pricing --list-models
 agenttrace --latest --lang zh    # Chinese (supports zh, en)
 ```
 
+When `-o` is present, agenttrace writes the file and still prints the report body to stdout.
+Saved-file confirmations and gate diagnostics go to stderr, so JSON output remains parseable
+and Markdown/HTML reports can still be piped or previewed.
+
 ### Cursor Import
 
 Cursor keeps local composer/chat state in SQLite `state.vscdb` files. Export the relevant JSON keys once, then point `agenttrace` at the exported file:
