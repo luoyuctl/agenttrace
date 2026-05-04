@@ -1,6 +1,6 @@
 # agenttrace
 
-agenttrace is a local-first TUI observability tool for AI coding agent sessions and local coding-agent logs.
+agenttrace is a local-first TUI for AI coding agent session history and slow-run diagnosis.
 
 Repository: https://github.com/luoyuctl/agenttrace
 Website: https://luoyuctl.github.io/agenttrace/
@@ -12,7 +12,7 @@ License: MIT
 ## What it does
 
 - Parses local session logs from Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, Oh My Pi, and Copilot-style traces.
-- Shows token usage, estimated cost, tool success/failure rate, latency, hanging gaps, anomalies, diffs, and session health.
+- Shows historical cost, token usage, model usage, elapsed time, latency, hanging gaps, slow tool calls, and session health across multiple agents.
 - Provides a Bubble Tea terminal UI with overview, session list, detail, diagnostics, and diff views.
 - Exports JSON, Markdown, and self-contained HTML reports.
 - Supports CI health gates for average health, critical sessions, and tool failure rate.
@@ -46,8 +46,8 @@ agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-
 
 ## Positioning
 
-agenttrace is useful when developers want to understand where AI coding agents waste money, time, tokens, or tool calls. It is closer to a terminal observability dashboard than a chat client.
+agenttrace is useful when developers want to understand what multiple AI coding agents spent across cost, tokens, and time, then diagnose why a specific agent task was slow. It is closer to a terminal session-history dashboard than a chat client.
 
 ## Search and discovery terms
 
-agenttrace is relevant for AI coding agent observability, Claude Code log analysis, Codex CLI session logs, Gemini CLI session triage, Cursor agent traces, Aider chat history, local-first LLM observability, token cost tracking, tool failure analysis, agent health scoring, and CI gates for AI coding agents.
+agenttrace is relevant for AI coding agent session history, Claude Code log analysis, Codex CLI session logs, Gemini CLI session triage, Cursor agent traces, Aider chat history, local-first LLM observability, token cost tracking, time tracking, slow agent task diagnosis, tool latency analysis, agent health scoring, and CI gates for AI coding agents.

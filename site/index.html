@@ -3,22 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>agenttrace - AI coding agent observability for local session logs</title>
+    <title>agenttrace - AI coding agent session history and slow-run diagnosis</title>
     <meta
       name="description"
-      content="Local-first AI coding agent observability for Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and more. Find token cost, tool failures, latency, anomalies, health regressions, diffs, and CI gates from local session logs."
+      content="Local-first AI coding agent session history for Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and more. Compare cost, tokens, and time across agents, then diagnose why a task was slow."
     />
-    <meta name="keywords" content="AI coding agent observability, agent observability, Claude Code logs, Codex CLI logs, Gemini CLI sessions, Cursor agent traces, Aider chat history, token cost tracking, tool failure analysis, local-first developer tools, CI health gates" />
+    <meta name="keywords" content="AI coding agent session history, AI agent cost tracking, Claude Code logs, Codex CLI logs, Gemini CLI sessions, Cursor agent traces, Aider chat history, token cost tracking, slow agent task diagnosis, tool latency analysis, local-first developer tools" />
     <link rel="canonical" href="https://luoyuctl.github.io/agenttrace/" />
-    <meta property="og:title" content="agenttrace - AI coding agent observability for local session logs" />
-    <meta property="og:description" content="Find token cost, tool failures, latency, anomalies, health regressions, diffs, and CI evidence in local Claude Code, Codex CLI, Gemini CLI, Cursor, and Aider sessions." />
+    <meta property="og:title" content="agenttrace - AI coding agent session history and slow-run diagnosis" />
+    <meta property="og:description" content="Compare cost, tokens, and time across local AI coding agent sessions, then find why a task was slow." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://luoyuctl.github.io/agenttrace/" />
     <meta property="og:image" content="https://luoyuctl.github.io/agenttrace/assets/hero-banner.png" />
     <meta property="og:image:alt" content="agenttrace terminal dashboard showing AI coding agent session metrics" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="agenttrace - AI coding agent observability for local session logs" />
-    <meta name="twitter:description" content="Trace token cost, tool failures, latency, anomalies, health, diffs, and CI gates from local AI coding agent logs." />
+    <meta name="twitter:title" content="agenttrace - AI coding agent session history and slow-run diagnosis" />
+    <meta name="twitter:description" content="Compare AI coding agent cost, tokens, and time, then diagnose slow runs from local logs." />
     <meta name="twitter:image" content="https://luoyuctl.github.io/agenttrace/assets/hero-banner.png" />
     <link rel="icon" href="assets/logo-icon.png" />
     <link rel="stylesheet" href="styles.css" />
@@ -28,16 +28,16 @@
         "@type": "SoftwareApplication",
         "name": "agenttrace",
         "applicationCategory": "DeveloperApplication",
-        "applicationSubCategory": "AI agent observability",
+        "applicationSubCategory": "AI agent session history",
         "operatingSystem": "macOS, Linux, Windows",
         "softwareVersion": "0.4.0",
-        "description": "Local TUI and report generator for AI coding agent sessions across Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes, OpenCode, OpenClaw, Oh My Pi, Kimi, and Copilot-style logs.",
-        "keywords": "AI coding agent observability, Claude Code logs, Codex CLI logs, Gemini CLI sessions, Cursor agent traces, Aider chat history, token cost tracking, tool failure analysis, local-first TUI, CI health gates",
+        "description": "Local TUI and report generator for reviewing AI coding agent cost, tokens, and time across historical sessions, then diagnosing slow runs.",
+        "keywords": "AI coding agent session history, Claude Code logs, Codex CLI logs, Gemini CLI sessions, Cursor agent traces, Aider chat history, token cost tracking, time tracking, slow agent task diagnosis, local-first TUI",
         "featureList": [
-          "Token and cost tracking for AI coding agent sessions",
-          "Tool failure, loop, latency, anomaly, and health analysis",
+          "Cost, token, model, and elapsed-time tracking across AI coding agent sessions",
+          "Slow-run diagnosis with long gaps, hanging sessions, retry loops, slow tools, large params, and context pressure",
           "Local-first TUI for Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and other session logs",
-          "JSON, Markdown, and HTML reports for CI gates and review evidence"
+          "JSON, Markdown, and HTML reports for review evidence"
         ],
         "url": "https://luoyuctl.github.io/agenttrace/",
         "codeRepository": "https://github.com/luoyuctl/agenttrace",
@@ -77,11 +77,11 @@
         <img class="hero-bg" src="assets/hero-banner.png" alt="agenttrace dashboard showing AI agent observability metrics" />
         <div class="hero-shade"></div>
         <div class="hero-copy">
-          <h1>Local AI coding agent observability.</h1>
+          <h1>See what your agents spent, then find why they slowed down.</h1>
           <p>
             agenttrace turns local Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and
-            OpenCode logs into a fast TUI, shareable HTML reports, health scores, anomaly
-            evidence, token cost breakdowns, and CI gates. No hosted backend. No prompt upload.
+            OpenCode logs into a fast TUI for historical cost, token, and time review,
+            plus slow-task diagnosis. No hosted backend. No prompt upload.
           </p>
           <div class="hero-actions">
             <button class="copy-btn" data-copy="curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh">
@@ -117,29 +117,29 @@ health: 58.7  critical: 1  tool_fail_rate: 60%</code></pre>
 
       <section class="proof-strip" id="evidence" aria-label="What agenttrace catches">
         <article>
-          <strong>Token bills</strong>
-          <span>Input, output, cache tokens, estimated cost, and top burning sessions.</span>
+          <strong>History</strong>
+          <span>Review multiple agents and historical sessions in one local dashboard.</span>
         </article>
         <article>
-          <strong>Tool loops</strong>
-          <span>Repeated calls, retries, long gaps, hanging runs, and tool failures.</span>
+          <strong>Spend</strong>
+          <span>Input, output, cache tokens, model pricing, estimated cost, and elapsed time.</span>
         </article>
         <article>
-          <strong>Regressions</strong>
-          <span>Health scores, shallow reasoning, redactions, anomalies, and diffs.</span>
+          <strong>Slow runs</strong>
+          <span>Long gaps, hanging sessions, retry loops, slow tools, and context pressure.</span>
         </article>
         <article>
-          <strong>CI evidence</strong>
-          <span>JSON, Markdown, and HTML reports with health and tool failure gates.</span>
+          <strong>Evidence</strong>
+          <span>JSON, Markdown, and HTML reports for reviews, issues, and build artifacts.</span>
         </article>
       </section>
 
       <section class="demo" id="demo">
         <div class="section-copy">
-          <h2>Start with the worst run, not the loudest guess.</h2>
+          <h2>Start with the expensive or slow run.</h2>
           <p>
-            The TUI opens on the operating picture: cost, health, latency, recent anomalies,
-            and the sessions most likely to waste human review time.
+            The TUI opens on the operating picture: agent source, model, tokens, cost, duration,
+            latency, and the sessions most likely to waste human review time.
           </p>
         </div>
         <div class="demo-frame">
@@ -150,32 +150,32 @@ health: 58.7  critical: 1  tool_fail_rate: 60%</code></pre>
       <section class="ops-grid">
         <article>
           <span>0 Overview</span>
-          <h3>See the fleet.</h3>
-          <p>Sessions, tokens, cost, error rate, P95 latency, health score, recent anomalies, and top agents.</p>
+          <h3>See the history.</h3>
+          <p>Sessions, agents, models, tokens, cost, elapsed time, P95 latency, health score, and recent anomalies.</p>
         </article>
         <article>
           <span>1 Session List</span>
-          <h3>Rank the waste.</h3>
-          <p>Sort by health, cost, or turns; filter by source, model, anomaly, text, or health threshold.</p>
+          <h3>Rank the spend.</h3>
+          <p>Sort by cost, duration, turns, or health; filter by source, model, anomaly, text, or health threshold.</p>
         </article>
         <article>
           <span>2 Detail</span>
-          <h3>Inspect evidence.</h3>
-          <p>Primary issue, impact, evidence, next action, loop analysis, tool warnings, and cost alerts.</p>
+          <h3>Inspect one run.</h3>
+          <p>Primary issue, impact, evidence, next action, latency gaps, loop analysis, tool warnings, and cost alerts.</p>
         </article>
         <article>
           <span>3 Diag / 4 Diff</span>
-          <h3>Ship the fix.</h3>
-          <p>Fingerprint loops, tool latency, context pressure, large params, rare tools, and side-by-side diffs.</p>
+          <h3>Find the slowdown.</h3>
+          <p>Fingerprint slow tools, long pauses, context pressure, large params, rare tools, and repeated loops.</p>
         </article>
       </section>
 
       <section class="workflow" id="workflow">
         <div class="section-copy">
-          <h2>Use the same evidence locally and in CI.</h2>
+          <h2>Keep the same evidence when you leave the TUI.</h2>
           <p>
             Run the TUI while debugging. Export Markdown for PRs. Attach HTML reports to builds.
-            Fail CI when agent health drops or tool failures spike.
+            Use JSON when you want automation around cost, duration, health, or critical sessions.
           </p>
         </div>
         <div class="command-stack">

@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="assets/logo-icon.png" alt="agenttrace logo" width="128" height="128">
+  <img src="assets/logo-icon.png" alt="agenttrace logo" width="256" height="256">
 </p>
 
-<h1 align="center">agenttrace</h1>
+<h1 align="center">AgentTrace</h1>
 
 <p align="center">
-  看懂本地 AI 编程 Agent 日志：token 成本、工具失败、延迟、健康分、diff 和 CI 检查。
+  汇总多个 AI 编程 Agent 的历史成本、Token 和耗时，并定位任务为什么跑得慢。
 </p>
 
 <p align="center">
@@ -29,20 +29,20 @@
 
 ---
 
-**agenttrace** 是一个本地 TUI 和报告生成工具，用来分析 AI 编程 Agent 的本地日志。它会读取 Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cursor、Aider、OpenCode、OpenClaw、Hermes Agent、Kimi CLI 和 Copilot 风格日志，然后告诉你 token 成本、工具失败、延迟、异常、健康分、diff 和 CI 检查证据。
+**agenttrace** 是一个本地 TUI 和报告生成工具，用来分析 AI 编程 Agent 的历史会话。它会读取 Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cursor、Aider、OpenCode、OpenClaw、Hermes Agent、Kimi CLI 和 Copilot 风格日志，主要帮你做两件事：汇总多个 Agent 历史会话的成本、Token 和耗时；定位某次任务为什么跑得慢。
 
 ## 为什么需要 agenttrace？
 
 AI 编程 Agent 越来越像一套小型构建系统：会调用工具、重试、卡住、花 token，但你最后往往只看到一段总结。
 
-**agenttrace** 读取这些 Agent 已经写在本机的日志，把最值得看的会话排到前面。
+**agenttrace** 读取这些 Agent 已经写在本机的日志，把最贵、最慢、最值得看的会话排到前面。
 
 它能帮你回答：
 
-- **钱花在哪了？** 查看 input、output、cache token、模型价格和估算成本。
-- **哪次 run 卡住了？** 发现长时间空档、挂起会话、重试循环和反复失败的工具调用。
-- **下一步应该修哪里？** 按健康分、成本、失败、异常、模型、来源或文本搜索排序。
-- **工作流有没有退化？** 对比会话，并在健康分下降或工具失败率升高时让 CI 失败。
+- **Agent 花了多少？** 按来源、模型、input/output/cache token、估算成本和真实耗时对比历史会话。
+- **任务为什么慢？** 发现长时间空档、挂起会话、重试循环、慢工具调用、大参数和上下文压力。
+- **先看哪一次？** 按成本、耗时、轮次、健康分、失败、异常、模型、来源或文本搜索排序。
+- **能不能本地看？** 所有分析都在本机完成，不需要上传 prompt、代码和日志。
 
 ## 真实本机运行
 
@@ -91,7 +91,7 @@ agenttrace --overview -f json
 
 # 生成可放到 CI artifact 或 issue 里的独立 HTML 报告
 agenttrace --overview -f html -o agenttrace-overview.html
-
+```
 
 ## 支持哪些Agent
 
@@ -103,11 +103,10 @@ Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor export
 
 | 需求 | agenttrace 提供 |
 |---|---|
-| 成本审计 | token 总量、cache 使用、模型价格、最贵会话 |
-| 可靠性排查 | 健康分、critical/warning 分桶、失败率、异常列表 |
-| 慢 run 调试 | 延迟统计、长间隔、挂起会话检测 |
-| prompt/工具改进 | 重复工具失败、循环、浅层推理、脱敏信号 |
-| 团队/CI 证据 | JSON、Markdown 和独立 HTML 报告 |
+| 历史消耗总览 | 跨 Agent 会话聚合，展示 token 总量、模型价格、估算成本和真实耗时 |
+| 慢任务诊断 | 延迟统计、长间隔、挂起会话、重试循环、慢工具、大参数和上下文压力 |
+| 优先级排序 | 按成本、耗时、轮次、健康分、失败、异常、模型、来源或文本搜索筛选 |
+| 可分享证据 | JSON、Markdown 和独立 HTML 报告 |
 
 ## 文档
 
@@ -142,4 +141,4 @@ go build -o agenttrace ./cmd/agenttrace/
 
 ## 许可证
 
-[MIT](LICENSE) © 2025 agenttrace contributors
+[MIT](LICENSE) © 2026 agenttrace contributors

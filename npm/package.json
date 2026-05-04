@@ -1,7 +1,7 @@
 {
   "name": "agenttrace",
   "version": "0.4.0",
-  "description": "Local-first AI coding agent observability for token cost, tool failures, latency, health, diffs, and CI gates",
+  "description": "Local-first AI coding agent session history for cost, tokens, time, and slow-run diagnosis",
   "main": "install.js",
   "bin": {
     "agenttrace": "run.js"

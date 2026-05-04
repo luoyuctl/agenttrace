@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="assets/logo-icon.png" alt="agenttrace logo" width="128" height="128">
+  <img src="assets/logo-icon.png" alt="agenttrace logo" width="256" height="256">
 </p>
 
 <h1 align="center">AgentTrace</h1>
 
 <p align="center">
-  Understand local AI coding agent logs: token cost, tool failures, latency, health, diffs, and CI gates.
+  Review AI coding agent history across cost, tokens, and time, then find why a run was slow.
 </p>
 
 <p align="center">
@@ -29,20 +29,19 @@
 
 ---
 
-**agenttrace** is a local TUI and report generator for AI coding agent observability. It reads Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cursor, Aider, OpenCode, OpenClaw, Hermes Agent, Kimi CLI, and Copilot-style logs, then shows token cost, tool failures, latency, anomalies, health regressions, diffs, and CI evidence.
+**agenttrace** is a local TUI and report generator for AI coding agent session history. It reads Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cursor, Aider, OpenCode, OpenClaw, Hermes Agent, Kimi CLI, and Copilot-style logs, then helps with two daily jobs: see what multiple agents spent across cost, tokens, and time; and diagnose why a task ran slowly.
 
 ## Why agenttrace?
 
 AI coding agents now behave like small build systems: they call tools, retry, stall, and spend tokens while you only see the final answer.
 
-**agenttrace** reads the logs your agents already write and puts the sessions worth checking first.
+**agenttrace** reads the logs your agents already write and puts cost-heavy or slow sessions first.
 
 It helps you answer:
 
-- **Where is the bill coming from?** See input, output, cache tokens, model pricing, and estimated cost.
-- **Which run got stuck?** Catch long gaps, hanging sessions, retry loops, and repeated tool failures.
-- **What should I fix next?** Rank sessions by health, cost, failures, anomalies, model, source, or text search.
-- **Did the workflow regress?** Compare sessions and fail CI when health drops or tool failures spike.
+- **What did my agents spend?** Compare historical sessions by agent source, model, input/output/cache tokens, estimated cost, and wall-clock time.
+- **Why was this task slow?** Catch long gaps, hanging sessions, retry loops, slow tool calls, large parameters, and context pressure.
+- **What should I inspect first?** Rank sessions by cost, duration, turns, health, failures, anomalies, model, source, or text search.
 - **Can I inspect this privately?** Everything runs locally; prompts, code, and logs do not need to leave your machine.
 
 ## Real local run
@@ -129,11 +128,10 @@ Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Her
 
 | Need | agenttrace gives you |
 |---|---|
-| Cost audit | Token totals, cache usage, model pricing, top expensive sessions |
-| Reliability triage | Health score, critical/warning buckets, failure rate, anomaly list |
-| Slow-run debugging | Latency stats, long gaps, hanging-session detection |
-| Prompt and tool fixes | Repeated tool failures, loops, shallow reasoning, redactions |
-| Team/CI evidence | JSON, Markdown, and self-contained HTML reports |
+| Historical spend review | Sessions grouped across agents with token totals, model pricing, estimated cost, and elapsed time |
+| Slow-task diagnosis | Latency stats, long gaps, hanging sessions, retry loops, slow tools, large params, and context pressure |
+| First-session triage | Sort and filter by cost, duration, health, failures, anomalies, model, source, or text search |
+| Shareable evidence | JSON, Markdown, and self-contained HTML reports |
 | Local-first inspection | No hosted backend required |
 
 ## Docs
@@ -168,4 +166,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution flow.
 
 ## License
 
-[MIT](LICENSE) © 2025 agenttrace contributors
+[MIT](LICENSE) © 2026 agenttrace contributors

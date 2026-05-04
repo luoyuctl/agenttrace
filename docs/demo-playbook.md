@@ -20,7 +20,7 @@ The script renders [docs/demo.tape](demo.tape) into `assets/agenttrace-demo.gif`
 
 ## Short Caption
 
-agenttrace is a local TUI observability dashboard for AI coding agents. It shows where Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, and similar tools waste tokens, time, and tool calls.
+agenttrace is a local TUI for AI coding agent session history. It shows what Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, and similar tools spent across cost, tokens, and time, then helps diagnose why a task was slow.
 
 ## Verification Before Posting
 
