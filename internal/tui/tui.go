@@ -5,6 +5,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -88,6 +89,7 @@ type sessionDiscoveryMsg struct {
 	sessions     []loadedSession
 	cacheEntries int
 	cacheValid   int
+	sourceCounts map[string]int
 }
 
 // loadProgressMsg 承载一批渐进加载结果。
@@ -109,15 +111,16 @@ type Model struct {
 	lang     i18n.Lang
 
 	// Progressive loading state
-	loading         bool
-	loadProgress    int
-	loadTotal       int
-	loadedFromCache int
-	cacheEntries    int
-	cacheValid      int
-	loadQueue       []string
-	sessionCache    engine.SessionCache
-	unsavedNewCount int
+	loading          bool
+	loadProgress     int
+	loadTotal        int
+	loadedFromCache  int
+	cacheEntries     int
+	cacheValid       int
+	loadSourceCounts map[string]int
+	loadQueue        []string
+	sessionCache     engine.SessionCache
+	unsavedNewCount  int
 
 	// Overview data
 	overview engine.Overview
@@ -242,6 +245,7 @@ func (m *Model) startReload() tea.Cmd {
 	m.loadedFromCache = 0
 	m.cacheEntries = 0
 	m.cacheValid = 0
+	m.loadSourceCounts = nil
 	m.unsavedNewCount = 0
 	m.loading = true
 
@@ -307,11 +311,13 @@ func discoverSessionFilesCmd(dir string, cache engine.SessionCache) tea.Cmd {
 			files:        files,
 			cacheEntries: cache.EntryCount(),
 			cacheValid:   cacheValid,
+			sourceCounts: loadingSourceCounts(files, nil, cache),
 		}
 		if dir == "" {
 			for _, s := range engine.LoadSQLiteBackedSessions() {
 				msg.sessions = append(msg.sessions, loadedSession{session: s})
 			}
+			msg.sourceCounts = loadingSourceCounts(files, msg.sessions, cache)
 		}
 		return msg
 	}
@@ -362,6 +368,56 @@ func loadNextCmd(files []string, cache engine.SessionCache, idx int) tea.Cmd {
 	}
 }
 
+func loadingSourceCounts(files []string, sessions []loadedSession, cache engine.SessionCache) map[string]int {
+	counts := make(map[string]int)
+	for _, loaded := range sessions {
+		source := loaded.session.Metrics.SourceTool
+		if source == "" {
+			source = "generic"
+		}
+		counts[source]++
+	}
+	for _, path := range files {
+		source := ""
+		if s, ok := engine.CachedSession(path, cache); ok {
+			source = s.Metrics.SourceTool
+		}
+		if source == "" {
+			source = loadingSourceFromPath(path)
+		}
+		counts[source]++
+	}
+	return counts
+}
+
+func loadingSourceFromPath(path string) string {
+	p := strings.ToLower(filepath.ToSlash(path))
+	switch {
+	case strings.Contains(p, "/.hermes/"):
+		return "hermes_jsonl"
+	case strings.Contains(p, "/.codex/"):
+		return "codex_cli"
+	case strings.Contains(p, "/.claude/"):
+		return "claude_code"
+	case strings.Contains(p, "/.gemini/"):
+		return "gemini_cli"
+	case strings.Contains(p, "/.qwen/"):
+		return "qwen_code"
+	case strings.Contains(p, "/opencode/") || strings.Contains(p, "application support/opencode"):
+		return "opencode"
+	case strings.Contains(p, "/.omp/"):
+		return "oh_my_pi"
+	case strings.Contains(p, "cline-dev"):
+		return "cline"
+	case strings.Contains(p, "/cursor/"):
+		return "cursor"
+	case strings.Contains(p, "aider"):
+		return "aider"
+	default:
+		return "generic"
+	}
+}
+
 // ── Update ──
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -378,6 +434,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loadTotal = len(msg.files) + len(msg.sessions)
 		m.cacheEntries = msg.cacheEntries
 		m.cacheValid = msg.cacheValid
+		m.loadSourceCounts = msg.sourceCounts
 		if len(msg.sessions) > 0 {
 			m.appendLoadedSessions(msg.sessions)
 		}
@@ -964,6 +1021,9 @@ func (m Model) renderLoading() string {
 		lines := []string{
 			boldStyle.Render(i18n.T("loading_discovering")),
 			"",
+			m.renderLoadingStatusLine(0, 0, contentW),
+			m.renderLoadingSourceCounts(contentW),
+			"",
 			dimStyle.Render(truncate(i18n.T("loading_scanning_hint"), contentW)),
 		}
 		return strings.Join([]string{
@@ -1000,6 +1060,9 @@ func (m Model) renderLoading() string {
 	lines := []string{
 		boldStyle.Render(i18n.T("loading_sessions")),
 		"",
+		m.renderLoadingStatusLine(progress, pct, contentW),
+		m.renderLoadingSourceCounts(contentW),
+		"",
 		fmt.Sprintf("  %s  %d/%d  %d%%%s", bar, progress, m.loadTotal, pct, cacheInfo),
 		"",
 		dimStyle.Render(truncate(i18n.T("loading_parsing_hint"), contentW)),
@@ -1009,6 +1072,102 @@ func (m Model) renderLoading() string {
 		header,
 		lipgloss.NewStyle().Width(contentW).Padding(1, 2).Render(strings.Join(lines, "\n")),
 	}, "\n")
+}
+
+func (m Model) renderLoadingStatusLine(progress, pct, width int) string {
+	phase := m.loadingPhase(progress)
+	cache := m.loadingCacheLabel()
+	parsed := fmt.Sprintf(i18n.T("loading_parsed"), len(m.sessions), maxInt(m.loadTotal, 0))
+	if m.loadTotal <= 0 {
+		parsed = fmt.Sprintf(i18n.T("loading_parsed"), 0, 0)
+	}
+	line := fmt.Sprintf("%s %s · %s · %s · %d%%",
+		i18n.T("loading_phase"),
+		phase,
+		parsed,
+		cache,
+		pct,
+	)
+	return truncate(line, width)
+}
+
+func (m Model) loadingPhase(progress int) string {
+	if m.loadTotal <= 0 {
+		return i18n.T("loading_phase_find")
+	}
+	if progress >= m.loadTotal {
+		return i18n.T("loading_phase_agg")
+	}
+	if m.cacheValid > 0 && m.loadedFromCache < m.cacheValid {
+		return i18n.T("loading_phase_cache")
+	}
+	return i18n.T("loading_phase_parse")
+}
+
+func (m Model) loadingCacheLabel() string {
+	hits := m.loadedFromCache
+	if hits < 0 {
+		hits = 0
+	}
+	valid := m.cacheValid
+	if valid < 0 {
+		valid = 0
+	}
+	if hits > valid && valid > 0 {
+		hits = valid
+	}
+	entries := m.cacheEntries
+	if entries < valid {
+		entries = valid
+	}
+	if entries < 0 {
+		entries = 0
+	}
+	return fmt.Sprintf(i18n.T("cache_status"), hits, valid, entries)
+}
+
+func (m Model) renderLoadingSourceCounts(width int) string {
+	if len(m.loadSourceCounts) == 0 {
+		return dimStyle.Render(truncate(i18n.T("loading_src_pending"), width))
+	}
+	type item struct {
+		source string
+		count  int
+	}
+	items := make([]item, 0, len(m.loadSourceCounts))
+	for source, count := range m.loadSourceCounts {
+		if count <= 0 {
+			continue
+		}
+		items = append(items, item{source: source, count: count})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].count == items[j].count {
+			return sourceDisplayName(items[i].source) < sourceDisplayName(items[j].source)
+		}
+		return items[i].count > items[j].count
+	})
+	if len(items) == 0 {
+		return dimStyle.Render(truncate(i18n.T("loading_src_pending"), width))
+	}
+	limit := 4
+	if width < 70 {
+		limit = 2
+	}
+	var parts []string
+	for i, it := range items {
+		if i >= limit {
+			remaining := 0
+			for _, rest := range items[i:] {
+				remaining += rest.count
+			}
+			parts = append(parts, fmt.Sprintf("+%d", remaining))
+			break
+		}
+		parts = append(parts, fmt.Sprintf("%s %d", sourceDisplayName(it.source), it.count))
+	}
+	line := fmt.Sprintf("%s %s", i18n.T("loading_sources"), strings.Join(parts, " · "))
+	return dimStyle.Render(truncate(line, width))
 }
 
 func (m Model) View() string {
