@@ -548,6 +548,9 @@ func TestCompactListKeepsTokensAndHealthReadable(t *testing.T) {
 	if row[2] != "1" || row[3] != "0" {
 		t.Fatalf("expected compact triage signals, got row=%v", row)
 	}
+	if row[4] != "$0.4200" || strings.Contains(row[4], "\x1b") {
+		t.Fatalf("expected compact cost to be stable table text, got %q", row[4])
+	}
 	if row[5] != "214.0K" {
 		t.Fatalf("expected full compact token value, got %q", row[5])
 	}
@@ -602,6 +605,9 @@ func TestWideListKeepsFullOperationalColumns(t *testing.T) {
 	row := m.table.Rows()[0]
 	if row[3] != "8" || row[4] != "12" || row[5] != "92" || row[6] != "1" {
 		t.Fatalf("expected turns/tools/success/fail columns, got row=%v", row)
+	}
+	if row[7] != "$0.4200" || strings.Contains(row[6], "\x1b") || strings.Contains(row[7], "\x1b") {
+		t.Fatalf("expected fail/cost columns to be stable table text, got row=%v", row)
 	}
 	if row[12] != "No major anomaly" {
 		t.Fatalf("expected issue column, got row=%v", row)

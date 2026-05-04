@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1811,7 +1812,7 @@ func TestAnalyzeHealthTrendUsesSessionTimeOrder(t *testing.T) {
 func TestValidateToolPatterns_DeadLoop(t *testing.T) {
 	events := make([]Event, 6)
 	for i := range events {
-		events[i] = Event{Role: "assistant", ToolCalls: []ToolCall{{Name: "read_file"}}}
+		events[i] = Event{Role: "assistant", ToolCalls: []ToolCall{{Name: "read_file", Args: `{"path":"README.md"}`}}}
 	}
 	warnings := ValidateToolPatterns(events)
 	for _, w := range warnings {
@@ -1820,6 +1821,49 @@ func TestValidateToolPatterns_DeadLoop(t *testing.T) {
 		}
 	}
 	t.Error("no dead_loop warning for 6 consecutive same tool calls")
+}
+
+func TestValidateToolPatterns_DifferentArgsAreNotDeadLoop(t *testing.T) {
+	events := make([]Event, 6)
+	for i := range events {
+		events[i] = Event{Role: "assistant", ToolCalls: []ToolCall{{Name: "read_file", Args: fmt.Sprintf(`{"path":"file%d.md"}`, i)}}}
+	}
+	for _, w := range ValidateToolPatterns(events) {
+		if w.Pattern == "dead_loop" || w.Pattern == "redundant" {
+			t.Fatalf("different args should not trigger %s warning: %+v", w.Pattern, w)
+		}
+	}
+}
+
+func TestValidateToolPatterns_EmptyContentDoesNotMeanEmptyArgs(t *testing.T) {
+	events := []Event{{
+		Role:      "assistant",
+		Content:   "",
+		ToolCalls: []ToolCall{{Name: "read_file", Args: `{"path":"README.md"}`}},
+	}}
+	for _, w := range ValidateToolPatterns(events) {
+		if w.Pattern == "empty_args" {
+			t.Fatalf("assistant content should not be treated as tool args: %+v", w)
+		}
+	}
+}
+
+func TestValidateToolPatterns_ConsecutiveFailedRetries(t *testing.T) {
+	events := []Event{
+		{Role: "assistant", ToolCalls: []ToolCall{{ID: "a", Name: "search", Args: `{"q":"x"}`}}},
+		{Role: "tool", ToolCallID: "a", IsError: true},
+		{Role: "assistant", ToolCalls: []ToolCall{{ID: "b", Name: "search", Args: `{"q":"x"}`}}},
+		{Role: "tool", ToolCallID: "b", IsError: true},
+		{Role: "assistant", ToolCalls: []ToolCall{{ID: "c", Name: "search", Args: `{"q":"x"}`}}},
+		{Role: "tool", ToolCallID: "c", IsError: true},
+	}
+	warnings := ValidateToolPatterns(events)
+	for _, w := range warnings {
+		if w.Pattern == "fail_retry_chain" && w.ToolName == "search" && w.Count == 3 {
+			return
+		}
+	}
+	t.Fatalf("expected fail_retry_chain warning, got %+v", warnings)
 }
 
 func TestValidateToolPatterns_NoIssues(t *testing.T) {

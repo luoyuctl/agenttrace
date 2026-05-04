@@ -834,11 +834,6 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 	healthCol := healthCell(health, healthWidth)
 
 	failStr := fmt.Sprintf("%d", failTools)
-	if failTools > 0 {
-		failStr = redStyle.Render(failStr)
-	} else {
-		failStr = dimStyle.Render(failStr)
-	}
 
 	tokensStr := compactInt(metricsTotalTokens(met))
 	issue := sessionIssueLabel(s)
@@ -849,7 +844,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			sourceDisplay,
 			failStr,
 			fmt.Sprintf("%d", len(s.Anomalies)),
-			costColor(met.CostEstimated),
+			costCell(met.CostEstimated),
 			tokensStr,
 			healthCol,
 		}
@@ -862,7 +857,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			fmt.Sprintf("%d", totalToolCalls),
 			sr,
 			failStr,
-			costColor(met.CostEstimated),
+			costCell(met.CostEstimated),
 			tokensStr,
 			engine.FmtDuration(chartValue(met.DurationSec)),
 			fmt.Sprintf("%d", len(s.Anomalies)),
@@ -878,7 +873,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			fmt.Sprintf("%d", totalToolCalls),
 			sr,
 			failStr,
-			costColor(met.CostEstimated),
+			costCell(met.CostEstimated),
 			tokensStr,
 			engine.FmtDuration(chartValue(met.DurationSec)),
 			fmt.Sprintf("%d", len(s.Anomalies)),
@@ -892,7 +887,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			fmt.Sprintf("%d", totalToolCalls),
 			sr,
 			failStr,
-			costColor(met.CostEstimated),
+			costCell(met.CostEstimated),
 			tokensStr,
 			healthCol,
 			issue,
@@ -904,7 +899,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			fmt.Sprintf("%d", nonNegativeInt(met.AssistantTurns)),
 			fmt.Sprintf("%d", totalToolCalls),
 			failStr,
-			costColor(met.CostEstimated),
+			costCell(met.CostEstimated),
 			tokensStr,
 			healthCol,
 		}
@@ -917,7 +912,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 		fmt.Sprintf("%d", totalToolCalls),
 		sr,
 		failStr,
-		costColor(met.CostEstimated),
+		costCell(met.CostEstimated),
 		tokensStr,
 		healthCol,
 	}
@@ -2252,20 +2247,8 @@ func (m *Model) sortColTitle(base, field string) string {
 	return base + " ▲"
 }
 
-// costColor returns a styled cost string based on amount thresholds.
-func costColor(amount float64) string {
-	amount = safeAmount(amount)
-	s := money4(amount)
-	switch {
-	case amount >= 0.50:
-		return redStyle.Render(s)
-	case amount >= 0.10:
-		return orangeStyle.Render(s)
-	case amount >= 0.03:
-		return yellowStyle.Render(s)
-	default:
-		return greenStyle.Render(s)
-	}
+func costCell(amount float64) string {
+	return money4(safeAmount(amount))
 }
 
 func healthCell(health int, width int) string {
