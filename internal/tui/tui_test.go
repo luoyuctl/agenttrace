@@ -340,6 +340,57 @@ func TestListSortShortcutsCoverFailureAndAnomalyColumns(t *testing.T) {
 	}
 }
 
+func TestListDriverSummaryShowsDominantGroupsAndCounts(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 30)
+	m.view = viewList
+	m.loadTotal = 5
+
+	rendered := m.View()
+
+	for _, want := range []string{
+		i18n.T("driver_summary_title"),
+		"Claude Code",
+		"claude-sonnet-4",
+		anomalyTypeLabel("tool_failures"),
+		"visible 3 · parsed 3 · discovered 5",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("driver summary missing %q:\n%s", want, rendered)
+		}
+	}
+	if got := maxRenderedWidth(rendered); got > 120 {
+		t.Fatalf("driver summary rendered too wide: got=%d line=%q", got, widestLine(rendered))
+	}
+}
+
+func TestTopDriverShortcutsJumpIntoFilteredRows(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 30)
+	m.view = viewList
+
+	m = pressForTest(t, m, "S")
+	if m.filterSource != "claude_code" || len(m.table.Rows()) != 1 {
+		t.Fatalf("S should filter to top source, source=%q rows=%d", m.filterSource, len(m.table.Rows()))
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "session_beta_with_a_long_name" {
+		t.Fatalf("S selected wrong session: idx=%d", idx)
+	}
+
+	m.runCommand("clear")
+	m = pressForTest(t, m, "M")
+	if m.filterModel != "claude-sonnet-4" || len(m.table.Rows()) != 1 {
+		t.Fatalf("M should filter to top model, model=%q rows=%d", m.filterModel, len(m.table.Rows()))
+	}
+
+	m.runCommand("clear")
+	m = pressForTest(t, m, "A")
+	if m.filterAnomalyType != "tool_failures" || len(m.table.Rows()) != 1 {
+		t.Fatalf("A should filter to top anomaly, anomaly=%q rows=%d", m.filterAnomalyType, len(m.table.Rows()))
+	}
+	if idx := m.findSessionIndex(); idx < 0 || m.sessions[idx].Name != "session_beta_with_a_long_name" {
+		t.Fatalf("A selected wrong session: idx=%d", idx)
+	}
+}
+
 func TestTextFilterKeepsRowsAndSelectionInSync(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewList

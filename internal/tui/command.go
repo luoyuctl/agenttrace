@@ -224,6 +224,11 @@ func normalizeSortField(field string) string {
 }
 
 func (m *Model) clearFilters() {
+	m.resetFilters()
+	m.rebuildFilteredView()
+}
+
+func (m *Model) resetFilters() {
 	m.filterText = ""
 	m.filterInput = ""
 	m.filterActive = false
@@ -235,7 +240,7 @@ func (m *Model) clearFilters() {
 	m.filterCostOp = ""
 	m.filterCostValue = 0
 	m.filterAnomaly = false
-	m.rebuildFilteredView()
+	m.filterAnomalyType = ""
 }
 
 func parseNumericExpression(expr string) (string, float64, bool) {
