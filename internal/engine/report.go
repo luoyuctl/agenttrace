@@ -593,6 +593,7 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	w(`</header>`)
 	w(`<div class="grid" aria-label="summary metrics">`)
 	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>%d</strong><p>%d %s / %d %s / %d %s</p></div>`, html.EscapeString(i18n.T("report_sessions")), ov.TotalSessions, ov.Healthy, html.EscapeString(i18n.T("overview_healthy")), ov.Warning, html.EscapeString(i18n.T("overview_warning")), ov.Critical, html.EscapeString(i18n.T("overview_critical"))))
+	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>%d</strong><p>%s</p></div>`, html.EscapeString(i18n.T("report_total_tokens")), summary.TotalTokens, html.EscapeString(i18n.T("metric_live"))))
 	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>%s</strong><p>%s</p></div>`, html.EscapeString(i18n.T("report_avg_health")), html.EscapeString(fmt.Sprintf("%.1f", summary.AvgHealth)), html.EscapeString(i18n.T("report_fleet_quality"))))
 	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>$%.2f</strong><p>%s</p></div>`, html.EscapeString(i18n.T("total_cost")), ov.TotalCost, html.EscapeString(i18n.T("report_estimated_cost"))))
 	w(fmt.Sprintf(`<div class="metric %s"><span>%s</span><strong>%d/%d</strong><p>%s</p></div>`, html.EscapeString(failureClass(summary.ToolFailRate)), html.EscapeString(i18n.T("report_tool_failures")), summary.FailedTools, summary.TotalTools, html.EscapeString(fmt.Sprintf(i18n.T("report_failure_rate"), summary.ToolFailRate))))

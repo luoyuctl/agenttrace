@@ -84,7 +84,8 @@ type loadedSession struct {
 }
 
 type sessionDiscoveryMsg struct {
-	files []string
+	files    []string
+	sessions []loadedSession
 }
 
 // loadProgressMsg 承载一批渐进加载结果。
@@ -293,7 +294,13 @@ func (m *Model) finishLoading() {
 
 func discoverSessionFilesCmd(dir string, cache engine.SessionCache) tea.Cmd {
 	return func() tea.Msg {
-		return sessionDiscoveryMsg{files: engine.FindSessionFilesCached(dir, cache)}
+		msg := sessionDiscoveryMsg{files: engine.FindReportableSessionFilesCached(dir, cache)}
+		if dir == "" {
+			for _, s := range engine.LoadSQLiteBackedSessions() {
+				msg.sessions = append(msg.sessions, loadedSession{session: s})
+			}
+		}
+		return msg
 	}
 }
 
@@ -355,8 +362,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionDiscoveryMsg:
 		m.loadQueue = msg.files
-		m.loadTotal = len(msg.files)
-		if m.loadTotal == 0 {
+		m.loadTotal = len(msg.files) + len(msg.sessions)
+		if len(msg.sessions) > 0 {
+			m.appendLoadedSessions(msg.sessions)
+		}
+		if len(msg.files) == 0 {
 			m.finishLoading()
 			return m, nil
 		}
@@ -814,7 +824,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 		failStr = dimStyle.Render(failStr)
 	}
 
-	tokensStr := compactInt(met.TokensInput + met.TokensOutput)
+	tokensStr := compactInt(metricsTotalTokens(met))
 	issue := sessionIssueLabel(s)
 	switch len(m.table.Columns()) {
 	case 7:
@@ -1196,7 +1206,7 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 			truncate(s.Name, nameW),
 			i18n.T("health"), clampHealth(s.Health),
 			money4(met.CostEstimated),
-			compactInt(met.TokensInput+met.TokensOutput),
+			compactInt(metricsTotalTokens(met)),
 		)
 		line2 := fmt.Sprintf("%s %d  %s %d/%d %s  %s %s",
 			i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
@@ -1213,7 +1223,7 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 		truncate(s.Name, nameW),
 		i18n.T("health"), clampHealth(s.Health),
 		i18n.T("cost"), safeAmount(met.CostEstimated),
-		i18n.T("tokens"), compactInt(met.TokensInput+met.TokensOutput),
+		i18n.T("tokens"), compactInt(metricsTotalTokens(met)),
 	)
 	line2 := fmt.Sprintf("%s %d  %s %d/%d %s  %s %s",
 		i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
@@ -2421,7 +2431,7 @@ func (m Model) renderCompactOverview(width int) string {
 }
 
 func (m Model) renderCompactMetricStrip(width int) string {
-	totalTokens := m.costSummary.TotalTokensIn + m.costSummary.TotalTokensOut
+	totalTokens := costSummaryTotalTokens(m.costSummary)
 	toolTotal, toolFail := aggregateToolCounts(m.sessions)
 	errorRate := 0.0
 	if toolTotal > 0 {
@@ -2490,7 +2500,7 @@ func (m Model) renderCompactRecent(width int) string {
 			healthColor(health).Render("●"),
 			nameW,
 			truncate(s.Name, nameW),
-			compactInt(s.Metrics.TokensInput+s.Metrics.TokensOutput),
+			compactInt(sessionTotalTokens(s)),
 			health,
 		)
 		lines = append(lines, truncate(line, width))
@@ -2539,7 +2549,7 @@ func anomalyRateStyle(rate float64) lipgloss.Style {
 }
 
 func (m Model) renderDashboardHero(width int) string {
-	totalTokens := m.costSummary.TotalTokensIn + m.costSummary.TotalTokensOut
+	totalTokens := costSummaryTotalTokens(m.costSummary)
 	toolTotal, toolFail := aggregateToolCounts(m.sessions)
 	errRate := 0.0
 	if toolTotal > 0 {
@@ -2677,7 +2687,7 @@ func (m Model) overviewActionMessage() string {
 func (m Model) renderDashboardMetrics(width int) string {
 	if width < 70 {
 		cardW := width
-		totalTokens := m.costSummary.TotalTokensIn + m.costSummary.TotalTokensOut
+		totalTokens := costSummaryTotalTokens(m.costSummary)
 		toolTotal, toolFail := aggregateToolCounts(m.sessions)
 		errorRate := 0.0
 		if toolTotal > 0 {
@@ -2702,7 +2712,7 @@ func (m Model) renderDashboardMetrics(width int) string {
 	if cardW < 16 {
 		cardW = (width - 4) / 3
 	}
-	totalTokens := m.costSummary.TotalTokensIn + m.costSummary.TotalTokensOut
+	totalTokens := costSummaryTotalTokens(m.costSummary)
 	toolTotal, toolFail := aggregateToolCounts(m.sessions)
 	errorRate := 0.0
 	if toolTotal > 0 {
@@ -2756,7 +2766,7 @@ func (m Model) renderTokenUsagePanel(width int) string {
 	values := recentTokenSeries(m.sessions, 36)
 	innerW := dashboardInnerWidth(width)
 	chart := miniBarChart(values, innerW, 8, []string{"34", "82"})
-	total := compactInt(m.costSummary.TotalTokensIn + m.costSummary.TotalTokensOut)
+	total := compactInt(costSummaryTotalTokens(m.costSummary))
 	legend := greenStyle.Render(i18n.T("legend_input")) + "  " + brandStyle.Render(i18n.T("legend_output")) + "  " + dimStyle.Render(i18n.T("legend_cache"))
 	content := chart + "\n" + legend
 	return dashboardPanel(i18n.T("panel_token_usage"), brandStyle.Render(fmt.Sprintf(i18n.T("metric_total"), total)), content, width)
@@ -2926,7 +2936,7 @@ func (m Model) renderTopAgentsPanel(width int) string {
 	var items []item
 	bySource := map[string]int{}
 	for _, s := range m.sessions {
-		bySource[s.Metrics.SourceTool] += nonNegativeInt(s.Metrics.TokensInput + s.Metrics.TokensOutput)
+		bySource[s.Metrics.SourceTool] += nonNegativeInt(sessionTotalTokens(s))
 	}
 	for k, v := range bySource {
 		name := k
@@ -2976,7 +2986,7 @@ func (m Model) renderRecentSessionsPanel(width int) string {
 			status = orangeStyle.Render("●")
 		}
 		name := truncate(s.Name, nameW)
-		tokens := compactInt(s.Metrics.TokensInput + s.Metrics.TokensOutput)
+		tokens := compactInt(sessionTotalTokens(s))
 		lines = append(lines, fmt.Sprintf("%s %-*s %6s %3d%%",
 			status,
 			nameW,
@@ -3013,6 +3023,18 @@ func aggregateToolCounts(sessions []engine.Session) (total, failed int) {
 	return total, failed
 }
 
+func costSummaryTotalTokens(cs engine.CostSummary) int {
+	return cs.TotalTokensIn + cs.TotalTokensOut + cs.TotalCacheRead + cs.TotalCacheWrite
+}
+
+func sessionTotalTokens(s engine.Session) int {
+	return metricsTotalTokens(s.Metrics)
+}
+
+func metricsTotalTokens(m engine.Metrics) int {
+	return m.TokensInput + m.TokensOutput + m.TokensCacheW + m.TokensCacheR
+}
+
 func aggregateP95Latency(sessions []engine.Session) float64 {
 	var vals []float64
 	for _, s := range sessions {
@@ -3036,7 +3058,7 @@ func recentTokenSeries(sessions []engine.Session, n int) []float64 {
 	limit := minInt(n, len(sessions))
 	for i := 0; i < limit; i++ {
 		s := sessions[limit-1-i]
-		vals[n-limit+i] = chartValue(float64(s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheR))
+		vals[n-limit+i] = chartValue(float64(sessionTotalTokens(s)))
 	}
 	return vals
 }

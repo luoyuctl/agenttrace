@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"database/sql"
 	"fmt"
 	"math"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/luoyuctl/agenttrace/internal/engine"
 	"github.com/luoyuctl/agenttrace/internal/i18n"
+	_ "modernc.org/sqlite"
 )
 
 func sampleModelForTest() Model {
@@ -546,7 +548,7 @@ func TestCompactListKeepsTokensAndHealthReadable(t *testing.T) {
 	if row[2] != "1" || row[3] != "0" {
 		t.Fatalf("expected compact triage signals, got row=%v", row)
 	}
-	if row[5] != "154.0K" {
+	if row[5] != "214.0K" {
 		t.Fatalf("expected full compact token value, got %q", row[5])
 	}
 	if row[6] != "92%" {
@@ -1107,6 +1109,20 @@ func TestOverviewUsesShortMetricTitlesAtStandardWidth(t *testing.T) {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("standard overview missing short metric title %q:\n%s", want, rendered)
 		}
+	}
+}
+
+func TestOverviewAggregateTokensIncludeCacheTokens(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.view = viewOverview
+
+	rendered := m.View()
+
+	if !strings.Contains(rendered, "767.0K") {
+		t.Fatalf("overview aggregate token total should include cache tokens like exports:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "597.0K") {
+		t.Fatalf("overview should not use input+output-only token total:\n%s", rendered)
 	}
 }
 
@@ -2135,6 +2151,82 @@ func TestStartReloadDiscoversThenLoadsCachedSessions(t *testing.T) {
 	if m.loadedFromCache != 1 || len(m.loadQueue) != 1 {
 		t.Fatalf("bad cache load state: fromCache=%d queue=%d", m.loadedFromCache, len(m.loadQueue))
 	}
+}
+
+func TestDefaultDiscoveryUsesReportableSQLiteBackedSource(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	sessionsDir := filepath.Join(home, ".hermes", "sessions")
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionsDir, "legacy.jsonl"), []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(home, ".hermes", "state.db")
+	if err := writeHermesStateDBForTest(dbPath); err != nil {
+		t.Fatal(err)
+	}
+
+	m := resizeForTest(t, New(""), 100, 30)
+	m.sessionCache = engine.SessionCache{Entries: map[string]engine.CacheEntry{}, Dirs: map[string]engine.DirCacheEntry{}}
+	msg, ok := m.startReload()().(sessionDiscoveryMsg)
+	if !ok {
+		t.Fatalf("expected discovery message")
+	}
+	if len(msg.files) != 0 {
+		t.Fatalf("default TUI discovery should skip sqlite-backed legacy files: %v", msg.files)
+	}
+	if len(msg.sessions) != 1 || msg.sessions[0].session.Metrics.SourceTool != "hermes_db" {
+		t.Fatalf("expected one sqlite-backed Hermes session, got %+v", msg.sessions)
+	}
+
+	next, cmd := m.Update(msg)
+	if cmd != nil {
+		t.Fatalf("sqlite-only discovery should finish without file load command")
+	}
+	m = next.(Model)
+	if len(m.sessions) != 1 || m.overview.TotalSessions != 1 {
+		t.Fatalf("TUI aggregate should use same sqlite-backed source as overview: sessions=%d ov=%+v", len(m.sessions), m.overview)
+	}
+	if got := engine.ComputeOverview(engine.ScanAllDirs()).TotalSessions; got != m.overview.TotalSessions {
+		t.Fatalf("TUI and overview discovery disagreed: tui=%d overview=%d", m.overview.TotalSessions, got)
+	}
+}
+
+func writeHermesStateDBForTest(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if _, err := db.Exec(`create table sessions (
+		id text primary key,
+		model text,
+		started_at real,
+		ended_at real,
+		message_count integer,
+		tool_call_count integer,
+		input_tokens integer,
+		output_tokens integer,
+		cache_read_tokens integer,
+		cache_write_tokens integer
+	)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`create table messages (session_id text, role text)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`insert into sessions values ('db-session', 'gpt-5.1', 1760000000, 1760000060, 2, 1, 1000, 200, 50, 25)`); err != nil {
+		return err
+	}
+	_, err = db.Exec(`insert into messages values ('db-session', 'user'), ('db-session', 'assistant')`)
+	return err
 }
 
 func TestStartLoadMessageKeepsReloadedModelState(t *testing.T) {

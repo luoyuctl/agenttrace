@@ -176,6 +176,16 @@ func CachedSession(path string, cache SessionCache) (Session, bool) {
 // listings. It still checks directory mtimes so newly written sessions are
 // picked up incrementally, but unchanged directories do not need ReadDir.
 func FindSessionFilesCached(dir string, cache SessionCache) []string {
+	return findSessionFilesCached(dir, cache, false)
+}
+
+// FindReportableSessionFilesCached 返回与 overview 默认数据源一致的文件列表：
+// SQLite 托管的数据源存在时，跳过对应的旧文件目录。
+func FindReportableSessionFilesCached(dir string, cache SessionCache) []string {
+	return findSessionFilesCached(dir, cache, true)
+}
+
+func findSessionFilesCached(dir string, cache SessionCache, skipSQLiteBacked bool) []string {
 	if cache.Entries == nil {
 		cache.Entries = make(map[string]CacheEntry)
 	}
@@ -199,6 +209,9 @@ func FindSessionFilesCached(dir string, cache SessionCache) []string {
 	seen := make(map[string]bool)
 	var files []string
 	for _, root := range roots {
+		if dir == "" && skipSQLiteBacked && skipSQLiteBackedFileDir(root) {
+			continue
+		}
 		maxDepth := maxSessionDirDepth(root)
 		for _, f := range collectSessionFilesCached(root, 0, maxDepth, cache) {
 			if !seen[f] {

@@ -53,6 +53,11 @@ func loadSQLiteBackedSessions() []Session {
 	return sessions
 }
 
+// LoadSQLiteBackedSessions 返回以本地 SQLite 为权威来源的会话。
+func LoadSQLiteBackedSessions() []Session {
+	return loadSQLiteBackedSessions()
+}
+
 func skipSQLiteBackedFileDir(dir string) bool {
 	home, _ := os.UserHomeDir()
 	if home == "" {
