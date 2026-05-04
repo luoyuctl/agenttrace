@@ -18,6 +18,7 @@ type doctorReport struct {
 	CacheEntries    int               `json:"cache_entries"`
 	CacheDirs       int               `json:"cache_dirs"`
 	CachedValid     int               `json:"cached_valid"`
+	Sessions        int               `json:"sessions"`
 	SessionFiles    int               `json:"session_files"`
 	Directories     []doctorDirReport `json:"directories"`
 	Recommendations []string          `json:"recommendations"`
@@ -44,7 +45,11 @@ func renderDoctorReport(dir string, demo bool, format string) (string, error) {
 
 func buildDoctorReport(dir string, demo bool) doctorReport {
 	cache := engine.LoadSessionCache()
-	files := engine.FindSessionFilesCached(dir, cache)
+	files := engine.FindReportableSessionFilesCached(dir, cache)
+	var sqliteSessions []engine.Session
+	if dir == "" && !demo {
+		sqliteSessions = engine.LoadSQLiteBackedSessions()
+	}
 	valid := engine.ValidCachedSessionCount(files, cache)
 
 	mode := i18n.T("doctor_mode_auto")
@@ -62,14 +67,15 @@ func buildDoctorReport(dir string, demo bool) doctorReport {
 		CacheEntries: cache.EntryCount(),
 		CacheDirs:    len(cache.Dirs),
 		CachedValid:  valid,
+		Sessions:     len(files) + len(sqliteSessions),
 		SessionFiles: len(files),
-		Directories:  doctorDirectories(dir, files),
+		Directories:  doctorDirectories(dir, files, sqliteSessions),
 	}
 	report.Recommendations = doctorRecommendations(report, dir, demo)
 	return report
 }
 
-func doctorDirectories(dir string, files []string) []doctorDirReport {
+func doctorDirectories(dir string, files []string, sqliteSessions []engine.Session) []doctorDirReport {
 	var dirs []doctorDirReport
 	if dir != "" {
 		abs, err := filepath.Abs(dir)
@@ -103,11 +109,47 @@ func doctorDirectories(dir string, files []string) []doctorDirReport {
 			Files:  countByRoot[candidate.Path],
 		})
 	}
+	dirs = append(dirs, doctorSQLiteDirectories(sqliteSessions)...)
+	return dirs
+}
+
+func doctorSQLiteDirectories(sessions []engine.Session) []doctorDirReport {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		return nil
+	}
+	countByTool := make(map[string]int)
+	for _, session := range sessions {
+		countByTool[session.Metrics.SourceTool]++
+	}
+
+	candidates := []struct {
+		tool string
+		name string
+		path string
+	}{
+		{tool: "hermes_db", name: "Hermes Agent (DB)", path: filepath.Join(home, ".hermes", "state.db")},
+		{tool: "opencode_db", name: "OpenCode (DB)", path: filepath.Join(home, ".local", "share", "opencode", "opencode.db")},
+	}
+
+	var dirs []doctorDirReport
+	for _, candidate := range candidates {
+		exists := fileExists(candidate.path)
+		if !exists && countByTool[candidate.tool] == 0 {
+			continue
+		}
+		dirs = append(dirs, doctorDirReport{
+			Name:   candidate.name,
+			Path:   candidate.path,
+			Exists: exists,
+			Files:  countByTool[candidate.tool],
+		})
+	}
 	return dirs
 }
 
 func doctorRecommendations(report doctorReport, dir string, demo bool) []string {
-	if report.SessionFiles == 0 {
+	if report.Sessions == 0 {
 		if dir != "" {
 			return []string{i18n.T("doctor_next_custom")}
 		}
@@ -129,7 +171,7 @@ func doctorReportText(report doctorReport) string {
 	fmt.Fprintf(&b, "%s\n", i18n.T("doctor_title"))
 	fmt.Fprintf(&b, "%s: %s\n", i18n.T("doctor_version"), report.Version)
 	fmt.Fprintf(&b, "%s: %s\n", i18n.T("doctor_mode"), report.Mode)
-	fmt.Fprintf(&b, "%s: %d\n", i18n.T("doctor_session_files"), report.SessionFiles)
+	fmt.Fprintf(&b, "%s: %d\n", i18n.T("doctor_session_files"), report.Sessions)
 	fmt.Fprintf(&b, "%s: %s\n", i18n.T("doctor_cache"), report.CachePath)
 	fmt.Fprintf(&b, "  "+i18n.T("doctor_cache_detail")+"\n", report.CacheEntries, report.CachedValid, report.CacheDirs)
 	fmt.Fprintf(&b, "\n%s:\n", i18n.T("doctor_directories"))
@@ -150,4 +192,9 @@ func doctorReportText(report doctorReport) string {
 func dirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
