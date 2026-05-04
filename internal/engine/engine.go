@@ -2292,50 +2292,7 @@ func FindSessionFiles(dir string) []string {
 		}
 		return sortFilesByModTime(all)
 	}
-	if isOpenCodeStoragePath(dir) {
-		return collectSessionFiles(dir)
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-	type entryInfo struct {
-		path string
-		t    time.Time
-	}
-	var items []entryInfo
-	for _, e := range entries {
-		path := filepath.Join(dir, e.Name())
-		if e.IsDir() {
-			if isClineTaskDir(path) {
-				info, err := e.Info()
-				mt := time.Time{}
-				if err == nil {
-					mt = info.ModTime()
-				}
-				items = append(items, entryInfo{path: path, t: mt})
-			}
-			continue
-		}
-		name := e.Name()
-		if !isSessionFileName(name) {
-			continue
-		}
-		info, err := e.Info()
-		mt := time.Time{}
-		if err == nil {
-			mt = info.ModTime()
-		}
-		items = append(items, entryInfo{path: path, t: mt})
-	}
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].t.After(items[j].t)
-	})
-	files := make([]string, len(items))
-	for i, it := range items {
-		files[i] = it.path
-	}
-	return files
+	return collectSessionFiles(dir)
 }
 
 func sortFilesByModTime(paths []string) []string {
