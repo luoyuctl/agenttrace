@@ -2670,9 +2670,9 @@ func (m Model) renderOverview() string {
 	}
 
 	hero := m.renderDashboardHero(contentW)
-	controls := m.renderDashboardControls(contentW)
-	actionHint := m.renderOverviewActionHint(contentW)
 	metrics := m.renderDashboardMetrics(contentW)
+	actionHint := m.renderOverviewActionHint(contentW)
+	controls := m.renderDashboardControls(contentW)
 
 	var body string
 	if contentW >= 132 {
@@ -2680,7 +2680,7 @@ func (m Model) renderOverview() string {
 		midW := contentW * 33 / 100
 		rightW := contentW - leftW - midW - 4
 		row1 := lipgloss.JoinHorizontal(lipgloss.Top,
-			m.renderTriagePanel(leftW), "  ",
+			m.renderInspectFirstPanel(leftW), "  ",
 			m.renderTokenUsagePanel(midW), "  ",
 			m.renderHealthPanel(rightW),
 		)
@@ -2694,21 +2694,21 @@ func (m Model) renderOverview() string {
 		body = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2)
 	} else if contentW >= 86 {
 		half := (contentW - 2) / 2
-		row1 := lipgloss.JoinHorizontal(lipgloss.Top, m.renderTriagePanel(half), "  ", m.renderHealthPanel(contentW-half-2))
-		row2 := lipgloss.JoinHorizontal(lipgloss.Top, m.renderTokenUsagePanel(half), "  ", m.renderRecentSessionsPanel(contentW-half-2))
-		body = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2, "", m.renderLatencyPanel(contentW), "", m.renderTopAgentsPanel(contentW))
+		row1 := lipgloss.JoinHorizontal(lipgloss.Top, m.renderInspectFirstPanel(half), "  ", m.renderTokenUsagePanel(contentW-half-2))
+		row2 := lipgloss.JoinHorizontal(lipgloss.Top, m.renderLatencyPanel(half), "  ", m.renderRecentSessionsPanel(contentW-half-2))
+		body = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2, "", m.renderHealthPanel(contentW), "", m.renderTopAgentsPanel(contentW))
 	} else {
 		body = lipgloss.JoinVertical(lipgloss.Left,
-			m.renderTriagePanel(contentW), "",
-			m.renderHealthPanel(contentW), "",
+			m.renderInspectFirstPanel(contentW), "",
 			m.renderTokenUsagePanel(contentW), "",
 			m.renderLatencyPanel(contentW), "",
+			m.renderHealthPanel(contentW), "",
 			m.renderRecentSessionsPanel(contentW), "",
 			m.renderTopAgentsPanel(contentW),
 		)
 	}
 
-	page := lipgloss.JoinVertical(lipgloss.Left, hero, controls, actionHint, metrics, body)
+	page := lipgloss.JoinVertical(lipgloss.Left, hero, metrics, actionHint, controls, body)
 	return lipgloss.NewStyle().Width(innerW).Render(page)
 }
 
@@ -2758,25 +2758,10 @@ func (m Model) renderCompactFocus(width int) string {
 	if len(m.sessions) == 0 {
 		return lipgloss.JoinVertical(lipgloss.Left, title, dimStyle.Render(i18n.T("no_data")))
 	}
-	rows := topRiskSessions(m.sessions, minInt(3, len(m.sessions)))
-	nameW := maxInt(10, width-31)
 	var lines []string
 	lines = append(lines, title)
-	for _, s := range rows {
-		health := clampHealth(s.Health)
-		issue := i18n.T("list_no_major_anomaly")
-		if len(s.Anomalies) > 0 {
-			issue = anomalyTypeLabel(s.Anomalies[0].Type)
-		}
-		line := fmt.Sprintf("%s %-*s %4d%% %8s  %s",
-			healthColor(health).Render("●"),
-			nameW,
-			truncate(s.Name, nameW),
-			health,
-			money4(s.Metrics.CostEstimated),
-			issue,
-		)
-		lines = append(lines, truncate(line, width))
+	for _, item := range m.inspectFirstItems() {
+		lines = append(lines, truncate(compactInspectLine(item, width), width))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
@@ -2818,6 +2803,47 @@ func topRiskSessions(sessions []engine.Session, limit int) []engine.Session {
 		rows = rows[:limit]
 	}
 	return rows
+}
+
+func topCostSession(sessions []engine.Session) (engine.Session, bool) {
+	if len(sessions) == 0 {
+		return engine.Session{}, false
+	}
+	top := sessions[0]
+	for _, s := range sessions[1:] {
+		if safeAmount(s.Metrics.CostEstimated) > safeAmount(top.Metrics.CostEstimated) {
+			top = s
+		}
+	}
+	return top, true
+}
+
+func topSlowSession(sessions []engine.Session) (engine.Session, bool) {
+	if len(sessions) == 0 {
+		return engine.Session{}, false
+	}
+	top := sessions[0]
+	for _, s := range sessions[1:] {
+		if chartValue(s.Metrics.DurationSec) > chartValue(top.Metrics.DurationSec) {
+			top = s
+		}
+	}
+	return top, true
+}
+
+func topCriticalSession(sessions []engine.Session) (engine.Session, bool) {
+	var top engine.Session
+	found := false
+	for _, s := range sessions {
+		if clampHealth(s.Health) >= 50 {
+			continue
+		}
+		if !found || clampHealth(s.Health) < clampHealth(top.Health) {
+			top = s
+			found = true
+		}
+	}
+	return top, found
 }
 
 func healthColor(health int) lipgloss.Style {
@@ -2981,26 +3007,21 @@ func (m Model) overviewActionMessage() string {
 }
 
 func (m Model) renderDashboardMetrics(width int) string {
+	totalTokens := costSummaryTotalTokens(m.costSummary)
+	totalElapsed := totalElapsedSeconds(m.sessions)
+	p95 := aggregateP95Latency(m.sessions)
+	topAgent, topAgentCost := topAgentByCost(m.sessions)
+	topModel, topModelCost := topModelByCost(m.sessions)
+
 	if width < 70 {
 		cardW := width
-		totalTokens := costSummaryTotalTokens(m.costSummary)
-		toolTotal, toolFail := aggregateToolCounts(m.sessions)
-		errorRate := 0.0
-		if toolTotal > 0 {
-			errorRate = float64(toolFail) / float64(toolTotal) * 100
-		}
-		p95 := aggregateP95Latency(m.sessions)
-		health := clampHealth(int(m.aggStats.AvgHealth))
-		if len(m.sessions) == 0 {
-			health = 0
-		}
 		cards := []string{
-			metricCard(i18n.T("metric_tokens"), compactInt(totalTokens), i18n.T("metric_live"), cardW, "82"),
 			metricCard(i18n.T("metric_cost"), money2(m.costSummary.TotalCost), i18n.T("metric_estimated"), cardW, "82"),
-			metricCard(i18n.T("metric_sessions"), fmt.Sprintf("%d", len(m.sessions)), i18n.T("metric_loaded"), cardW, "82"),
-			metricCard(i18n.T("metric_errors"), fmt.Sprintf("%.2f%%", errorRate), fmt.Sprintf(i18n.T("metric_failed"), toolFail), cardW, "82"),
+			metricCard(i18n.T("metric_tokens"), compactInt(totalTokens), i18n.T("metric_live"), cardW, "82"),
+			metricCard(i18n.T("metric_elapsed"), engine.FmtDuration(totalElapsed), i18n.T("metric_all_sessions"), cardW, "214"),
 			metricCard(i18n.T("metric_p95"), fmt.Sprintf("%.2fs", p95), i18n.T("metric_tool_gaps"), cardW, "39"),
-			metricCard(i18n.T("metric_health"), fmt.Sprintf("%d%%", health), healthLabel(health), cardW, "82"),
+			metricCard(i18n.T("metric_top_agent"), topAgent, money2(topAgentCost), cardW, "45"),
+			metricCard(i18n.T("metric_top_model"), topModel, money2(topModelCost), cardW, "99"),
 		}
 		return lipgloss.JoinVertical(lipgloss.Left, cards...)
 	}
@@ -3008,37 +3029,24 @@ func (m Model) renderDashboardMetrics(width int) string {
 	if cardW < 16 {
 		cardW = (width - 4) / 3
 	}
-	totalTokens := costSummaryTotalTokens(m.costSummary)
-	toolTotal, toolFail := aggregateToolCounts(m.sessions)
-	errorRate := 0.0
-	if toolTotal > 0 {
-		errorRate = float64(toolFail) / float64(toolTotal) * 100
-	}
-	p95 := aggregateP95Latency(m.sessions)
-	health := clampHealth(int(m.aggStats.AvgHealth))
-	if len(m.sessions) == 0 {
-		health = 0
-	}
 	tokenTitle := i18n.T("metric_total_tokens")
 	costTitle := i18n.T("metric_total_cost_usd")
-	errorTitle := i18n.T("metric_error_rate")
+	elapsedTitle := i18n.T("metric_elapsed_time")
 	p95Title := i18n.T("metric_p95_latency")
-	healthTitle := i18n.T("metric_health_score")
 	if cardW < 20 {
 		tokenTitle = i18n.T("metric_tokens")
 		costTitle = i18n.T("metric_cost")
-		errorTitle = i18n.T("metric_errors")
+		elapsedTitle = i18n.T("metric_elapsed")
 		p95Title = i18n.T("metric_p95")
-		healthTitle = i18n.T("metric_health")
 	}
 
 	cards := []string{
-		metricCard(tokenTitle, compactInt(totalTokens), i18n.T("metric_live"), cardW, "82"),
 		metricCard(costTitle, money2(m.costSummary.TotalCost), i18n.T("metric_estimated"), cardW, "82"),
-		metricCard(i18n.T("metric_sessions"), fmt.Sprintf("%d", len(m.sessions)), i18n.T("metric_loaded"), cardW, "82"),
-		metricCard(errorTitle, fmt.Sprintf("%.2f%%", errorRate), fmt.Sprintf(i18n.T("metric_failed"), toolFail), cardW, "82"),
+		metricCard(tokenTitle, compactInt(totalTokens), i18n.T("metric_live"), cardW, "82"),
+		metricCard(elapsedTitle, engine.FmtDuration(totalElapsed), i18n.T("metric_all_sessions"), cardW, "214"),
 		metricCard(p95Title, fmt.Sprintf("%.2fs", p95), i18n.T("metric_tool_gaps"), cardW, "39"),
-		metricCard(healthTitle, fmt.Sprintf("%d%%", health), healthLabel(health), cardW, "82"),
+		metricCard(i18n.T("metric_top_agent"), topAgent, money2(topAgentCost), cardW, "45"),
+		metricCard(i18n.T("metric_top_model"), topModel, money2(topModelCost), cardW, "99"),
 	}
 
 	if width >= 110 {
@@ -3050,10 +3058,11 @@ func (m Model) renderDashboardMetrics(width int) string {
 }
 
 func metricCard(title, value, sub string, width int, color string) string {
+	bodyW := maxInt(4, width-6)
 	body := lipgloss.JoinVertical(lipgloss.Left,
-		dashTitleStyle.Render(title),
-		lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Bold(true).Render(value),
-		dimStyle.Render(sub),
+		dashTitleStyle.Render(truncate(title, bodyW)),
+		lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Bold(true).Render(truncate(value, bodyW)),
+		dimStyle.Render(truncate(sub, bodyW)),
 	)
 	return styleForOuterWidth(dashPanelStyle, width).Height(5).Render(body)
 }
@@ -3161,36 +3170,71 @@ func (m Model) renderAnomalyPanel(width int) string {
 	return dashboardPanel(i18n.T("panel_anomaly_detection"), cyanStyle.Render(i18n.T("panel_view_all")), strings.Join(lines, "\n"), width)
 }
 
-func (m Model) renderTriagePanel(width int) string {
+type inspectFirstItem struct {
+	Label      string
+	EmptyText  string
+	Session    engine.Session
+	HasSession bool
+}
+
+func (m Model) renderInspectFirstPanel(width int) string {
 	innerW := dashboardInnerWidth(width)
 	if len(m.sessions) == 0 {
-		return dashboardPanel(i18n.T("panel_triage_now"), "", dimStyle.Render(i18n.T("triage_no_sessions")), width)
+		return dashboardPanel(i18n.T("panel_inspect_first"), "", dimStyle.Render(i18n.T("triage_no_sessions")), width)
 	}
 
-	s := topRiskSessions(m.sessions, 1)[0]
-	ins := buildSessionInsight(
-		s,
-		engine.GenerateFixes(s.Metrics, s.Anomalies),
-		engine.PredictCostAnomaly(costBaselineSessions(m.sessions, s), s),
-	)
+	items := m.inspectFirstItems()
+	labelW := 0
+	for _, item := range items {
+		labelW = maxInt(labelW, lipgloss.Width(item.Label))
+	}
+	var lines []string
+	for _, item := range items {
+		lines = append(lines, inspectFirstLine(item, labelW, innerW))
+	}
+	return dashboardPanel(i18n.T("panel_inspect_first"), cyanStyle.Render(i18n.T("triage_panel_aside")), strings.Join(lines, "\n"), width)
+}
+
+func (m Model) inspectFirstItems() []inspectFirstItem {
+	costSession, hasCost := topCostSession(m.sessions)
+	slowSession, hasSlow := topSlowSession(m.sessions)
+	criticalSession, hasCritical := topCriticalSession(m.sessions)
+	return []inspectFirstItem{
+		{Label: i18n.T("inspect_top_cost"), Session: costSession, HasSession: hasCost},
+		{Label: i18n.T("inspect_slowest"), Session: slowSession, HasSession: hasSlow},
+		{Label: i18n.T("inspect_critical"), EmptyText: i18n.T("inspect_no_critical"), Session: criticalSession, HasSession: hasCritical},
+	}
+}
+
+func inspectFirstLine(item inspectFirstItem, labelW int, width int) string {
+	if !item.HasSession {
+		return triageLine(item.Label, item.EmptyText, labelW, width)
+	}
+	s := item.Session
 	health := clampHealth(s.Health)
-	nameW := maxInt(8, innerW-17)
-	head := fmt.Sprintf("%s %-*s %3d%% %s",
+	value := fmt.Sprintf("%s %s  %s  %s  %d%%",
 		healthColor(health).Render("●"),
+		truncate(s.Name, maxInt(8, width-labelW-28)),
+		money4(s.Metrics.CostEstimated),
+		engine.FmtDuration(chartValue(s.Metrics.DurationSec)),
+		health,
+	)
+	return triageLine(item.Label, value, labelW, width)
+}
+
+func compactInspectLine(item inspectFirstItem, width int) string {
+	if !item.HasSession {
+		return fmt.Sprintf("%s  %s", item.Label, item.EmptyText)
+	}
+	s := item.Session
+	nameW := maxInt(8, width-lipgloss.Width(item.Label)-27)
+	return fmt.Sprintf("%s  %-*s %8s %8s",
+		item.Label,
 		nameW,
 		truncate(s.Name, nameW),
-		health,
 		money4(s.Metrics.CostEstimated),
+		engine.FmtDuration(chartValue(s.Metrics.DurationSec)),
 	)
-	labelW := lipgloss.Width(i18n.T("triage_evidence_label"))
-	lines := []string{
-		truncate(head, innerW),
-		triageLine(i18n.T("triage_issue_label"), ins.Issue, labelW, innerW),
-		triageLine(i18n.T("triage_impact_label"), ins.Impact, labelW, innerW),
-		triageLine(i18n.T("triage_evidence_label"), ins.Evidence, labelW, innerW),
-		triageLine(i18n.T("triage_next_label"), triageKeyHint(s)+" · "+ins.NextAction, labelW, innerW),
-	}
-	return dashboardPanel(i18n.T("panel_triage_now"), cyanStyle.Render(i18n.T("triage_panel_aside")), strings.Join(lines, "\n"), width)
 }
 
 func triageLine(label, value string, labelW int, width int) string {
@@ -3317,6 +3361,50 @@ func aggregateToolCounts(sessions []engine.Session) (total, failed int) {
 		failed += nonNegativeInt(s.Metrics.ToolCallsFail)
 	}
 	return total, failed
+}
+
+func totalElapsedSeconds(sessions []engine.Session) float64 {
+	total := 0.0
+	for _, s := range sessions {
+		total += chartValue(s.Metrics.DurationSec)
+	}
+	return total
+}
+
+func topAgentByCost(sessions []engine.Session) (string, float64) {
+	costs := map[string]float64{}
+	for _, s := range sessions {
+		name := sourceDisplayName(s.Metrics.SourceTool)
+		costs[name] += safeAmount(s.Metrics.CostEstimated)
+	}
+	return topCostName(costs)
+}
+
+func topModelByCost(sessions []engine.Session) (string, float64) {
+	costs := map[string]float64{}
+	for _, s := range sessions {
+		name := s.Metrics.ModelUsed
+		if name == "" {
+			name = i18n.T("not_available")
+		}
+		costs[name] += safeAmount(s.Metrics.CostEstimated)
+	}
+	return topCostName(costs)
+}
+
+func topCostName(costs map[string]float64) (string, float64) {
+	if len(costs) == 0 {
+		return i18n.T("not_available"), 0
+	}
+	topName := ""
+	topCost := 0.0
+	for name, cost := range costs {
+		if topName == "" || cost > topCost || (cost == topCost && name < topName) {
+			topName = name
+			topCost = cost
+		}
+	}
+	return topName, topCost
 }
 
 func costSummaryTotalTokens(cs engine.CostSummary) int {

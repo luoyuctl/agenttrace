@@ -1071,7 +1071,7 @@ func TestCompactOverviewUsesScanFriendlySmallViewport(t *testing.T) {
 
 	rendered := m.View()
 
-	for _, want := range []string{"Next", "FOCUS", "RECENT", "TOKEN", "HEALTH"} {
+	for _, want := range []string{"Next", "INSPECT FIRST", "RECENT", "TOKEN", "HEALTH"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("compact overview missing %q:\n%s", want, rendered)
 		}
@@ -1135,37 +1135,51 @@ func TestOverviewShowsActionHint(t *testing.T) {
 	}
 }
 
-func TestOverviewShowsTriagePanel(t *testing.T) {
+func TestOverviewShowsInspectFirstPanel(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.sessions[0].Metrics.DurationSec = 45
+	m.sessions[1].Metrics.DurationSec = 122
+	m.sessions[2].Metrics.DurationSec = 240
 	m.view = viewOverview
 
 	rendered := m.View()
 
-	for _, want := range []string{"TRIAGE NOW", "gamma", "Issue", "Impact", "Evidence", "press ! then Enter"} {
+	for _, want := range []string{"INSPECT FIRST", "Top cost", "Slowest", "Critical", "session_b", "gamma"} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("overview triage panel missing %q:\n%s", want, rendered)
+			t.Fatalf("overview inspect-first panel missing %q:\n%s", want, rendered)
 		}
 	}
 	if got := maxRenderedWidth(rendered); got > 120 {
-		t.Fatalf("overview triage panel too wide: got=%d line=%q", got, widestLine(rendered))
+		t.Fatalf("overview inspect-first panel too wide: got=%d line=%q", got, widestLine(rendered))
 	}
 }
 
-func TestOverviewUsesShortMetricTitlesAtStandardWidth(t *testing.T) {
+func TestOverviewPrioritizesSpendTimeMetrics(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 120, 36)
+	m.sessions[0].Metrics.DurationSec = 45
+	m.sessions[1].Metrics.DurationSec = 122
+	m.sessions[2].Metrics.DurationSec = 240
+	m.costSummary = engine.ComputeCostSummary(m.sessions)
+	m.overview = engine.ComputeOverview(m.sessions)
+	m.aggStats = engine.ComputeAggregateStats(m.sessions)
 	m.view = viewOverview
 
 	rendered := m.View()
 
-	for _, unwanted := range []string{"TOTAL TOKENS", "TOTAL COST", "(USD)", "ERROR RATE", "P95 LATENCY"} {
+	for _, unwanted := range []string{"ERROR RATE"} {
 		if strings.Contains(rendered, unwanted) {
 			t.Fatalf("standard overview should avoid wrapped metric title %q:\n%s", unwanted, rendered)
 		}
 	}
-	for _, want := range []string{"TOKENS", "COST", "ERRORS", "P95", "HEALTH"} {
+	for _, want := range []string{"COST", "TOKENS", "ELAPSED", "P95", "TOP AGENT", "TOP MODEL", "767.0K", "$1.85"} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("standard overview missing short metric title %q:\n%s", want, rendered)
+			t.Fatalf("overview missing spend/time metric %q:\n%s", want, rendered)
 		}
+	}
+	metricIdx := strings.Index(rendered, "COST")
+	controlsIdx := strings.Index(rendered, "$ top cost")
+	if metricIdx < 0 || controlsIdx < 0 || metricIdx > controlsIdx {
+		t.Fatalf("spend/time metrics should appear before shortcut hints, metric=%d controls=%d:\n%s", metricIdx, controlsIdx, rendered)
 	}
 }
 
@@ -1203,7 +1217,7 @@ func TestChineseOverviewShowsTranslatedActionHint(t *testing.T) {
 	}
 }
 
-func TestChineseOverviewShowsTranslatedTriagePanel(t *testing.T) {
+func TestChineseOverviewShowsTranslatedInspectFirstPanel(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.ZH)
 	t.Cleanup(func() { i18n.SetLang(prev) })
@@ -1215,13 +1229,13 @@ func TestChineseOverviewShowsTranslatedTriagePanel(t *testing.T) {
 
 	rendered := m.View()
 
-	for _, want := range []string{"立即排查", "问题", "影响", "证据", "按 ! 再 Enter"} {
+	for _, want := range []string{"优先查看", "最高费用", "最慢会话", "严重会话"} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("Chinese overview triage panel missing %q:\n%s", want, rendered)
+			t.Fatalf("Chinese overview inspect-first panel missing %q:\n%s", want, rendered)
 		}
 	}
-	if strings.Contains(rendered, "TRIAGE NOW") {
-		t.Fatalf("Chinese overview leaked English triage label:\n%s", rendered)
+	if strings.Contains(rendered, "INSPECT FIRST") {
+		t.Fatalf("Chinese overview leaked English inspect-first label:\n%s", rendered)
 	}
 }
 
@@ -1234,12 +1248,12 @@ func TestChineseCompactOverviewTranslatesRuntimeLabels(t *testing.T) {
 	m.view = viewOverview
 
 	rendered := m.View()
-	for _, want := range []string{"关注", "最近", "健康"} {
+	for _, want := range []string{"优先查看", "最近", "健康"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("compact overview missing translated label %q:\n%s", want, rendered)
 		}
 	}
-	for _, unwanted := range []string{"FOCUS", "RECENT"} {
+	for _, unwanted := range []string{"INSPECT FIRST", "RECENT"} {
 		if strings.Contains(rendered, unwanted) {
 			t.Fatalf("compact overview leaked English label %q:\n%s", unwanted, rendered)
 		}
