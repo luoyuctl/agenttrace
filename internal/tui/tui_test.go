@@ -1839,6 +1839,68 @@ func TestDetailRendersDiagnosticSummary(t *testing.T) {
 	}
 }
 
+func TestDetailInsightClampsLoopWasteToTotal(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	s := engine.Session{
+		Metrics:  engine.Metrics{CostEstimated: 0.0008},
+		LoopCost: engine.LoopCost{RetryEvents: 4, LoopGroups: 1, TotalLoopCost: 0.0750},
+	}
+
+	ins := buildSessionInsight(s, nil, engine.CostAlert{})
+
+	if !strings.Contains(ins.Impact, "$0.0008 loop cost inside $0.0008 total") {
+		t.Fatalf("detail insight should clamp loop waste to total, got %q", ins.Impact)
+	}
+	if strings.Contains(ins.Impact, "$0.0750") {
+		t.Fatalf("detail insight kept impossible loop cost: %q", ins.Impact)
+	}
+}
+
+func TestDiagnosticsClampSimpleLoopCostToTotal(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	s := engine.Session{
+		Metrics:  engine.Metrics{CostEstimated: 0.0008},
+		LoopCost: engine.LoopCost{TotalLoopCost: 0.0750},
+	}
+	m := resizeForTest(t, sampleModelForTest(), 100, 36)
+
+	rendered := m.renderFingerprintLoops(s)
+
+	if !strings.Contains(rendered, "cost $0.0008") {
+		t.Fatalf("diagnostics should clamp simple loop cost to total, got %q", rendered)
+	}
+	if strings.Contains(rendered, "$0.0750") {
+		t.Fatalf("diagnostics kept impossible loop cost: %q", rendered)
+	}
+}
+
+func TestLoopAnalysisClampsLoopResultCostToTotal(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 100, 36)
+	m.sessions = []engine.Session{{Metrics: engine.Metrics{CostEstimated: 0.0008}}}
+	m.filteredIndices = nil
+	m.detailReady = true
+	m.loopResult = engine.LoopResult{HasLoop: true, LoopType: "tool_loop", Turns: 5, LoopCost: 0.0750}
+
+	rendered := m.renderLoopAnalysis()
+
+	if !strings.Contains(rendered, "$0.0008") {
+		t.Fatalf("loop analysis should clamp loop result cost to total, got %q", rendered)
+	}
+	if strings.Contains(rendered, "$0.0750") {
+		t.Fatalf("loop analysis kept impossible loop cost: %q", rendered)
+	}
+}
+
 func TestOpeningDetailWithNoVisibleRowsClearsStaleViewport(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 36)
 	m.view = viewList

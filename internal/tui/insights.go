@@ -46,8 +46,9 @@ func buildSessionInsight(s engine.Session, fixes []engine.FixSuggestion, alert e
 		}
 	}
 	if s.LoopCost.TotalLoopCost > 0 {
+		loopCost := engine.ClampLoopWaste(s.LoopCost.TotalLoopCost, met.CostEstimated)
 		ins.Issue = i18n.T("insight_loop_cost")
-		ins.Impact = fmt.Sprintf(i18n.T("insight_loop_impact"), safeAmount(s.LoopCost.TotalLoopCost), safeAmount(met.CostEstimated))
+		ins.Impact = fmt.Sprintf(i18n.T("insight_loop_impact"), loopCost, safeAmount(met.CostEstimated))
 		ins.Evidence = fmt.Sprintf(i18n.T("insight_loop_evidence"), s.LoopCost.RetryEvents, s.LoopCost.LoopGroups)
 		ins.Confidence = i18n.T("insight_high")
 		ins.Color = lipgloss.Color("196")

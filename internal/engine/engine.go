@@ -156,6 +156,47 @@ type LoopCost struct {
 	LoopGroups      int     `json:"loop_groups"`
 }
 
+func ClampLoopWaste(loopCost, totalCost float64) float64 {
+	if math.IsNaN(loopCost) || math.IsInf(loopCost, 0) || loopCost < 0 {
+		loopCost = 0
+	}
+	if math.IsNaN(totalCost) || math.IsInf(totalCost, 0) || totalCost <= 0 {
+		return 0
+	}
+	if loopCost > totalCost {
+		return totalCost
+	}
+	return loopCost
+}
+
+func LoopWastePercent(loopCost, totalCost float64) float64 {
+	if math.IsNaN(totalCost) || math.IsInf(totalCost, 0) || totalCost <= 0 {
+		return 0
+	}
+	return ClampLoopWaste(loopCost, totalCost) / totalCost * 100
+}
+
+func ClampLoopCostToTotal(lc LoopCost, totalCost float64) LoopCost {
+	lc.RetryCost = ClampLoopWaste(lc.RetryCost, totalCost)
+	lc.ToolLoopCost = ClampLoopWaste(lc.ToolLoopCost, totalCost)
+	lc.FormatRetryCost = ClampLoopWaste(lc.FormatRetryCost, totalCost)
+	lc.TotalLoopCost = ClampLoopWaste(lc.TotalLoopCost, totalCost)
+	componentTotal := lc.RetryCost + lc.ToolLoopCost + lc.FormatRetryCost
+	if lc.TotalLoopCost == 0 || componentTotal == 0 || componentTotal <= lc.TotalLoopCost {
+		return lc
+	}
+	scale := lc.TotalLoopCost / componentTotal
+	lc.RetryCost *= scale
+	lc.ToolLoopCost *= scale
+	lc.FormatRetryCost *= scale
+	return lc
+}
+
+func ClampLoopResultToTotal(lr LoopResult, totalCost float64) LoopResult {
+	lr.LoopCost = ClampLoopWaste(lr.LoopCost, totalCost)
+	return lr
+}
+
 // ── Global Overview ──
 
 // AgentOverview holds per-agent aggregate stats.
@@ -2104,7 +2145,8 @@ func LoadSession(path string) (*Session, error) {
 	m := Analyze(events, model)
 	a := DetectAnomalies(m)
 	h := HealthScore(m, a)
-	loopResult := AnalyzeLoops(events)
+	loopResult := ClampLoopResultToTotal(AnalyzeLoops(events), m.CostEstimated)
+	loopCost := ClampLoopCostToTotal(ComputeLoopCost(events), m.CostEstimated)
 
 	// v0.2: community-driven diagnostics
 	loops := DetectFingerprintLoops(events)
@@ -2121,7 +2163,7 @@ func LoadSession(path string) (*Session, error) {
 		Metrics:            m,
 		Anomalies:          a,
 		Health:             h,
-		LoopCost:           ComputeLoopCost(events),
+		LoopCost:           loopCost,
 		LoopFingerprints:   loops,
 		ToolLatencies:      latencies,
 		ContextUtil:        ctxUtil,
@@ -2166,6 +2208,8 @@ func LocalizeSession(s Session) Session {
 			tw.Detail = detail
 		}
 	}
+	s.LoopCost = ClampLoopCostToTotal(s.LoopCost, s.Metrics.CostEstimated)
+	s.LoopResultData = ClampLoopResultToTotal(s.LoopResultData, s.Metrics.CostEstimated)
 	return s
 }
 
@@ -2971,7 +3015,7 @@ func PredictCostAnomaly(sessions []Session, current Session) CostAlert {
 	for _, s := range sessions {
 		if s.Metrics.AssistantTurns > 0 {
 			totalCostTurn += s.Metrics.CostEstimated / float64(s.Metrics.AssistantTurns)
-			totalLoopTurn += s.LoopCost.TotalLoopCost / float64(s.Metrics.AssistantTurns)
+			totalLoopTurn += ClampLoopWaste(s.LoopCost.TotalLoopCost, s.Metrics.CostEstimated) / float64(s.Metrics.AssistantTurns)
 			count++
 		}
 	}
@@ -2989,7 +3033,7 @@ func PredictCostAnomaly(sessions []Session, current Session) CostAlert {
 
 	var curLoopTurn float64
 	if current.Metrics.AssistantTurns > 0 {
-		curLoopTurn = current.LoopCost.TotalLoopCost / float64(current.Metrics.AssistantTurns)
+		curLoopTurn = ClampLoopWaste(current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated) / float64(current.Metrics.AssistantTurns)
 	}
 
 	alert := CostAlert{
@@ -3010,14 +3054,14 @@ func PredictCostAnomaly(sessions []Session, current Session) CostAlert {
 		alert.Triggered = true
 		alert.Level = "warning"
 		alert.Message = fmt.Sprintf(i18n.T("cost_alert_critical"), curCostTurn, avgCostTurn, alert.Ratio)
-	} else if current.Metrics.CostEstimated > 0 && current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated > 0.50 {
+	} else if loopPercent := LoopWastePercent(current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated); loopPercent > 50 {
 		alert.Triggered = true
 		alert.Level = "critical"
-		alert.Message = fmt.Sprintf(i18n.T("cost_alert_warning"), current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated, current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated*100)
-	} else if current.Metrics.CostEstimated > 0 && current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated > 0.30 {
+		alert.Message = fmt.Sprintf(i18n.T("cost_alert_warning"), ClampLoopWaste(current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated), current.Metrics.CostEstimated, loopPercent)
+	} else if loopPercent := LoopWastePercent(current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated); loopPercent > 30 {
 		alert.Triggered = true
 		alert.Level = "warning"
-		alert.Message = fmt.Sprintf(i18n.T("cost_alert_warning"), current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated, current.LoopCost.TotalLoopCost/current.Metrics.CostEstimated*100)
+		alert.Message = fmt.Sprintf(i18n.T("cost_alert_warning"), ClampLoopWaste(current.LoopCost.TotalLoopCost, current.Metrics.CostEstimated), current.Metrics.CostEstimated, loopPercent)
 	} else {
 		alert.Triggered = false
 		alert.Level = "info"
@@ -3629,10 +3673,8 @@ func ComputeWasteReport(m Metrics, events []Event, loopResult LoopResult) WasteR
 	wr.Cache = AnalyzeCacheEfficiency(m)
 	wr.Bloat = AnalyzeToolBloat(m)
 	wr.Stuck = DetectStuckPatterns(events)
-	wr.LoopCost = loopResult.LoopCost
-	if m.CostEstimated > 0 {
-		wr.LoopPercent = wr.LoopCost / m.CostEstimated * 100
-	}
+	wr.LoopCost = ClampLoopWaste(loopResult.LoopCost, m.CostEstimated)
+	wr.LoopPercent = LoopWastePercent(loopResult.LoopCost, m.CostEstimated)
 	wr.TotalWasted = wr.Cache.WastedCost + wr.LoopCost
 	if wr.Bloat.BloatScore > 50 {
 		wr.TotalWasted += m.CostEstimated * 0.15
@@ -3732,10 +3774,8 @@ func ComputeWasteReportFromSession(s *Session) WasteReport {
 		// Fallback to simple stuck detection from metrics
 		wr.Stuck = detectStuckFromMetrics(s.Metrics)
 	}
-	wr.LoopCost = s.LoopCost.TotalLoopCost
-	if s.Metrics.CostEstimated > 0 {
-		wr.LoopPercent = wr.LoopCost / s.Metrics.CostEstimated * 100
-	}
+	wr.LoopCost = ClampLoopWaste(s.LoopCost.TotalLoopCost, s.Metrics.CostEstimated)
+	wr.LoopPercent = LoopWastePercent(s.LoopCost.TotalLoopCost, s.Metrics.CostEstimated)
 	wr.TotalWasted = wr.Cache.WastedCost + wr.LoopCost
 	if wr.Bloat.BloatScore > 50 {
 		wr.TotalWasted += s.Metrics.CostEstimated * 0.05
