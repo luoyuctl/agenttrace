@@ -28,7 +28,10 @@ jobs:
         run: |
           mkdir -p public/assets
           cp -R site/. public/
-          cp assets/agenttrace-demo.gif assets/hero-banner.png assets/logo-icon.png assets/readme-real-overview.png public/assets/
+          cp assets/agenttrace-demo.gif assets/hero-banner.png assets/logo-icon.png \
+            assets/readme-real-overview.png assets/readme-real-critical.png \
+            assets/readme-real-detail.png assets/readme-real-diagnostics.png \
+            public/assets/
 
       - name: Validate Pages artifact
         run: scripts/ci/check-pages-artifact.sh public
