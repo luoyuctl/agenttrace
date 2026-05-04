@@ -1916,6 +1916,44 @@ func TestDetailRendersDiagnosticSummary(t *testing.T) {
 	}
 }
 
+func TestDetailViewportPrioritizesDiagnosisBeforeRawReport(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 100, 36)
+	m.view = viewList
+	m.table.SetCursor(1)
+	m.sessions[1].Metrics.DurationSec = 122
+	m.openDetail()
+
+	content := m.renderDetailViewportContent(m.sessions[1])
+	for _, want := range []string{
+		i18n.T("insight_primary_issue"),
+		i18n.T("insight_impact"),
+		i18n.T("insight_evidence"),
+		i18n.T("insight_next"),
+		i18n.T("insight_confidence"),
+		i18n.T("detail_metric_title"),
+		i18n.T("cost"),
+		i18n.T("tokens"),
+		i18n.T("duration_col"),
+		i18n.T("tools"),
+		i18n.T("diff_field_anomalies"),
+		i18n.T("detail_raw_report_title"),
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("detail content missing %q:\n%s", want, content)
+		}
+	}
+
+	metricsIdx := strings.Index(content, i18n.T("detail_metric_title"))
+	rawIdx := strings.Index(content, i18n.T("detail_raw_report_title"))
+	if metricsIdx < 0 || rawIdx < 0 || rawIdx <= metricsIdx {
+		t.Fatalf("raw report should sit below diagnosis-first metrics, metrics=%d raw=%d:\n%s", metricsIdx, rawIdx, content)
+	}
+}
+
 func TestDetailInsightClampsLoopWasteToTotal(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.EN)
