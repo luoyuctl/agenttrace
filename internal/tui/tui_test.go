@@ -578,6 +578,7 @@ func TestCommandBackspaceRemovesWholeRune(t *testing.T) {
 func TestTabIntoDiffPreparesComparison(t *testing.T) {
 	m := resizeForTest(t, sampleModelForTest(), 100, 30)
 	m.view = viewDiagnostics
+	m.openDiagnostics()
 	m.rebuildFilteredView()
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -588,6 +589,23 @@ func TestTabIntoDiffPreparesComparison(t *testing.T) {
 	}
 	if len(m.diffResult.Entries) == 0 {
 		t.Fatalf("expected prepared diff entries")
+	}
+}
+
+func TestDiagnosticsViewUsesScrollableViewport(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 80, 24)
+	m.view = viewList
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	m = next.(Model)
+	if m.view != viewDiagnostics || !m.diagnosticsReady {
+		t.Fatalf("expected diagnostics viewport to be ready, view=%d ready=%v", m.view, m.diagnosticsReady)
+	}
+	before := m.viewport.YOffset
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = next.(Model)
+	if m.viewport.YOffset <= before {
+		t.Fatalf("expected diagnostics viewport to scroll, before=%d after=%d", before, m.viewport.YOffset)
 	}
 }
 
@@ -610,6 +628,21 @@ func TestCompactListKeepsTokensAndHealthReadable(t *testing.T) {
 	}
 	if row[6] != "92%" {
 		t.Fatalf("expected health value, got %q", row[6])
+	}
+}
+
+func TestCompactHeightListKeepsTableRowsVisible(t *testing.T) {
+	m := resizeForTest(t, sampleModelForTest(), 80, 24)
+	m.view = viewList
+
+	rendered := m.View()
+	for _, want := range []string{"session_alpha", "$0.4200", "214.0K", "92%"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("compact-height list should keep table data visible, missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "TOP DRIVERS") {
+		t.Fatalf("compact-height list should prioritize table rows over summary panels:\n%s", rendered)
 	}
 }
 
@@ -665,6 +698,17 @@ func TestWideListKeepsFullOperationalColumns(t *testing.T) {
 	}
 	if row[12] != "No major anomaly" {
 		t.Fatalf("expected issue column, got row=%v", row)
+	}
+	rendered := m.View()
+	for _, want := range []string{"DURATION", "$0.4200", "214.0K", "No major anomaly"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("wide list should render diagnostic data without hiding %q:\n%s", want, rendered)
+		}
+	}
+	for _, clipped := range []string{"DURA…", "$0.42…", "No maj…"} {
+		if strings.Contains(rendered, clipped) {
+			t.Fatalf("wide list should not clip core diagnostic data %q:\n%s", clipped, rendered)
+		}
 	}
 }
 

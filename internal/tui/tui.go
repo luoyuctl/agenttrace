@@ -160,9 +160,10 @@ type Model struct {
 	tableReady bool
 
 	// Detail view
-	viewport    viewport.Model
-	detailReady bool
-	loopResult  engine.LoopResult // 循环检测结果
+	viewport         viewport.Model
+	detailReady      bool
+	diagnosticsReady bool
+	loopResult       engine.LoopResult // 循环检测结果
 
 	// Diff view
 	diffResult     engine.SessionDiff
@@ -239,6 +240,7 @@ func (m *Model) startReload() tea.Cmd {
 	m.sessions = nil
 	m.view = viewOverview
 	m.detailReady = false
+	m.diagnosticsReady = false
 	m.loadQueue = nil
 	m.loadProgress = 0
 	m.loadTotal = 0
@@ -470,6 +472,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Height = m.detailViewportHeight()
 			m.refreshDetailViewport()
 		}
+		if m.diagnosticsReady {
+			m.viewport.Width = m.detailViewportWidth()
+			m.viewport.Height = m.detailViewportHeight()
+			m.refreshDiagnosticsViewport()
+		}
 
 	case tea.KeyMsg:
 		// During loading, only allow quit
@@ -596,7 +603,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.view = viewDetail
 				m.openDetail()
 			case viewDetail:
-				m.view = viewDiagnostics
+				m.openDiagnostics()
 			case viewDiagnostics:
 				m.openDiff()
 			case viewDiff:
@@ -628,12 +635,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.openDetail()
 			}
 		case "3":
-			m.view = viewDiagnostics
+			m.openDiagnostics()
 		case "4":
 			m.openDiff()
 		case "w":
 			if (m.view == viewList || m.view == viewDetail) && len(m.filteredIndices) > 0 {
-				m.view = viewDiagnostics
+				m.openDiagnostics()
 			}
 
 		case "/":
@@ -750,6 +757,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case viewDetail:
 				m.viewport, cmd = m.viewport.Update(msg)
+			case viewDiagnostics:
+				m.viewport, cmd = m.viewport.Update(msg)
 			case viewDiff:
 				// No sub-component in diff view
 			}
@@ -768,10 +777,12 @@ func (m *Model) toggleLanguage() {
 	i18n.SetLang(m.lang)
 	m.refreshColumns()
 	m.refreshDetailViewport()
+	m.refreshDiagnosticsViewport()
 }
 
 func (m *Model) openDetail() {
 	m.detailReady = false
+	m.diagnosticsReady = false
 	if !m.tableReady || len(m.sessions) == 0 {
 		return
 	}
@@ -786,7 +797,15 @@ func (m *Model) openDetail() {
 	}
 }
 
+func (m *Model) openDiagnostics() {
+	m.view = viewDiagnostics
+	m.detailReady = false
+	m.refreshDiagnosticsViewport()
+}
+
 func (m *Model) openDiff() {
+	m.detailReady = false
+	m.diagnosticsReady = false
 	m.prepareDiffForCursor()
 	m.view = viewDiff
 }
@@ -832,6 +851,22 @@ func (m *Model) refreshDetailViewport() {
 		return
 	}
 	m.detailReady = false
+}
+
+func (m *Model) refreshDiagnosticsViewport() {
+	if m.view != viewDiagnostics {
+		return
+	}
+	idx := m.findSessionIndex()
+	if idx < 0 || idx >= len(m.sessions) {
+		m.diagnosticsReady = false
+		return
+	}
+	s := m.sessions[idx]
+	m.prepareDetailState(s)
+	m.viewport = viewport.New(m.detailViewportWidth(), m.detailViewportHeight())
+	m.viewport.SetContent(m.renderWasteContent(s, m.detailViewportWidth()))
+	m.diagnosticsReady = true
 }
 
 func (m Model) detailViewportHeight() int {
@@ -1205,7 +1240,7 @@ func (m Model) View() string {
 				content = m.frameContent(dimStyle.Render(m.selectionHint()))
 			}
 		case viewDiagnostics:
-			content = m.renderWaste()
+			content = m.renderDiagnosticsView()
 		case viewDiff:
 			content = m.renderDiff()
 		}
@@ -1245,6 +1280,7 @@ func (m Model) renderListView() string {
 	contentW := m.frameBodyWidth()
 	var sections []string
 	extraLines := 0
+	showListPanels := m.height == 0 || m.height >= 30
 	if filterBar := m.renderListStatusBar(contentW); filterBar != "" {
 		sections = append(sections, filterBar)
 		extraLines += renderedLineCount(filterBar)
@@ -1253,14 +1289,18 @@ func (m Model) renderListView() string {
 		sections = append(sections, empty)
 		extraLines += renderedLineCount(empty)
 	}
-	if summary := m.renderDriverSummary(contentW); summary != "" {
-		sections = append(sections, summary)
-		extraLines += renderedLineCount(summary)
+	if showListPanels {
+		if summary := m.renderDriverSummary(contentW); summary != "" {
+			sections = append(sections, summary)
+			extraLines += renderedLineCount(summary)
+		}
 	}
-	if selected := m.renderSelectedSessionSummary(maxInt(1, contentW-6)); selected != "" {
-		panel := subtlePanel(i18n.T("list_selected"), selected, contentW)
-		sections = append(sections, panel)
-		extraLines += renderedLineCount(panel)
+	if showListPanels {
+		if selected := m.renderSelectedSessionSummary(maxInt(1, contentW-6)); selected != "" {
+			panel := subtlePanel(i18n.T("list_selected"), selected, contentW)
+			sections = append(sections, panel)
+			extraLines += renderedLineCount(panel)
+		}
 	}
 	tableView := m.table
 	tableView.SetWidth(contentW)
@@ -2240,6 +2280,18 @@ func (m Model) renderWaste() string {
 		return m.frameContent(dimStyle.Render(m.selectionHint()))
 	}
 	s := m.sessions[idx]
+	return m.frameContent(m.renderWasteContent(s, panelW))
+}
+
+func (m Model) renderDiagnosticsView() string {
+	if !m.diagnosticsReady {
+		return m.renderWaste()
+	}
+	scrollInfo := dimStyle.Render(fmt.Sprintf(" %s: %.0f%% ", i18n.T("scroll_label"), m.viewport.ScrollPercent()*100))
+	return m.frameContent(lipgloss.JoinVertical(lipgloss.Left, scrollInfo, m.viewport.View()))
+}
+
+func (m Model) renderWasteContent(s engine.Session, panelW int) string {
 	cardW := panelW
 	twoColumn := panelW >= 92
 	if twoColumn {
@@ -2302,10 +2354,10 @@ func (m Model) renderWaste() string {
 			}
 		}
 		sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, rows...))
-		return m.frameContent(lipgloss.JoinVertical(lipgloss.Left, sections...))
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 	sections = append(sections, lipgloss.JoinVertical(lipgloss.Left, cards...))
-	return m.frameContent(lipgloss.JoinVertical(lipgloss.Left, sections...))
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
 func (m Model) renderSlowRunSummary(s engine.Session) string {
@@ -3041,6 +3093,9 @@ func (m *Model) adjustColumnWidths(width int) {
 
 	if width >= 170 {
 		m.setColumnsAndRefreshRows(m.wideListColumns(22, 13, 18, 5, 5, 5, 5, 8, 7, 8, 5, 9, 16))
+		return
+	} else if width >= 150 {
+		m.setColumnsAndRefreshRows(m.wideListColumns(16, 9, 8, 5, 5, 5, 4, 9, 7, 8, 4, 9, 16))
 		return
 	} else if width > 130 {
 		m.setColumnsAndRefreshRows(m.wideListColumns(14, 13, 10, 5, 5, 5, 4, 7, 6, 5, 4, 9, 7))
