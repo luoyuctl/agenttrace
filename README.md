@@ -20,7 +20,7 @@
   <a href="https://goreportcard.com/report/github.com/luoyuctl/agenttrace"><img src="https://goreportcard.com/badge/github.com/luoyuctl/agenttrace" alt="Go Report Card"></a>
   <img src="https://img.shields.io/badge/go-1.25+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.4.1-2bbc8a.svg" alt="Homebrew">
+  <img src="https://img.shields.io/badge/Homebrew-v0.4.2-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <p align="center">
@@ -63,15 +63,15 @@ agenttrace
 That local run found:
 
 ```text
-AGENTTRACE v0.4.1
+AGENTTRACE v0.4.2
 ```
 
 | Signal | What agenttrace found |
 |---|---:|
 | Analyzed sessions | 1,714 |
-| Total tokens | 8.89B |
-| Estimated cost | $4,867.99 |
-| Tool failure rate | 1.49% |
+| Total tokens | 8.93B |
+| Estimated cost | $4,896.61 |
+| Tool failure rate | 1.5% |
 | Critical sessions | 35 |
 | Average health | 90% |
 
@@ -94,7 +94,7 @@ Windows:
 iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
 ```
 
-The npm wrapper is prepared in `npm/`, but the public package is not published yet.
+The npm wrapper is also available as `agenttrace` after each release is published.
 
 ## Common workflows
 

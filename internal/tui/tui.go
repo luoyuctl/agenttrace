@@ -944,13 +944,14 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 		}
 		healthWidth = cols[healthIdx].Width
 	}
-	healthCol := healthCell(health, healthWidth)
+	healthCol := healthCellText(health, healthWidth)
 
 	failStr := fmt.Sprintf("%d", failTools)
 
-	tokensStr := tokenCell(metricsTotalTokens(met))
-	issue := issueCell(sessionIssueLabel(s), s)
-	duration := durationCell(met.DurationSec)
+	costStr := money4(met.CostEstimated)
+	tokensStr := compactInt(metricsTotalTokens(met))
+	issue := sessionIssueLabel(s)
+	duration := engine.FmtDuration(chartValue(met.DurationSec))
 	switch len(m.table.Columns()) {
 	case 7:
 		return table.Row{
@@ -958,7 +959,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			sourceDisplay,
 			failStr,
 			fmt.Sprintf("%d", len(s.Anomalies)),
-			costCell(met.CostEstimated),
+			costStr,
 			tokensStr,
 			healthCol,
 		}
@@ -971,7 +972,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			fmt.Sprintf("%d", totalToolCalls),
 			sr,
 			failStr,
-			costCell(met.CostEstimated),
+			costStr,
 			tokensStr,
 			duration,
 			fmt.Sprintf("%d", len(s.Anomalies)),
@@ -987,7 +988,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			fmt.Sprintf("%d", totalToolCalls),
 			sr,
 			failStr,
-			costCell(met.CostEstimated),
+			costStr,
 			tokensStr,
 			duration,
 			fmt.Sprintf("%d", len(s.Anomalies)),
@@ -1001,7 +1002,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			fmt.Sprintf("%d", totalToolCalls),
 			sr,
 			failStr,
-			costCell(met.CostEstimated),
+			costStr,
 			tokensStr,
 			healthCol,
 			issue,
@@ -1013,7 +1014,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			fmt.Sprintf("%d", nonNegativeInt(met.AssistantTurns)),
 			fmt.Sprintf("%d", totalToolCalls),
 			failStr,
-			costCell(met.CostEstimated),
+			costStr,
 			tokensStr,
 			healthCol,
 		}
@@ -1026,7 +1027,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 		fmt.Sprintf("%d", totalToolCalls),
 		sr,
 		failStr,
-		costCell(met.CostEstimated),
+		costStr,
 		tokensStr,
 		healthCol,
 	}
@@ -3060,6 +3061,10 @@ func costCell(amount float64) string {
 }
 
 func healthCell(health int, width int) string {
+	return healthColor(health).Render(healthCellText(health, width))
+}
+
+func healthCellText(health int, width int) string {
 	health = clampHealth(health)
 	score := fmt.Sprintf("%d%%", health)
 	if width < 7 {
@@ -3075,7 +3080,7 @@ func healthCell(health int, width int) string {
 	if candidate := fmt.Sprintf("%s %s", score, label); lipgloss.Width(candidate) <= width {
 		text = candidate
 	}
-	return healthColor(health).Render(truncate(text, width))
+	return truncate(text, width)
 }
 
 // refreshColumns rebuilds column titles after a language switch.

@@ -4,6 +4,17 @@
 
 No unreleased changes yet.
 
+## v0.4.2 - 2026-05-05
+
+### Changed
+
+- Refreshed README GIF and screenshots from a real local run with color enabled.
+- Updated release surfaces for the v0.4.2 Homebrew and npm distribution.
+
+### Fixed
+
+- Kept Session List table values readable when terminal colors are enabled.
+
 ## v0.4.1 - 2026-05-04
 
 ### Changed
