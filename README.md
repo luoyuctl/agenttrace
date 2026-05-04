@@ -114,6 +114,16 @@ Recommended when you prefer package-manager upgrades:
 brew install luoyuctl/tap/agenttrace
 ```
 
+If Homebrew is current but your shell still reports an older binary, confirm the
+local version first:
+
+```bash
+agenttrace --version
+agenttrace --doctor
+brew update && brew upgrade luoyuctl/tap/agenttrace
+which agenttrace
+```
+
 ### Go install
 
 Recommended when your `$GOBIN` or `$GOPATH/bin` is already on `PATH`:
