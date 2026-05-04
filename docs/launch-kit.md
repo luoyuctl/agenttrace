@@ -215,6 +215,16 @@ go build -o /tmp/agenttrace ./cmd/agenttrace
 /tmp/agenttrace --demo --overview -f json
 ```
 
+## Release Consistency Checklist
+
+Before sharing a release publicly, compare these surfaces against `gh release list --repo luoyuctl/agenttrace --limit 1`:
+
+- README release and Homebrew badges point at the latest version.
+- `homebrew/Formula/agenttrace.rb`, `homebrew/README.md`, `npm/package.json`, and `npm/README.md` match the current install story.
+- `site/index.html` JSON-LD `softwareVersion`, `site/demo-report.html`, `site/llms.txt`, `site/robots.txt`, and `site/sitemap.xml` remain present and version-consistent where they mention a release.
+- GitHub Discussions, release notes, and launch copy do not point readers at stale release links.
+- Public CTAs use neutral product actions such as `Get agenttrace`, `Install`, or `Latest release`.
+
 Install smoke:
 
 ```bash
