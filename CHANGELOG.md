@@ -4,6 +4,14 @@
 
 No unreleased changes yet.
 
+## v0.4.1 - 2026-05-04
+
+### Changed
+
+- Refreshed the README's real local-run screenshots and summary metrics from
+  the latest TUI against local session logs.
+- Updated release surfaces for the v0.4.1 distribution.
+
 ## v0.4.0 - 2026-05-04
 
 ### Changed

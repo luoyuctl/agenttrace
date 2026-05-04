@@ -33,7 +33,7 @@ From this directory:
 node --check install.js
 node --check run.js
 AGENTTRACE_BIN=/path/to/agenttrace node run.js --version
-AGENTTRACE_RELEASE_TAG=v0.4.0 node install.js
+AGENTTRACE_RELEASE_TAG=v0.4.1 node install.js
 npm pack --dry-run
 ```
 
