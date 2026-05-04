@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/readme-demo-run.gif" alt="agenttrace 使用合成演示数据展示 AI 编程 Agent 会话排查" width="100%">
+  <img src="assets/readme-real-run.gif" alt="agenttrace running locally against real AI coding agent session logs" width="100%">
 </p>
 
 ---
@@ -44,21 +44,19 @@ AI 编程 Agent 越来越像一套小型构建系统：会调用工具、重试�
 - **先看哪一次？** 按成本、耗时、轮次、健康分、失败、异常、模型、来源或文本搜索排序。
 - **能不能本地看？** 所有分析都在本机完成，不需要上传 prompt、代码和日志。
 
-## 合成演示数据
+## 真实本机运行
 
 ```bash
-agenttrace --demo
+agenttrace
 ```
-
-下面的截图来自生成的演示数据，不包含真实 prompt、源码、本机路径、会话标识符或个人/工作使用指标。
 
 | 概览 | Critical 会话 |
 |---|---|
-| <img src="assets/readme-overview.png" alt="agenttrace 使用合成演示数据展示会话、token、成本、错误和健康分" width="100%"> | <img src="assets/readme-critical.png" alt="agenttrace 使用合成演示数据展示 critical 会话列表" width="100%"> |
+| <img src="assets/readme-real-overview.png" alt="agenttrace overview showing real local AI coding agent sessions, token cost, errors, and health" width="100%"> | <img src="assets/readme-real-critical.png" alt="agenttrace critical session list from real local AI coding agent logs" width="100%"> |
 
 | 会话详情 | 诊断 |
 |---|---|
-| <img src="assets/readme-detail.png" alt="agenttrace 使用合成演示数据展示会话详情、健康分、成本和下一步动作" width="100%"> | <img src="assets/readme-diagnostics.png" alt="agenttrace 使用合成演示数据展示延迟、上下文窗口和大参数调用诊断" width="100%"> |
+| <img src="assets/readme-real-detail.png" alt="agenttrace detail view showing health, cost, tool failures, and next action from a real local session" width="100%"> | <img src="assets/readme-real-diagnostics.png" alt="agenttrace diagnostics view showing latency, context window, and large parameter calls from real local logs" width="100%"> |
 
 ## 安装
 

@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/readme-demo-run.gif" alt="agenttrace demo fixture showing synthetic AI coding agent session triage" width="100%">
+  <img src="assets/readme-real-run.gif" alt="agenttrace running locally against real AI coding agent session logs" width="100%">
 </p>
 
 ---
@@ -44,23 +44,23 @@ It helps you answer:
 - **What should I inspect first?** Rank sessions by cost, duration, turns, health, failures, anomalies, model, source, or text search.
 - **Can I inspect this privately?** Everything runs locally; prompts, code, and logs do not need to leave your machine.
 
-## Demo fixture run
+## Real local run
 
-These screenshots use generated demo data. They do not contain real prompts, source code, local paths, session identifiers, or personal/work usage metrics.
+These screenshots were captured from a local run against real session logs. They are not `--demo` output and not test fixtures.
 
 ```bash
-agenttrace --demo
+agenttrace
 ```
 
 | Overview | Critical sessions |
 |---|---|
-| <img src="assets/readme-overview.png" alt="agenttrace overview showing synthetic demo sessions, token cost, errors, and health" width="100%"> | <img src="assets/readme-critical.png" alt="agenttrace critical session list from synthetic demo data" width="100%"> |
+| <img src="assets/readme-real-overview.png" alt="agenttrace overview showing real local AI coding agent sessions, token cost, errors, and health" width="100%"> | <img src="assets/readme-real-critical.png" alt="agenttrace critical session list from real local AI coding agent logs" width="100%"> |
 
 | Session detail | Diagnostics |
 |---|---|
-| <img src="assets/readme-detail.png" alt="agenttrace detail view showing health, cost, tool failures, and next action from a synthetic demo session" width="100%"> | <img src="assets/readme-diagnostics.png" alt="agenttrace diagnostics view showing latency, context window, and large parameter calls from synthetic demo data" width="100%"> |
+| <img src="assets/readme-real-detail.png" alt="agenttrace detail view showing health, cost, tool failures, and next action from a real local session" width="100%"> | <img src="assets/readme-real-diagnostics.png" alt="agenttrace diagnostics view showing latency, context window, and large parameter calls from real local logs" width="100%"> |
 
-The demo fixture shows:
+That local run found:
 
 ```text
 AGENTTRACE v0.4.0
@@ -68,12 +68,12 @@ AGENTTRACE v0.4.0
 
 | Signal | What agenttrace found |
 |---|---:|
-| Analyzed sessions | 3 |
-| Total tokens | 278.2K |
-| Estimated cost | $0.81 |
-| Tool failure rate | 60% |
-| Critical sessions | 1 |
-| Average health | 58.7 |
+| Analyzed sessions | 1,707 |
+| Total tokens | 8.68B |
+| Estimated cost | $4,716.31 |
+| Tool failure rate | 1.54% |
+| Critical sessions | 35 |
+| Average health | 90% |
 
 ## Install
 
