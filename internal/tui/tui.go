@@ -84,8 +84,10 @@ type loadedSession struct {
 }
 
 type sessionDiscoveryMsg struct {
-	files    []string
-	sessions []loadedSession
+	files        []string
+	sessions     []loadedSession
+	cacheEntries int
+	cacheValid   int
 }
 
 // loadProgressMsg 承载一批渐进加载结果。
@@ -111,6 +113,8 @@ type Model struct {
 	loadProgress    int
 	loadTotal       int
 	loadedFromCache int
+	cacheEntries    int
+	cacheValid      int
 	loadQueue       []string
 	sessionCache    engine.SessionCache
 	unsavedNewCount int
@@ -235,6 +239,8 @@ func (m *Model) startReload() tea.Cmd {
 	m.loadProgress = 0
 	m.loadTotal = 0
 	m.loadedFromCache = 0
+	m.cacheEntries = 0
+	m.cacheValid = 0
 	m.unsavedNewCount = 0
 	m.loading = true
 
@@ -294,7 +300,13 @@ func (m *Model) finishLoading() {
 
 func discoverSessionFilesCmd(dir string, cache engine.SessionCache) tea.Cmd {
 	return func() tea.Msg {
-		msg := sessionDiscoveryMsg{files: engine.FindReportableSessionFilesCached(dir, cache)}
+		files := engine.FindReportableSessionFilesCached(dir, cache)
+		cacheValid := engine.ValidCachedSessionCount(files, cache)
+		msg := sessionDiscoveryMsg{
+			files:        files,
+			cacheEntries: cache.EntryCount(),
+			cacheValid:   cacheValid,
+		}
 		if dir == "" {
 			for _, s := range engine.LoadSQLiteBackedSessions() {
 				msg.sessions = append(msg.sessions, loadedSession{session: s})
@@ -363,6 +375,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionDiscoveryMsg:
 		m.loadQueue = msg.files
 		m.loadTotal = len(msg.files) + len(msg.sessions)
+		m.cacheEntries = msg.cacheEntries
+		m.cacheValid = msg.cacheValid
 		if len(msg.sessions) > 0 {
 			m.appendLoadedSessions(msg.sessions)
 		}
@@ -1433,17 +1447,31 @@ func (m Model) renderHelp() string {
 }
 
 func (m Model) cacheStatusLabel() string {
-	if m.loadTotal <= 0 {
+	if m.loadTotal <= 0 && m.cacheEntries <= 0 {
 		return ""
 	}
-	cached := m.loadedFromCache
-	if cached < 0 {
-		cached = 0
+	hits := m.loadedFromCache
+	if hits < 0 {
+		hits = 0
 	}
-	if cached > m.loadTotal {
-		cached = m.loadTotal
+	if m.loadTotal > 0 && hits > m.loadTotal {
+		hits = m.loadTotal
 	}
-	return fmt.Sprintf(i18n.T("cache_status"), cached, m.loadTotal)
+	valid := m.cacheValid
+	if valid < hits {
+		valid = hits
+	}
+	if valid < 0 {
+		valid = 0
+	}
+	entries := m.cacheEntries
+	if entries < valid {
+		entries = valid
+	}
+	if entries < 0 {
+		entries = 0
+	}
+	return fmt.Sprintf(i18n.T("cache_status"), hits, valid, entries)
 }
 
 func (m Model) viewName() string {

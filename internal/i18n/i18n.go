@@ -831,7 +831,7 @@ var translations = map[string]map[Lang]string{
 	"loading_scanning_hint": {EN: "Scanning known agent directories. Press q to quit.", ZH: "正在扫描已知 Agent 目录。按 q 退出。"},
 	"loading_parsing_hint":  {EN: "Parsing and analyzing session files. Press q to quit.", ZH: "正在解析和分析会话文件。按 q 退出。"},
 	"loading_from_cache":    {EN: "%d from cache", ZH: "%d 个来自缓存"},
-	"cache_status":          {EN: "cache %d/%d", ZH: "缓存 %d/%d"},
+	"cache_status":          {EN: "cache hits %d/%d valid (%d entries)", ZH: "缓存命中 %d/%d 有效（%d 条）"},
 	"scroll_label":          {EN: "Scroll", ZH: "滚动"},
 	"list_filter":           {EN: "filter", ZH: "筛选"},
 	"list_selected":         {EN: "SELECTED SESSION", ZH: "当前会话"},

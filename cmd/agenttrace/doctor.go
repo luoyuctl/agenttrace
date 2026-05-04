@@ -45,12 +45,7 @@ func renderDoctorReport(dir string, demo bool, format string) (string, error) {
 func buildDoctorReport(dir string, demo bool) doctorReport {
 	cache := engine.LoadSessionCache()
 	files := engine.FindSessionFilesCached(dir, cache)
-	valid := 0
-	for _, file := range files {
-		if _, ok := engine.CachedSession(file, cache); ok {
-			valid++
-		}
-	}
+	valid := engine.ValidCachedSessionCount(files, cache)
 
 	mode := i18n.T("doctor_mode_auto")
 	if dir != "" {
