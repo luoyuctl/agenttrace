@@ -13,21 +13,29 @@
   <img src="https://img.shields.io/badge/Homebrew-v0.4.0-2bbc8a.svg" alt="Homebrew">
 </p>
 
-<h3 align="center">💸 Stop burning cash and hours on invisible AI agent waste</h3>
+<h3 align="center">💸 See where AI coding agents burn tokens, time, and trust</h3>
 
 ---
 
 ## What is agenttrace?
 
-AI coding agents (Claude Code, Gemini CLI, Codex CLI) burn tokens in loops, retry failures silently, and leave you with a surprise bill. You're wasting **money** on dead tokens and **time** on broken sessions — and you can't even see where.
+AI coding agents are now part of the build loop. They plan, call tools, retry failures, hit long gaps, and spend tokens while you only see the final answer.
 
-**agenttrace** finds the waste in both — so you stop paying for nothing and start shipping faster.
+**agenttrace** is a local TUI and report generator that reads the session logs already on your machine and turns them into health scores, cost evidence, anomaly detection, diffs, and CI gates.
+
+In the built-in demo, one command surfaces the exact kind of waste teams miss:
+
+- **278,200 tokens** across 3 sessions
+- **$0.81 estimated cost**
+- **60% tool failure rate**
+- **1 critical session** with hanging, shallow thinking, and tool failures
+- a health trend that drops from **100 → 66**
 
 Site: https://luoyuctl.github.io/agenttrace/
 
 Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
-Featured in: [Awesome Codex CLI](https://github.com/RoggeOhta/awesome-codex-cli), [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli), [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild), [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills), and [Awesome AI Agents](https://github.com/ARUNAGIRINATHAN-K/awesome-ai-agents).
+Listed in: [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli), [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild), and [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills).
 
 <p align="center">
   <img src="assets/agenttrace-demo.gif" alt="agenttrace TUI demo" width="100%">
@@ -39,7 +47,7 @@ The GIF follows the shortest first-run path: demo data -> critical sessions -> d
 
 ## Why it exists
 
-AI agents now behave like tiny build systems: they plan, call tools, retry, hang, and spend money while doing it. Most teams only see the final output, not the session health, token burn, tool failure rate, or whether the agent got stuck. agenttrace gives that missing operational view in the terminal.
+High-star CLI tools win because they make a painful workflow visible, fast, and local. agenttrace does that for AI agent sessions: open a terminal, sort the worst run, inspect the evidence, and decide whether the fix is a prompt, skill, tool wrapper, model choice, or CI rule.
 
 ## Where it fits
 
@@ -48,7 +56,7 @@ agenttrace is not a hosted tracing backend or another chat client. It is a local
 | If you need... | Use agenttrace for... |
 |---|---|
 | Local-first privacy | Inspect sessions without uploading prompts, code, or tool logs |
-| Fast terminal triage | Open a TUI, sort bad sessions, and jump into detail/diagnostics |
+| Fast terminal triage | Open a TUI, sort bad sessions, and jump into detail, diagnostics, or diff |
 | Cross-agent comparison | Compare Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes, OpenCode, Oh My Pi, Kimi, and more |
 | Cost and token evidence | See cost, token usage, cache usage, retries, loops, latency, and health in one place |
 | Workflow improvement | Mine local sessions for repeated tool failures, hanging gaps, and costly loops before updating prompts, skills, or project instructions |
@@ -66,12 +74,23 @@ agenttrace is not a hosted tracing backend or another chat client. It is a local
 | Brittle prompts or skills | `tool_fail_rate`, anomaly mix, and expensive sessions that point to the workflow note, skill, or command wrapper to fix next |
 | CI blind spots | JSON reports and health gates for average health, critical sessions, and tool failure rate |
 
+## What you can do in 60 seconds
+
+```bash
+agenttrace --demo
+agenttrace --demo --overview -f json
+agenttrace --demo --overview -f html -o agenttrace-demo.html
+```
+
+Use the demo when you want to evaluate the product before granting it access to real local logs. It exercises the same parser, health scoring, anomaly detection, cost summary, Markdown/JSON/HTML exporters, and CI gate fields used by real scans.
+
 ## ✨ Features
 
 | Feature | Description |
 |---|---|
-| 🚀 **Single Binary** | 7.5 MB — `curl -sL ... \| sh` install, no runtime deps |
+| 🚀 **Single Binary** | About 12 MB — `curl -sL ... \| sh` install, no runtime deps |
 | 🖥️ **Bubble Tea TUI** | Modern terminal UI: Overview → Session List → Detail → Diagnostics → Diff |
+| 🧪 **Built-in Demo** | Try representative healthy, hanging, and shallow sessions before scanning real logs |
 | ⚡ **Persistent Cache** | Incremental session cache avoids a full disk parse on every startup |
 | 🩺 **Doctor Mode** | `--doctor` checks detected agent dirs, cache health, and next steps |
 | ⌨️ **Command Mode** | `:health <80`, `:cost >0.1`, `:sort cost desc`, `:anomalies` |

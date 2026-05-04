@@ -3,20 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>agenttrace - TUI observability for AI coding agents</title>
+    <title>agenttrace - local observability for AI coding agents</title>
     <meta
       name="description"
-      content="A local TUI for finding token waste, tool loops, failures, latency, anomalies, health regressions, diffs, and CI evidence across AI coding agent sessions."
+      content="A local TUI and report generator that finds token waste, tool loops, failures, latency, anomalies, health regressions, diffs, and CI evidence across AI coding agent sessions."
     />
     <link rel="canonical" href="https://luoyuctl.github.io/agenttrace/" />
-    <meta property="og:title" content="agenttrace - TUI observability for AI coding agents" />
+    <meta property="og:title" content="agenttrace - local observability for AI coding agents" />
     <meta property="og:description" content="Find token waste, tool loops, failures, latency, anomalies, health regressions, diffs, and CI evidence in local AI coding agent sessions." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://luoyuctl.github.io/agenttrace/" />
     <meta property="og:image" content="https://luoyuctl.github.io/agenttrace/assets/hero-banner.png" />
     <meta property="og:image:alt" content="agenttrace terminal dashboard showing AI coding agent session metrics" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="agenttrace - TUI observability for AI coding agents" />
+    <meta name="twitter:title" content="agenttrace - local observability for AI coding agents" />
     <meta name="twitter:description" content="Trace cost, tokens, tool failures, latency, anomalies, health, diffs, and CI gates from local AI coding agent logs." />
     <meta name="twitter:image" content="https://luoyuctl.github.io/agenttrace/assets/hero-banner.png" />
     <link rel="icon" href="assets/logo-icon.png" />
@@ -29,7 +29,7 @@
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "softwareVersion": "0.4.0",
-        "description": "TUI observability for AI coding agent sessions across Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes, OpenCode, Kimi, and Copilot-style logs.",
+        "description": "Local TUI and report generator for AI coding agent sessions across Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes, OpenCode, OpenClaw, Oh My Pi, Kimi, and Copilot-style logs.",
         "url": "https://luoyuctl.github.io/agenttrace/",
         "codeRepository": "https://github.com/luoyuctl/agenttrace",
         "license": "https://github.com/luoyuctl/agenttrace/blob/master/LICENSE",
@@ -48,40 +48,57 @@
         <span>agenttrace</span>
       </a>
       <nav aria-label="Primary navigation">
-        <a href="#demo">Demo</a>
+        <a href="#evidence">Evidence</a>
+        <a href="#workflow">Workflow</a>
         <a href="demo-report.html">Report</a>
         <a href="#install">Install</a>
-        <a href="#ci">CI</a>
         <a href="https://github.com/luoyuctl/agenttrace/discussions/2">Feedback</a>
         <a class="nav-cta" href="#install">Get agenttrace</a>
       </nav>
     </header>
 
     <main>
-      <section class="hero">
+      <section class="hero" id="install">
         <img class="hero-bg" src="assets/hero-banner.png" alt="agenttrace dashboard showing AI agent observability metrics" />
         <div class="hero-shade"></div>
         <div class="hero-copy">
-          <h1>Find AI agent waste before it ships.</h1>
+          <h1>Your AI agents already leave traces. Read them.</h1>
           <p>
-            agenttrace turns Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports,
-            Hermes, OpenCode, Kimi, and Copilot-style logs into one fast local TUI.
+            agenttrace turns local coding-agent logs into a fast TUI, shareable HTML reports,
+            health scores, anomaly evidence, and CI gates. No hosted backend. No prompt upload.
           </p>
-          <div class="hero-actions" id="install">
+          <div class="hero-actions">
             <button class="copy-btn" data-copy="curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh">
               Copy install
             </button>
             <a href="demo-report.html">View sample report</a>
             <a href="https://github.com/luoyuctl/agenttrace/releases/latest">Latest release</a>
           </div>
-          <pre><code>curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
-go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
-agenttrace --demo
-agenttrace --demo --overview -f html -o report.html</code></pre>
+          <div class="hero-terminal" aria-label="Quick start terminal">
+            <div class="terminal-bar">
+              <span></span><span></span><span></span>
+              <strong>60-second proof</strong>
+            </div>
+            <pre><code>curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+agenttrace --demo --overview -f json
+
+# demo result
+sessions: 3  tokens: 278200  cost: $0.81
+health: 58.7  critical: 1  tool_fail_rate: 60%</code></pre>
+          </div>
         </div>
+        <aside class="hero-card" aria-label="Demo evidence">
+          <strong>Built-in demo surfaced</strong>
+          <dl>
+            <div><dt>278,200</dt><dd>tokens traced</dd></div>
+            <div><dt>$0.81</dt><dd>estimated cost</dd></div>
+            <div><dt>60%</dt><dd>tool failure rate</dd></div>
+            <div><dt>100→66</dt><dd>health trend</dd></div>
+          </dl>
+        </aside>
       </section>
 
-      <section class="proof-strip" aria-label="What agenttrace catches">
+      <section class="proof-strip" id="evidence" aria-label="What agenttrace catches">
         <article>
           <strong>Token bills</strong>
           <span>Input, output, cache tokens, estimated cost, and top burning sessions.</span>
@@ -102,10 +119,10 @@ agenttrace --demo --overview -f html -o report.html</code></pre>
 
       <section class="demo" id="demo">
         <div class="section-copy">
-          <h2>A terminal workbench for agent sessions.</h2>
+          <h2>Start with the worst run, not the loudest guess.</h2>
           <p>
-            Sort hot sessions, drill into details, compare nearby runs, and inspect diagnostics
-            without uploading logs to another service.
+            The TUI opens on the operating picture: cost, health, latency, recent anomalies,
+            and the sessions most likely to waste human review time.
           </p>
         </div>
         <div class="demo-frame">
@@ -116,53 +133,61 @@ agenttrace --demo --overview -f html -o report.html</code></pre>
       <section class="ops-grid">
         <article>
           <span>0 Overview</span>
-          <h3>See the operating picture.</h3>
+          <h3>See the fleet.</h3>
           <p>Sessions, tokens, cost, error rate, P95 latency, health score, recent anomalies, and top agents.</p>
         </article>
         <article>
           <span>1 Session List</span>
-          <h3>Find the expensive run.</h3>
+          <h3>Rank the waste.</h3>
           <p>Sort by health, cost, or turns; filter by source, model, anomaly, text, or health threshold.</p>
         </article>
         <article>
           <span>2 Detail</span>
-          <h3>Explain what went wrong.</h3>
+          <h3>Inspect evidence.</h3>
           <p>Primary issue, impact, evidence, next action, loop analysis, tool warnings, and cost alerts.</p>
         </article>
         <article>
           <span>3 Diag / 4 Diff</span>
-          <h3>Turn symptoms into fixes.</h3>
+          <h3>Ship the fix.</h3>
           <p>Fingerprint loops, tool latency, context pressure, large params, rare tools, and side-by-side diffs.</p>
         </article>
       </section>
 
-      <section class="workflow" id="ci">
+      <section class="workflow" id="workflow">
         <div class="section-copy">
-          <h2>Use it locally, then gate it in CI.</h2>
+          <h2>Use the same evidence locally and in CI.</h2>
           <p>
-            The same parser powers the TUI, Markdown and HTML reports, JSON output, GitHub artifacts,
-            and threshold-based build failures.
+            Run the TUI while debugging. Export Markdown for PRs. Attach HTML reports to builds.
+            Fail CI when agent health drops or tool failures spike.
           </p>
         </div>
-        <pre><code>agenttrace --overview -f html -o agenttrace-overview.html
-agenttrace --overview -f markdown -o agenttrace-overview.md
-agenttrace --overview \
-  --fail-under-health 80 \
-  --fail-on-critical \
-  --max-tool-fail-rate 15</code></pre>
+        <div class="command-stack">
+          <article>
+            <span>Shareable report</span>
+            <code>agenttrace --overview -f html -o agenttrace-overview.html</code>
+          </article>
+          <article>
+            <span>PR comment</span>
+            <code>agenttrace --overview -f markdown -o agenttrace-overview.md</code>
+          </article>
+          <article>
+            <span>Build gate</span>
+            <code>agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-rate 15</code>
+          </article>
+        </div>
       </section>
 
       <section class="formats">
         <h2>Multi-agent logs, one operational view.</h2>
-        <p>Claude Code · Codex CLI · Gemini CLI · Qwen Code · Aider · Cursor exports · Hermes Agent · OpenCode · OpenClaw · Kimi CLI · Copilot-style traces</p>
+        <p>Claude Code · Codex CLI · Gemini CLI · Qwen Code · Cline · Aider · Cursor exports · Hermes Agent · OpenCode · OpenClaw · Oh My Pi · Kimi CLI · Copilot-style traces</p>
       </section>
 
       <section class="community">
         <div class="section-copy">
           <h2>Built in the open for agent operators.</h2>
           <p>
-            agenttrace is being submitted to terminal, AI agent, observability, and LLMOps directories.
-            Feedback is tracked publicly so the TUI can keep following real coding-agent pain.
+            agenttrace is listed in AI agent and terminal-tool communities, and feedback is tracked
+            publicly so the TUI can keep following real coding-agent pain.
           </p>
         </div>
         <div class="community-links" aria-label="Community links">
