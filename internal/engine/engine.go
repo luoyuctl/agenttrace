@@ -2475,7 +2475,7 @@ func ScanAllDirs() []Session {
 			sessions = append(sessions, *s)
 		}
 	}
-	sessions = append(sessions, loadSQLiteBackedSessions()...)
+	sessions = append(sessions, LoadSQLiteBackedSessions()...)
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].Metrics.SessionStart > sessions[j].Metrics.SessionStart
 	})

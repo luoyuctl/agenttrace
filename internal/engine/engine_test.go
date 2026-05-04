@@ -907,6 +907,31 @@ func TestFindSessionFilesCachedSkipsDeletedCachedFiles(t *testing.T) {
 	}
 }
 
+func TestFindReportableSessionFilesCachedSkipsSQLiteBackedDirs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sessionsDir := filepath.Join(home, ".hermes", "sessions")
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	sessionPath := filepath.Join(sessionsDir, "legacy.jsonl")
+	if err := os.WriteFile(sessionPath, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".hermes", "state.db"), []byte("sqlite"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	rawFiles := FindSessionFilesCached("", SessionCache{Entries: map[string]CacheEntry{}, Dirs: map[string]DirCacheEntry{}})
+	if len(rawFiles) != 1 || rawFiles[0] != sessionPath {
+		t.Fatalf("raw cached discovery should still expose files: %v", rawFiles)
+	}
+	reportable := FindReportableSessionFilesCached("", SessionCache{Entries: map[string]CacheEntry{}, Dirs: map[string]DirCacheEntry{}})
+	if len(reportable) != 0 {
+		t.Fatalf("reportable discovery should skip sqlite-backed file dirs: %v", reportable)
+	}
+}
+
 func TestLoadSessionCacheDefersEntryDecode(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -1197,6 +1222,8 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 				ModelUsed:     "claude-sonnet-4",
 				TokensInput:   100,
 				TokensOutput:  50,
+				TokensCacheW:  25,
+				TokensCacheR:  50,
 				ToolCallsOK:   9,
 				ToolCallsFail: 1,
 				CostEstimated: 0.25,
@@ -1253,7 +1280,7 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	if payload.Version != Version || payload.Summary.TotalSessions != 2 || payload.Summary.Critical != 1 {
 		t.Fatalf("bad summary: %+v", payload.Summary)
 	}
-	if payload.Summary.TotalCost != 1 || payload.Summary.TotalTokens != 450 || payload.Summary.ToolFailRate != 25 {
+	if payload.Summary.TotalCost != 1 || payload.Summary.TotalTokens != 525 || payload.Summary.ToolFailRate != 25 {
 		t.Fatalf("missing operational totals: %+v", payload.Summary)
 	}
 	if payload.Summary.HealthTrend.Direction == "" || payload.Summary.HealthTrend.Message == "" || len(payload.Summary.HealthTrend.Points) != 2 {
@@ -1394,6 +1421,8 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 				ModelUsed:     "gpt-4.1",
 				TokensInput:   1000,
 				TokensOutput:  500,
+				TokensCacheW:  25,
+				TokensCacheR:  50,
 				ToolCallsOK:   4,
 				ToolCallsFail: 1,
 				CostEstimated: 0.12,
@@ -1417,6 +1446,7 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 	for _, want := range []string{
 		"# agenttrace overview",
 		"| Sessions | 2 |",
+		"| Total tokens | 2075 |",
 		"| Health Trend |",
 		"| Tool failures | 6 / 10 (60.0%) |",
 		"| Aider | 1 |",
@@ -1509,6 +1539,8 @@ func TestReportOverviewHTMLIsShareableAndEscaped(t *testing.T) {
 				ModelUsed:     "gpt-4.1",
 				TokensInput:   1000,
 				TokensOutput:  500,
+				TokensCacheW:  25,
+				TokensCacheR:  50,
 				ToolCallsOK:   4,
 				ToolCallsFail: 1,
 				CostEstimated: 0.12,
@@ -1533,6 +1565,8 @@ func TestReportOverviewHTMLIsShareableAndEscaped(t *testing.T) {
 		"<!doctype html>",
 		"<title>agenttrace overview</title>",
 		"AI agent session overview",
+		"Total tokens",
+		"<strong>2075</strong>",
 		"Tool failures",
 		"Aider",
 		"Cursor",
