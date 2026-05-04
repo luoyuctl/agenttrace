@@ -105,17 +105,7 @@ func main() {
 
 	// List models
 	if *listModels {
-		fmt.Printf(i18n.T("supported_models")+"\n", engine.Version)
-		fmt.Println(strings.Repeat("=", 58))
-		fmt.Printf("  %-22s %10s %10s\n", i18n.T("model_header"), i18n.T("input_per_m"), i18n.T("output_per_m"))
-		fmt.Println("  " + strings.Repeat("-", 44))
-		for k, v := range engine.ListPricing() {
-			fmt.Printf("  %-22s $%8.2f  $%8.2f\n", k, v.Input, v.Output)
-		}
-		fmt.Println()
-		fmt.Printf(i18n.T("default_model_label")+"\n",
-			engine.LookupPrice("default").Input, engine.LookupPrice("default").Output)
-		fmt.Println("  " + engine.PricingSource())
+		fmt.Print(renderModelPricingList(engine.Version, engine.PricingSource(), engine.ListPricing(), engine.LookupPrice("default")))
 		return
 	}
 

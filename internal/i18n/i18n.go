@@ -1177,7 +1177,15 @@ var translations = map[string]map[Lang]string{
 	// ── Pricing ──
 	"pricing_litellm_fetched": {EN: "LiteLLM (fetched %s)", ZH: "LiteLLM (获取于 %s)"},
 	"pricing_litellm_cached":  {EN: "LiteLLM (cached %s)", ZH: "LiteLLM (缓存于 %s)"},
+	"pricing_litellm_stale":   {EN: "LiteLLM (stale cache %s)", ZH: "LiteLLM (过期缓存 %s)"},
 	"pricing_save_warning":    {EN: "Warning: failed to save pricing cache: %v\n", ZH: "警告: 保存定价缓存失败: %v\n"},
+	"pricing_source_label":    {EN: "Source", ZH: "来源"},
+	"pricing_catalog_hint":    {EN: "%d model prices loaded. Common/default models are shown first; the complete catalog follows.", ZH: "已加载 %d 个模型定价。常用/默认模型优先展示，完整目录随后列出。"},
+	"pricing_common_section":  {EN: "Common/default pricing", ZH: "常用/默认模型定价"},
+	"pricing_full_catalog_section": {
+		EN: "Full pricing catalog (%d models)",
+		ZH: "完整定价目录（%d 个模型）",
+	},
 
 	// ── Impact labels (for prompt impact) ──
 	"impact_positive":      {EN: "positive", ZH: "正面"},
