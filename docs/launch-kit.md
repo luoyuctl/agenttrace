@@ -215,6 +215,16 @@ go build -o /tmp/agenttrace ./cmd/agenttrace
 /tmp/agenttrace --demo --overview -f json
 ```
 
+For public demo, report, or release-surface checks, run the reusable gates from [CI Integration](ci-integration.md):
+
+```bash
+AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-output-contract.sh
+AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-deterministic-output.sh
+AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-report-semantics.sh
+scripts/ci/check-release-surfaces.sh
+scripts/ci/check-pages-artifact.sh site
+```
+
 ## Release Consistency Checklist
 
 Before sharing a release publicly, compare these surfaces against `gh release list --repo luoyuctl/agenttrace --limit 1`:
