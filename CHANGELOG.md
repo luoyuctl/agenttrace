@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-These notes cover changes merged after `v0.3.48`, the latest public release.
-They are release-draft notes for the default branch and are not a published tag
-yet.
+No unreleased changes yet.
+
+## v0.4.0 - 2026-05-04
 
 ### Changed
 
