@@ -475,7 +475,7 @@ func TestListEmptyFilterStateShowsRecoveryPath(t *testing.T) {
 	m.filterText = "no-such-session"
 	m.rebuildFilteredView()
 
-	rendered := m.View()
+	rendered := m.renderWaste()
 	for _, want := range []string{
 		i18n.T("no_visible_sessions_title"),
 		fmt.Sprintf(i18n.T("no_visible_sessions_active"), m.filterLabel()),
@@ -2101,6 +2101,41 @@ func TestDiagnosticsClampsInvalidContextUtilization(t *testing.T) {
 		if strings.Contains(rendered, bad) {
 			t.Fatalf("diagnostics should sanitize invalid metric %q:\n%s", bad, rendered)
 		}
+	}
+}
+
+func TestDiagnosticsRendersSlowRunExplanation(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 120, 40)
+	m.sessions[0].Metrics.GapsSec = []float64{3, 95}
+	m.sessions[0].ToolLatencies = []engine.ToolLatencyItem{
+		{ToolName: "quick", Count: 2, AvgSec: 1, P95Sec: 2, MaxSec: 3},
+		{ToolName: "terminal", Count: 4, AvgSec: 8, P95Sec: 24, MaxSec: 31, IsSlow: true},
+	}
+	m.sessions[0].ContextUtil.RiskLevel = "warning"
+	m.sessions[0].ContextUtil.Suggestion = "compact soon"
+	m.sessions[0].LargeParams = []engine.LargeParamCall{{ToolName: "terminal", ParamSize: 9000, Risk: "high", Detail: "large args"}}
+	m.view = viewDiagnostics
+
+	rendered := m.renderWaste()
+	for _, want := range []string{
+		"SLOW-RUN SUMMARY",
+		"Most likely driver: tool latency",
+		"SLOW PATH",
+		"Slow tool: terminal",
+		"Long gap",
+		"Large params",
+		"Context pressure",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("diagnostics slow-run explanation missing %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Index(rendered, "SLOW PATH") > strings.Index(rendered, "LOOP FINGERPRINT") {
+		t.Fatalf("slow-path evidence should appear before lower-priority diagnostic cards:\n%s", rendered)
 	}
 }
 
