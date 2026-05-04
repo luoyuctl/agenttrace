@@ -349,6 +349,9 @@ func TestListDriverSummaryShowsDominantGroupsAndCounts(t *testing.T) {
 
 	for _, want := range []string{
 		i18n.T("driver_summary_title"),
+		i18n.T("driver_source"),
+		i18n.T("driver_model"),
+		i18n.T("driver_anomaly"),
 		"Claude Code",
 		"claude-sonnet-4",
 		anomalyTypeLabel("tool_failures"),
@@ -1042,13 +1045,37 @@ func TestListViewShowsSelectedSessionSummary(t *testing.T) {
 
 	m := resizeForTest(t, sampleModelForTest(), 120, 32)
 	m.view = viewList
+	m.sessions[1].Metrics.DurationSec = 122
+	m.refreshTable()
 	m.table.SetCursor(1)
 
 	rendered := m.View()
-	for _, want := range []string{"SELECTED SESSION", "session_beta", "$1.2500", "tool failures"} {
+	for _, want := range []string{"SELECTED SESSION", "session_beta", "Reason", "failure", "$1.2500", "461.0K", "DURATION", "2.0m", "tool failures"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("list summary missing %q:\n%s", want, rendered)
 		}
+	}
+}
+
+func TestListViewSelectedSummaryFitsNarrowCriticalList(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	m := resizeForTest(t, sampleModelForTest(), 80, 32)
+	m.view = viewList
+	m.sessions[2].Metrics.DurationSec = 240
+	m.refreshTable()
+	m.runCommand("critical")
+
+	rendered := m.View()
+	for _, want := range []string{"SELECTED SESSION", "gamma", "Reason", "hanging", "DURATION", "4.0m"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("narrow critical list missing %q:\n%s", want, rendered)
+		}
+	}
+	if got := maxRenderedWidth(rendered); got > 80 {
+		t.Fatalf("narrow critical list rendered too wide: got=%d line=%q", got, widestLine(rendered))
 	}
 }
 

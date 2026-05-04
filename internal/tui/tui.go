@@ -856,8 +856,9 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 
 	failStr := fmt.Sprintf("%d", failTools)
 
-	tokensStr := compactInt(metricsTotalTokens(met))
-	issue := sessionIssueLabel(s)
+	tokensStr := tokenCell(metricsTotalTokens(met))
+	issue := issueCell(sessionIssueLabel(s), s)
+	duration := durationCell(met.DurationSec)
 	switch len(m.table.Columns()) {
 	case 7:
 		return table.Row{
@@ -880,7 +881,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			failStr,
 			costCell(met.CostEstimated),
 			tokensStr,
-			engine.FmtDuration(chartValue(met.DurationSec)),
+			duration,
 			fmt.Sprintf("%d", len(s.Anomalies)),
 			healthCol,
 			issue,
@@ -896,7 +897,7 @@ func (m *Model) sessionRow(s engine.Session) table.Row {
 			failStr,
 			costCell(met.CostEstimated),
 			tokensStr,
-			engine.FmtDuration(chartValue(met.DurationSec)),
+			duration,
 			fmt.Sprintf("%d", len(s.Anomalies)),
 			healthCol,
 		}
@@ -1238,49 +1239,65 @@ func (m Model) renderSelectedSessionSummary(width int) string {
 	}
 	s := m.sessions[idx]
 	met := s.Metrics
-	okTools, _, totalTools, _ := normalizedToolCounts(met)
+	okTools, failTools, totalTools, _ := normalizedToolCounts(met)
 	success := i18n.T("not_available")
 	if totalTools > 0 {
 		success = fmt.Sprintf("%.0f%%", float64(okTools)/float64(totalTools)*100)
 	}
 
-	issue := i18n.T("list_no_major_anomaly")
-	if len(s.Anomalies) > 0 {
-		issue = anomalyTypeLabel(s.Anomalies[0].Type)
-	}
+	issue := sessionIssueLabel(s)
+	reason := selectedSessionReason(s)
+	duration := durationCell(met.DurationSec)
+	cost := costCell(met.CostEstimated)
+	tokens := tokenCell(metricsTotalTokens(met))
+	issueText := issueCell(issue, s)
+	failText := metricValueStyle(failTools > 0, lipgloss.Color("196")).Render(fmt.Sprintf("%d", failTools))
 	if width < 80 {
 		nameW := minInt(24, maxInt(10, width/3))
-		line1 := fmt.Sprintf("%s  %s %d%%  %s  %s",
+		line1 := fmt.Sprintf("%s  %s %s",
 			truncate(s.Name, nameW),
-			i18n.T("health"), clampHealth(s.Health),
-			money4(met.CostEstimated),
-			compactInt(metricsTotalTokens(met)),
+			i18n.T("list_reason"),
+			reason.Render(),
 		)
-		line2 := fmt.Sprintf("%s %d  %s %d/%d %s  %s %s",
+		line2 := fmt.Sprintf("%s %d%%  %s %s  %s %s  %s %s",
+			i18n.T("health"), clampHealth(s.Health),
+			i18n.T("cost"), cost,
+			i18n.T("tokens"), tokens,
+			i18n.T("duration_col"), duration,
+		)
+		line3 := fmt.Sprintf("%s %d  %s %d/%d %s  %s %s  %s %s",
 			i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
 			i18n.T("tools"), okTools, totalTools, success,
-			i18n.T("list_issue"), issue,
+			i18n.T("fail"), failText,
+			i18n.T("list_issue"), issueText,
 		)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			dimStyle.Render(truncate(line1, width)),
 			dimStyle.Render(truncate(line2, width)),
+			dimStyle.Render(truncate(line3, width)),
 		)
 	}
 	nameW := minInt(32, maxInt(14, width/3))
-	line1 := fmt.Sprintf("%s  %s %d%%  %s $%.4f  %s %s",
+	line1 := fmt.Sprintf("%s  %s %d%%  %s %s",
 		truncate(s.Name, nameW),
 		i18n.T("health"), clampHealth(s.Health),
-		i18n.T("cost"), safeAmount(met.CostEstimated),
-		i18n.T("tokens"), compactInt(metricsTotalTokens(met)),
+		i18n.T("list_reason"), reason.Render(),
 	)
-	line2 := fmt.Sprintf("%s %d  %s %d/%d %s  %s %s",
+	line2 := fmt.Sprintf("%s %s  %s %s  %s %s  %s %s",
+		i18n.T("cost"), cost,
+		i18n.T("tokens"), tokens,
+		i18n.T("duration_col"), duration,
+		i18n.T("list_issue"), issueText,
+	)
+	line3 := fmt.Sprintf("%s %d  %s %d/%d %s  %s %s",
 		i18n.T("turns_header"), nonNegativeInt(met.AssistantTurns),
 		i18n.T("tools"), okTools, totalTools, success,
-		i18n.T("list_issue"), issue,
+		i18n.T("fail"), failText,
 	)
 	return lipgloss.JoinVertical(lipgloss.Left,
 		dimStyle.Render(truncate(line1, width)),
 		dimStyle.Render(truncate(line2, width)),
+		dimStyle.Render(truncate(line3, width)),
 	)
 }
 
@@ -1523,6 +1540,20 @@ type listDriverSummary struct {
 	Anomaly listDriverItem
 }
 
+type selectedReason struct {
+	Label string
+	Value string
+	Color lipgloss.Color
+}
+
+func (r selectedReason) Render() string {
+	label := lipgloss.NewStyle().Foreground(r.Color).Bold(true).Render(r.Label)
+	if r.Value == "" || strings.EqualFold(r.Label, r.Value) {
+		return label
+	}
+	return fmt.Sprintf("%s %s", label, lipgloss.NewStyle().Foreground(r.Color).Render(r.Value))
+}
+
 func (m Model) renderDriverSummary(width int) string {
 	if len(m.sessions) < 20 && (m.loadTotal <= 0 || m.loadTotal == len(m.sessions)) && !m.hasAnyFilter() {
 		return ""
@@ -1558,26 +1589,116 @@ func (m Model) parsedDiscoveryLabel() string {
 }
 
 func (m Model) driverSummaryLine(key, label string, item listDriverItem, total int, width int) string {
+	keyColor := driverKeyColor(key)
+	keyText := lipgloss.NewStyle().
+		Background(lipgloss.Color("236")).
+		Foreground(keyColor).
+		Bold(true).
+		Padding(0, 1).
+		Render(key)
+	labelText := lipgloss.NewStyle().Foreground(keyColor).Render(label)
 	if item.Count == 0 {
-		return dimStyle.Render(truncate(fmt.Sprintf("%s %-7s %s", key, label, i18n.T("driver_none")), width))
+		return truncate(fmt.Sprintf("%s %-7s %s", keyText, labelText, dimStyle.Render(i18n.T("driver_none"))), width)
 	}
 	pct := 0
 	if total > 0 {
 		pct = item.Count * 100 / total
 	}
-	text := fmt.Sprintf("%s %-7s %s  %d/%d %d%%  %s %d  %s %s",
-		key,
-		label,
-		item.Label,
-		item.Count,
-		total,
-		pct,
+	text := fmt.Sprintf("%s %-7s %s  %s  %s %s  %s %s",
+		keyText,
+		labelText,
+		boldStyle.Render(item.Label),
+		dimStyle.Render(scanMetricSummary(item.Count, total, pct)),
 		i18n.T("fail"),
-		item.Fail,
+		metricValueStyle(item.Fail > 0, lipgloss.Color("196")).Render(fmt.Sprintf("%d", item.Fail)),
 		i18n.T("cost"),
 		costCell(item.Cost),
 	)
 	return truncate(text, width)
+}
+
+func driverKeyColor(key string) lipgloss.Color {
+	switch key {
+	case "S":
+		return lipgloss.Color("39")
+	case "M":
+		return lipgloss.Color("99")
+	case "A":
+		return lipgloss.Color("208")
+	default:
+		return lipgloss.Color("245")
+	}
+}
+
+func selectedSessionReason(s engine.Session) selectedReason {
+	met := s.Metrics
+	fail := nonNegativeInt(met.ToolCallsFail)
+	if hasAnomalyType(s, "hanging") {
+		return selectedReason{Label: i18n.T("list_reason_hanging"), Value: sessionIssueLabel(s), Color: lipgloss.Color("196")}
+	}
+	if fail > 0 || hasAnomalyType(s, "tool_failures") {
+		value := sessionIssueLabel(s)
+		if fail > 0 {
+			value = fmt.Sprintf("%d %s", fail, i18n.T("fail"))
+		}
+		return selectedReason{Label: i18n.T("list_reason_failure"), Value: value, Color: lipgloss.Color("196")}
+	}
+	if safeAmount(met.CostEstimated) >= 1 {
+		return selectedReason{Label: i18n.T("list_reason_cost"), Value: money4(met.CostEstimated), Color: lipgloss.Color("208")}
+	}
+	if chartValue(met.DurationSec) > 0 {
+		return selectedReason{Label: i18n.T("list_reason_duration"), Value: engine.FmtDuration(chartValue(met.DurationSec)), Color: lipgloss.Color("214")}
+	}
+	return selectedReason{Label: i18n.T("list_no_major_anomaly"), Value: "", Color: lipgloss.Color("42")}
+}
+
+func hasAnomalyType(s engine.Session, kind string) bool {
+	for _, anomaly := range s.Anomalies {
+		if anomaly.Type == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func metricValueStyle(alert bool, color lipgloss.Color) lipgloss.Style {
+	if alert {
+		return lipgloss.NewStyle().Foreground(color).Bold(true)
+	}
+	return dimStyle
+}
+
+func tokenCell(total int) string {
+	total = nonNegativeInt(total)
+	style := greenStyle
+	if total >= 300000 {
+		style = redStyle
+	} else if total >= 100000 {
+		style = orangeStyle
+	}
+	return style.Render(compactInt(total))
+}
+
+func durationCell(sec float64) string {
+	sec = chartValue(sec)
+	style := greenStyle
+	if sec >= 180 {
+		style = redStyle
+	} else if sec >= 60 {
+		style = orangeStyle
+	}
+	return style.Render(engine.FmtDuration(sec))
+}
+
+func issueCell(issue string, s engine.Session) string {
+	if len(s.Anomalies) == 0 {
+		return dimStyle.Render(issue)
+	}
+	return anomalyColor(s.Anomalies[0].Type).Render(issue)
+}
+
+func scanMetricSummary(count, total, pct int) string {
+	return fmt.Sprintf("%d/%d %d%%", count, total, pct)
 }
 
 func (m Model) buildDriverSummary() listDriverSummary {
@@ -2585,7 +2706,14 @@ func (m *Model) sortColTitle(base, field string) string {
 }
 
 func costCell(amount float64) string {
-	return money4(safeAmount(amount))
+	amount = safeAmount(amount)
+	style := greenStyle
+	if amount >= 1 {
+		style = redStyle
+	} else if amount >= 0.1 {
+		style = orangeStyle
+	}
+	return style.Render(money4(amount))
 }
 
 func healthCell(health int, width int) string {
