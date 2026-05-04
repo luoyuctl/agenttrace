@@ -234,7 +234,18 @@ func ComputeOverview(sessions []Session) Overview {
 	}
 	// Sort anomalies by severity (high → medium → low)
 	sort.SliceStable(ov.AnomaliesTop, func(i, j int) bool {
-		return anomalySeverityRank(ov.AnomaliesTop[i].Severity) < anomalySeverityRank(ov.AnomaliesTop[j].Severity)
+		a := ov.AnomaliesTop[i]
+		b := ov.AnomaliesTop[j]
+		if ai, bi := anomalySeverityRank(a.Severity), anomalySeverityRank(b.Severity); ai != bi {
+			return ai < bi
+		}
+		if a.Session != b.Session {
+			return a.Session < b.Session
+		}
+		if a.Type != b.Type {
+			return a.Type < b.Type
+		}
+		return a.Age < b.Age
 	})
 	return ov
 }
