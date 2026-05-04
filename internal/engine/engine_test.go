@@ -1076,6 +1076,21 @@ func TestSessionCachePathUsesOverride(t *testing.T) {
 	}
 }
 
+func TestPricingSourceLabelsStaleLiteLLMCache(t *testing.T) {
+	prev := dynamicPricing
+	dynamicPricing = &pricingStore{
+		entries:  map[string]Price{"gpt-test": {Input: 1, Output: 2}},
+		loadedAt: time.Date(2026, 5, 4, 9, 0, 0, 0, time.UTC),
+		source:   "cache(stale)",
+	}
+	t.Cleanup(func() { dynamicPricing = prev })
+
+	got := PricingSource()
+	if !strings.Contains(got, "LiteLLM") || !strings.Contains(got, "stale cache") {
+		t.Fatalf("stale cache should still be labeled as LiteLLM datasource, got %q", got)
+	}
+}
+
 func TestWasteReportTextLocalizesSuggestionLabel(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.ZH)

@@ -261,6 +261,8 @@ func PricingSource() string {
 		return fmt.Sprintf(i18n.T("pricing_litellm_fetched"), dynamicPricing.loadedAt.Format("2006-01-02 15:04"))
 	case "cache":
 		return fmt.Sprintf(i18n.T("pricing_litellm_cached"), dynamicPricing.loadedAt.Format("2006-01-02 15:04"))
+	case "cache(stale)":
+		return fmt.Sprintf(i18n.T("pricing_litellm_stale"), dynamicPricing.loadedAt.Format("2006-01-02 15:04"))
 	default:
 		return "built-in fallback (use --update-pricing for latest)"
 	}
