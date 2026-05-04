@@ -8,7 +8,7 @@ Use this when sharing agenttrace on GitHub, Hacker News, Reddit, V2EX, X, or Pro
 scripts/record-demo.sh
 ```
 
-The script renders [docs/demo.tape](demo.tape) into `assets/agenttrace-demo.gif` with [VHS](https://github.com/charmbracelet/vhs), then refreshes `assets/tui-preview.png` when `ffmpeg` is available. VHS also needs `ttyd` available on `PATH`.
+The script renders [docs/demo.tape](demo.tape) into `assets/agenttrace-demo.gif` with [VHS](https://github.com/charmbracelet/vhs). VHS also needs `ttyd` available on `PATH`.
 
 ## Storyline
 
@@ -20,7 +20,7 @@ The script renders [docs/demo.tape](demo.tape) into `assets/agenttrace-demo.gif`
 
 ## Short Caption
 
-agenttrace is a local TUI observability dashboard for AI coding agents. It shows where Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, and similar tools waste tokens, time, and tool calls.
+agenttrace is a local TUI for AI coding agent session history. It shows what Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, and similar tools spent across cost, tokens, and time, then helps diagnose why a task was slow.
 
 ## Verification Before Posting
 

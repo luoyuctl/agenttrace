@@ -25,7 +25,7 @@ for asset in \
   assets/agenttrace-demo.gif \
   assets/hero-banner.png \
   assets/logo-icon.png \
-  assets/tui-preview.png; do
+  assets/readme-real-overview.png; do
   if [[ ! -f "$page_dir/$asset" && ! -f "$repo_root/$asset" ]]; then
     fail "missing Pages asset: $asset"
   fi

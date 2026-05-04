@@ -1,16 +1,16 @@
 # agenttrace Launch Kit
 
-agenttrace is a terminal observability dashboard for AI coding agent sessions. It helps developers see where Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, and Copilot-style logs waste time, tokens, and tool calls.
+agenttrace is a terminal dashboard for AI coding agent session history. It helps developers compare cost, token usage, and elapsed time across Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, and Copilot-style logs, then diagnose why a task ran slowly.
 
 ## Positioning
 
 **One-liner**
 
-TUI observability for AI coding agents: trace sessions, cost, tokens, tool failures, latency, anomalies, and health in one fast terminal dashboard.
+Local-first TUI for AI coding agent history: compare cost, tokens, and time across agents, then diagnose slow runs.
 
 **Problem**
 
-AI coding agents behave like tiny build systems: they plan, call tools, retry, hang, and spend money. Most teams only see the final output, not the session health, token burn, tool failure rate, or whether the agent got stuck.
+AI coding agents behave like tiny build systems: they plan, call tools, retry, hang, and spend money. Most teams only see the final output, not which agent sessions burned the most cost/tokens/time or why one task got stuck.
 
 **Why now**
 
@@ -20,8 +20,8 @@ Agent usage is moving from experiments to daily engineering workflows. Developer
 
 Title ideas:
 
-- Show HN: agenttrace, a TUI observability dashboard for AI coding agents
-- agenttrace: find where AI coding agents waste tokens, time, and tool calls
+- Show HN: agenttrace, a TUI for AI coding agent cost, tokens, time, and slow runs
+- agenttrace: compare AI agent session cost and diagnose slow tasks
 - I built a terminal dashboard for debugging AI coding agent sessions
 
 Body:
@@ -30,11 +30,11 @@ I built agenttrace, a single-binary TUI for inspecting AI coding agent sessions 
 
 It parses logs from Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, and Copilot-style traces, then shows:
 
-- token and cost burn
-- tool success/failure rate
-- latency and hanging gaps
-- anomaly detection
-- per-session health score
+- historical token, cost, and elapsed-time burn
+- agent/source/model breakdowns
+- latency, hanging gaps, and slow tool calls
+- retry loops, large params, context pressure, and anomalies
+- per-session health score for triage
 - detail diagnostics and session diffs
 - JSON output for dashboards
 - CI health gates for average health, critical sessions, and tool failure rate
@@ -67,17 +67,17 @@ Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
 **X / Threads**
 
-AI coding agents now need observability too.
+AI coding agents now need session history too.
 
 I built agenttrace: a fast terminal dashboard for local agent sessions.
 
-It shows token cost, latency, tool failures, anomalies, health score, details, diffs, JSON output, and CI health gates across Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes, OpenCode, Kimi, and more.
+It shows what multiple agents spent across cost, tokens, and time, then helps explain why a task was slow: hanging gaps, slow tools, retry loops, large params, context pressure, health score, details, diffs, JSON output, and CI gates.
 
 https://github.com/luoyuctl/agenttrace
 
 **Reddit / V2EX**
 
-I made a TUI tool for people using AI coding agents daily. It scans local session logs and shows where agents waste time or money: hanging gaps, tool failures, retry loops, shallow reasoning, token/cost burn, and session health.
+I made a TUI tool for people using AI coding agents daily. It scans local session logs and shows two things: what multiple agents spent across cost, tokens, and time; and why a specific task was slow, including hanging gaps, slow tools, retry loops, large params, context pressure, and session health.
 
 The goal is not another chat UI. It is closer to `htop`/`lazygit` for AI agent runs: fast local inspection, filtering, diagnostics, and exportable JSON.
 
@@ -171,7 +171,7 @@ Manual-only submission:
 - awesome-go: defer until the project is older and has the required quality links; contribution checks expect repository maturity, pkg.go.dev, Go Report Card, and coverage evidence.
 - awesome-cli-apps: PR https://github.com/agarrharr/awesome-cli-apps/pull/1032 was closed without maintainer feedback. Revisit after more external adoption or a clearer category fit.
 - awesome-tuis: likely blocked until the repo is at least 6 months old; its PR template requires repos to be at least 6 months old, PR #658 was closed after reviewer feedback, and follow-up PR #659 is open.
-- Terminal Trove: submit through https://terminaltrove.com/post/ after confirming the author contact email. Suggested categories: `macos`, `linux`, `windows`, `monitoring`, `observability`, `tui`, `json`, `ai`, `cli`, `debugging`, `cross-platform`. Preview PNG: `https://luoyuctl.github.io/agenttrace/assets/tui-preview.png`; GIF: `https://luoyuctl.github.io/agenttrace/assets/agenttrace-demo.gif`.
+- Terminal Trove: submit through https://terminaltrove.com/post/ after confirming the author contact email. Suggested categories: `macos`, `linux`, `windows`, `monitoring`, `observability`, `tui`, `json`, `ai`, `cli`, `debugging`, `cross-platform`. Preview PNG: `https://luoyuctl.github.io/agenttrace/assets/readme-real-overview.png`; GIF: `https://luoyuctl.github.io/agenttrace/assets/agenttrace-demo.gif`.
 - Terminal Apps: submitted suggestion issue https://github.com/scmmishra/terminal-apps.dev/issues/55. Name: `agenttrace`; GitHub URL: `https://github.com/luoyuctl/agenttrace`.
 - awesome-ai-coding-techniques: submitted technique suggestion https://github.com/inmve/awesome-ai-coding-techniques/issues/37. Suggested technique: inspect AI agent session traces after a run.
 - InftyAI/Awesome-LLMOps: closed duplicate PR https://github.com/InftyAI/Awesome-LLMOps/pull/418 in favor of workflow-generated PR https://github.com/InftyAI/Awesome-LLMOps/pull/420.
@@ -180,10 +180,10 @@ Terminal Trove draft:
 
 - Name: `agenttrace`
 - URL: `github.com/luoyuctl/agenttrace`
-- Tagline: `Local-first TUI observability for AI coding agent sessions.`
-- Description: `agenttrace parses local Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor export, Hermes, OpenCode, Kimi, and Copilot-style logs into a fast terminal dashboard for session health, cost, token usage, latency, tool failures, anomalies, diffs, and CI evidence.`
-- Standout features: `Overview, session list, detail, diagnostics, and diff views; incremental local cache; JSON, Markdown, and self-contained HTML reports with CI gates for health and tool failure rate.`
-- Who it is for: `Developers using AI coding agents who need to find expensive, stuck, slow, or low-quality sessions without uploading private logs to a hosted observability service.`
+- Tagline: `Local-first TUI for AI coding agent cost, tokens, time, and slow-run diagnosis.`
+- Description: `agenttrace parses local Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor export, Hermes, OpenCode, Kimi, and Copilot-style logs into a fast terminal dashboard for comparing historical session cost, token usage, and elapsed time, then diagnosing slow tasks.`
+- Standout features: `Overview, session list, detail, diagnostics, and diff views; incremental local cache; slow-run evidence for long gaps, hanging sessions, slow tools, large params, and context pressure; JSON, Markdown, and self-contained HTML reports.`
+- Who it is for: `Developers using multiple AI coding agents who need to find expensive or slow sessions without uploading private logs to a hosted service.`
 - Primary language: `go`
 - License: `mit`
 - Install:
