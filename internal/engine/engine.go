@@ -36,6 +36,7 @@ var ToolDisplayNames = map[string]string{
 	"openclaw":     "OpenClaw",
 	"copilot_cli":  "Copilot CLI",
 	"kimi_cli":     "Kimi CLI",
+	"pi":           "pi (earendil-works/pi)",
 	"generic":      "Generic JSON/JSONL",
 }
 
@@ -418,6 +419,13 @@ func DetectFormat(path string) FormatInfo {
 				return fi
 			}
 		}
+		// pi: JSONL with session header type field
+		if typ, _ := firstLineObj["type"].(string); typ == "session" {
+			if _, hasVersion := firstLineObj["version"]; hasVersion {
+				fi.Format = "pi"
+				return fi
+			}
+		}
 		// Generic JSONL with role field → try parse as generic
 		if _, hasRole := firstLineObj["role"]; hasRole {
 			fi.Format = "generic"
@@ -429,6 +437,13 @@ func DetectFormat(path string) FormatInfo {
 }
 
 func detectSingleJSON(doc map[string]interface{}) string {
+	// pi session header: type="session" + version (JSONL format, but first line parsed as single JSON)
+	if typ, _ := doc["type"].(string); typ == "session" {
+		if _, hasVersion := doc["version"]; hasVersion {
+			return "pi"
+		}
+	}
+
 	// OpenClaw: provider="openclaw" distinguishes from other formats
 	if provider, _ := doc["provider"].(string); provider == "openclaw" {
 		return "openclaw"
@@ -562,6 +577,8 @@ func Parse(path string) ([]Event, error) {
 		return parseCopilotCLI(string(fi.Raw))
 	case "kimi_cli":
 		return parseKimiCLI(fi.Doc)
+	case "pi":
+		return parsePi(string(fi.Raw))
 	default:
 		return parseGeneric(string(fi.Raw))
 	}
