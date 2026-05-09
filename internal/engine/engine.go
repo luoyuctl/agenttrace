@@ -59,6 +59,7 @@ type Event struct {
 type ToolCall struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	Args string `json:"args,omitempty"`
 }
 
 // ── Metrics ──
@@ -2952,4 +2953,33 @@ func levelEmoji(level string) string {
 	case "red": return "🔴"
 	}
 	return ""
+}
+
+func jsonish(v interface{}) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	default:
+		if jb, err := json.Marshal(x); err == nil {
+			return string(jb)
+		}
+	}
+	return ""
+}
+
+func numberAsInt(v interface{}) int {
+	switch x := v.(type) {
+	case int:
+		return x
+	case int64:
+		return int(x)
+	case float64:
+		return int(x)
+	case json.Number:
+		n, _ := x.Int64()
+		return int(n)
+	}
+	return 0
 }

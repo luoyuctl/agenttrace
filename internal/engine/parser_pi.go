@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
-// parsePi parses pi coding agent JSONL session files.
+const piSource = "pi"
+
+// parsePi parses pi (earendil-works/pi) coding agent JSONL session files.
 // pi stores sessions at ~/.pi/agent/sessions/--<path>--/<timestamp>_<uuid>.jsonl.
 //
 // Format (one JSON object per line):
@@ -17,10 +19,13 @@ import (
 //	{"type":"model_change",...}
 //	{"type":"compaction",...}
 //	{"type":"branch_summary",...}
+//	{"type":"thinking_level_change",...}
+//	{"type":"session_info",...}
+//	{"type":"custom_message",...}
 //
-// AgentMessage roles: user, assistant, toolResult, bashExecution, custom,
-// branchSummary, compactionSummary.
-// Content blocks: text, thinking, toolCall (camelCase), image.
+// AgentMessage roles: user, assistant, developer, toolResult, bashExecution,
+// custom, branchSummary, compactionSummary.
+// Content blocks: text, thinking, redactedThinking, toolCall (camelCase), image.
 //
 // Key differences from Claude/Kimi:
 //   - "toolCall" (camelCase) instead of "tool_use"
@@ -58,8 +63,8 @@ func parsePi(raw string) ([]Event, error) {
 				Role:       "meta",
 				Content:    fmt.Sprintf("session_id=%s cwd=%s", sessionID, cwd),
 				ModelUsed:  currentModel,
-				SourceTool: "pi",
-				Timestamp:  strOrUnixMs(entry, "timestamp"),
+				SourceTool: piSource,
+				Timestamp:  piTimestamp(entry["timestamp"], ""),
 			})
 
 		case "message":
@@ -68,39 +73,48 @@ func parsePi(raw string) ([]Event, error) {
 				continue
 			}
 			role, _ := msg["role"].(string)
-			ts := strOrUnixMs(entry, "timestamp")
+			ts := piTimestamp(msg["timestamp"], piTimestamp(entry["timestamp"], ""))
+
+			// Track model from message-level model field
+			if nextModel := str(msg, "model"); nextModel != "" {
+				currentModel = nextModel
+			}
+
+			// Extract usage from message (pi embeds costs in assistant messages)
+			if usage := piUsage(msg["usage"]); len(usage) > 0 {
+				events = append(events, Event{
+					Role:       "meta",
+					Timestamp:  ts,
+					Usage:      usage,
+					ModelUsed:  currentModel,
+					SourceTool: piSource,
+				})
+			}
 
 			switch role {
 			case "user":
-				contentBlocks, _ := msg["content"].([]interface{})
-				text := concatTextBlocks(contentBlocks)
+				text := concatContentText(msg["content"])
 				if text != "" {
 					events = append(events, Event{
 						Role:       "user",
 						Content:    text,
 						Timestamp:  ts,
-						SourceTool: "pi",
+						SourceTool: piSource,
 					})
 				}
-
+			case "developer":
+				text := concatContentText(msg["content"])
+				if text != "" {
+					events = append(events, Event{
+						Role:       "system",
+						Content:    text,
+						Timestamp:  ts,
+						ModelUsed:  currentModel,
+						SourceTool: piSource,
+					})
+				}
 			case "assistant":
 				contentBlocks, _ := msg["content"].([]interface{})
-				model := str(msg, "model")
-				if model == "" {
-					model = currentModel
-				}
-				if model != "" {
-					currentModel = model
-				}
-
-				// Extract usage from assistant message (pi embeds costs here)
-				if u, ok := msg["usage"]; ok {
-					ev := Event{Role: "meta", ModelUsed: currentModel, SourceTool: "pi", Timestamp: ts}
-					ub, _ := json.Marshal(u)
-					json.Unmarshal(ub, &ev.Usage)
-					events = append(events, ev)
-				}
-
 				for _, block := range contentBlocks {
 					b, ok := block.(map[string]interface{})
 					if !ok {
@@ -116,7 +130,7 @@ func parsePi(raw string) ([]Event, error) {
 								Content:    text,
 								Timestamp:  ts,
 								ModelUsed:  currentModel,
-								SourceTool: "pi",
+								SourceTool: piSource,
 							})
 						}
 					case "thinking":
@@ -127,44 +141,49 @@ func parsePi(raw string) ([]Event, error) {
 							Reasoning:  think,
 							Redacted:   false,
 							ModelUsed:  currentModel,
-							SourceTool: "pi",
+							SourceTool: piSource,
+						})
+					case "redactedThinking":
+						data, _ := b["data"].(string)
+						events = append(events, Event{
+							Role:       "assistant",
+							Timestamp:  ts,
+							Reasoning:  data,
+							Redacted:   true,
+							ModelUsed:  currentModel,
+							SourceTool: piSource,
 						})
 					case "toolCall":
 						id, _ := b["id"].(string)
 						name, _ := b["name"].(string)
 						events = append(events, Event{
-							Role:       "assistant",
-							Timestamp:  ts,
-							ToolCalls:  []ToolCall{{ID: id, Name: name}},
-							ModelUsed:  currentModel,
-							SourceTool: "pi",
+							Role:      "assistant",
+							Timestamp: ts,
+							ToolCalls: []ToolCall{{ID: id, Name: name, Args: jsonish(b["arguments"])}},
+							ModelUsed: currentModel,
+							SourceTool: piSource,
 						})
 					case "image":
 						events = append(events, Event{
-							Role:       role,
+							Role:       "assistant",
 							Content:    "[image]",
 							Timestamp:  ts,
-							SourceTool: "pi",
+							SourceTool: piSource,
 						})
 					}
 				}
-
 			case "toolResult":
-				contentBlocks, _ := msg["content"].([]interface{})
-				text := concatTextBlocks(contentBlocks)
-				toolCallID := str(msg, "toolCallId")
-				isErr, _ := msg["isError"].(bool)
+				content := concatContentText(msg["content"])
 				events = append(events, Event{
 					Role:       "tool",
-					Content:    text,
+					Content:    content,
 					Timestamp:  ts,
-					ToolCallID: toolCallID,
-					IsError:    isErr,
-					SourceTool: "pi",
+					ToolCallID: str(msg, "toolCallId"),
+					IsError:    boolValue(msg["isError"]),
+					ModelUsed:  currentModel,
+					SourceTool: piSource,
 				})
-
 			case "bashExecution":
-				// Bash execution: record as tool event with command + output
 				command, _ := msg["command"].(string)
 				output, _ := msg["output"].(string)
 				exitCode, _ := msg["exitCode"]
@@ -176,9 +195,8 @@ func parsePi(raw string) ([]Event, error) {
 					Content:    content,
 					Timestamp:  ts,
 					IsError:    isErr,
-					SourceTool: "pi",
+					SourceTool: piSource,
 				})
-
 			case "compactionSummary":
 				summary, _ := msg["summary"].(string)
 				if summary != "" {
@@ -186,10 +204,9 @@ func parsePi(raw string) ([]Event, error) {
 						Role:       "meta",
 						Content:    fmt.Sprintf("compaction_summary: %s", summary),
 						Timestamp:  ts,
-						SourceTool: "pi",
+						SourceTool: piSource,
 					})
 				}
-
 			case "branchSummary":
 				summary, _ := msg["summary"].(string)
 				if summary != "" {
@@ -197,23 +214,37 @@ func parsePi(raw string) ([]Event, error) {
 						Role:       "meta",
 						Content:    fmt.Sprintf("branch_summary: %s", summary),
 						Timestamp:  ts,
-						SourceTool: "pi",
+						SourceTool: piSource,
 					})
 				}
+			}
+
+		case "custom_message":
+			content := concatContentText(entry["content"])
+			if strings.TrimSpace(content) != "" {
+				ts := piTimestamp(entry["timestamp"], "")
+				events = append(events, Event{
+					Role:       "user",
+					Content:    content,
+					Timestamp:  ts,
+					ModelUsed:  currentModel,
+					SourceTool: piSource,
+				})
 			}
 
 		case "model_change":
 			modelID, _ := entry["modelId"].(string)
 			provider, _ := entry["provider"].(string)
+			ts := piTimestamp(entry["timestamp"], "")
 			if modelID != "" {
 				currentModel = modelID
 			}
 			events = append(events, Event{
 				Role:       "meta",
 				Content:    fmt.Sprintf("model_change: %s/%s", provider, modelID),
-				Timestamp:  strOrUnixMs(entry, "timestamp"),
+				Timestamp:  ts,
 				ModelUsed:  currentModel,
-				SourceTool: "pi",
+				SourceTool: piSource,
 			})
 
 		case "compaction":
@@ -223,11 +254,12 @@ func parsePi(raw string) ([]Event, error) {
 			if summary != "" {
 				content = fmt.Sprintf("compaction: %s (%v tokens)", summary, tokensBefore)
 			}
+			ts := piTimestamp(entry["timestamp"], "")
 			events = append(events, Event{
 				Role:       "meta",
 				Content:    content,
-				Timestamp:  strOrUnixMs(entry, "timestamp"),
-				SourceTool: "pi",
+				Timestamp:  ts,
+				SourceTool: piSource,
 			})
 
 		case "branch_summary":
@@ -237,30 +269,33 @@ func parsePi(raw string) ([]Event, error) {
 			if fromID != "" {
 				info = fmt.Sprintf(" (from %s)", fromID)
 			}
+			ts := piTimestamp(entry["timestamp"], "")
 			events = append(events, Event{
 				Role:       "meta",
 				Content:    fmt.Sprintf("branch_summary: %s%s", summary, info),
-				Timestamp:  strOrUnixMs(entry, "timestamp"),
-				SourceTool: "pi",
+				Timestamp:  ts,
+				SourceTool: piSource,
 			})
 
 		case "thinking_level_change":
 			level, _ := entry["thinkingLevel"].(string)
+			ts := piTimestamp(entry["timestamp"], "")
 			events = append(events, Event{
 				Role:       "meta",
 				Content:    fmt.Sprintf("thinking_level: %s", level),
-				Timestamp:  strOrUnixMs(entry, "timestamp"),
-				SourceTool: "pi",
+				Timestamp:  ts,
+				SourceTool: piSource,
 			})
 
 		case "session_info":
 			name, _ := entry["name"].(string)
 			if name != "" {
+				ts := piTimestamp(entry["timestamp"], "")
 				events = append(events, Event{
 					Role:       "meta",
 					Content:    fmt.Sprintf("session_name: %s", name),
-					Timestamp:  strOrUnixMs(entry, "timestamp"),
-					SourceTool: "pi",
+					Timestamp:  ts,
+					SourceTool: piSource,
 				})
 			}
 		}
@@ -269,31 +304,84 @@ func parsePi(raw string) ([]Event, error) {
 	return events, nil
 }
 
-// concatTextBlocks joins text content blocks into a single string.
-func concatTextBlocks(blocks []interface{}) string {
-	var parts []string
-	for _, block := range blocks {
-		b, ok := block.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if bt, _ := b["type"].(string); bt == "text" {
-			if text, _ := b["text"].(string); text != "" {
-				parts = append(parts, text)
+// concatContentText joins text blocks from pi's content array into a single string.
+// Handles both string content and content block arrays.
+func concatContentText(raw interface{}) string {
+	switch c := raw.(type) {
+	case string:
+		return c
+	case []interface{}:
+		var parts []string
+		for _, item := range c {
+			block, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if str(block, "type") == "text" {
+				if text := str(block, "text"); text != "" {
+					parts = append(parts, text)
+				}
 			}
 		}
+		return strings.Join(parts, "\n")
+	default:
+		return jsonish(raw)
 	}
-	return strings.Join(parts, "\n")
 }
 
-// strOrUnixMs extracts a string or Unix-ms timestamp from a map field.
+// piUsage extracts usage data from pi's message.usage field.
+// Converts numeric values but preserves original field names.
+func piUsage(raw interface{}) map[string]int {
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	usage := make(map[string]int)
+	for k, v := range m {
+		usage[k] = numberAsInt(v)
+	}
+	if len(usage) == 0 {
+		return nil
+	}
+	// Check if any non-zero value exists
+	for _, v := range usage {
+		if v > 0 {
+			return usage
+		}
+	}
+	return nil
+}
+
+// piTimestamp extracts a string or Unix-ms timestamp from a value.
 // pi may store timestamps as both ISO strings and Unix ms numbers.
-func strOrUnixMs(m map[string]interface{}, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
+// Uses RFC3339Nano for maximum precision when converting from Unix ms.
+func piTimestamp(raw interface{}, fallback string) string {
+	if ms, ok := numberAsInt64(raw); ok && ms > 0 {
+		return time.UnixMilli(ms).UTC().Format(time.RFC3339Nano)
 	}
-	if v, ok := m[key].(float64); ok {
-		return time.UnixMilli(int64(v)).UTC().Format(time.RFC3339)
+	if s, ok := raw.(string); ok && s != "" {
+		return s
 	}
-	return ""
+	return fallback
+}
+
+func numberAsInt64(v interface{}) (int64, bool) {
+	switch n := v.(type) {
+	case int:
+		return int64(n), true
+	case int64:
+		return n, true
+	case float64:
+		return int64(n), true
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func boolValue(v interface{}) bool {
+	b, _ := v.(bool)
+	return b
 }
