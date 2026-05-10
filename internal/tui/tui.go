@@ -407,6 +407,8 @@ func loadingSourceFromPath(path string) string {
 		return "qwen_code"
 	case strings.Contains(p, "/opencode/") || strings.Contains(p, "application support/opencode"):
 		return "opencode"
+	case strings.Contains(p, "/.pi/agent/sessions/"):
+		return "pi"
 	case strings.Contains(p, "/.omp/"):
 		return "oh_my_pi"
 	case strings.Contains(p, "cline-dev"):

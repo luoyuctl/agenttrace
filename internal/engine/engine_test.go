@@ -466,6 +466,36 @@ func TestParseOhMyPiSessionJSONL(t *testing.T) {
 	}
 }
 
+func TestParsePiSessionJSONLUsesPiSourceFromPath(t *testing.T) {
+	home := t.TempDir()
+	sessionDir := filepath.Join(home, ".pi", "agent", "sessions")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessionDir, "session.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{"type": "session", "version": 3, "id": "pi-session", "cwd": "/work/pi"},
+		map[string]interface{}{
+			"type": "message",
+			"message": map[string]interface{}{
+				"role":    "user",
+				"content": "hello from pi",
+			},
+		},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := Analyze(events, "mimo-v2.5-pro"); m.SourceTool != "pi" {
+		t.Fatalf("expected PI source for ~/.pi session, got %+v", m)
+	}
+}
+
 func TestParseOhMyPiSessionJSONL_InvalidHeader(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "broken.jsonl")
@@ -510,6 +540,13 @@ func TestFindSessionFilesIncludesPiSessionDir(t *testing.T) {
 
 	if got := DetectFormat(path).Format; got != "oh_my_pi" {
 		t.Fatalf("pi session format: %s", got)
+	}
+	events, err := Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := Analyze(events, "mimo-v2.5-pro"); m.SourceTool != "pi" {
+		t.Fatalf("expected PI source for auto-discovered PI session, got %+v", m)
 	}
 	files := FindSessionFiles("")
 	if !containsPath(files, path) {

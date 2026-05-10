@@ -3,11 +3,23 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-const ohMyPiSource = "oh_my_pi"
+const (
+	piSource     = "pi"
+	ohMyPiSource = "oh_my_pi"
+)
+
+func piSourceForPath(path string) string {
+	normalized := strings.ToLower(filepath.ToSlash(path))
+	if strings.Contains(normalized, "/.pi/agent/sessions/") {
+		return piSource
+	}
+	return ohMyPiSource
+}
 
 func isOhMyPiSessionHeader(obj map[string]interface{}) bool {
 	if typ, _ := obj["type"].(string); typ != "session" {
@@ -20,11 +32,14 @@ func isOhMyPiSessionHeader(obj map[string]interface{}) bool {
 	return hasVersion || hasCWD || hasTitleSource || hasParent
 }
 
-func parseOhMyPiSessionJSONL(raw string) ([]Event, error) {
+func parseOhMyPiSessionJSONL(raw string, sourceTool string) ([]Event, error) {
 	var metaEvents []Event
 	var events []Event
 	model := "unknown"
 	seenHeader := false
+	if sourceTool == "" {
+		sourceTool = ohMyPiSource
+	}
 
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -56,7 +71,7 @@ func parseOhMyPiSessionJSONL(raw string) ([]Event, error) {
 			if !ok {
 				continue
 			}
-			for _, ev := range ohMyPiMessageEvents(msg, ts, &model) {
+			for _, ev := range ohMyPiMessageEvents(msg, ts, &model, sourceTool) {
 				if ev.Role == "meta" {
 					metaEvents = append(metaEvents, ev)
 				} else {
@@ -71,7 +86,7 @@ func parseOhMyPiSessionJSONL(raw string) ([]Event, error) {
 					Content:    content,
 					Timestamp:  ts,
 					ModelUsed:  model,
-					SourceTool: ohMyPiSource,
+					SourceTool: sourceTool,
 				})
 			}
 		case "model_change":
@@ -81,7 +96,7 @@ func parseOhMyPiSessionJSONL(raw string) ([]Event, error) {
 					Role:       "meta",
 					Timestamp:  ts,
 					ModelUsed:  model,
-					SourceTool: ohMyPiSource,
+					SourceTool: sourceTool,
 				})
 			}
 		case "branch_summary", "compaction":
@@ -92,7 +107,7 @@ func parseOhMyPiSessionJSONL(raw string) ([]Event, error) {
 					Content:    content,
 					Timestamp:  ts,
 					ModelUsed:  model,
-					SourceTool: ohMyPiSource,
+					SourceTool: sourceTool,
 				})
 			}
 		}
@@ -107,7 +122,7 @@ func parseOhMyPiSessionJSONL(raw string) ([]Event, error) {
 	return append(metaEvents, events...), nil
 }
 
-func ohMyPiMessageEvents(msg map[string]interface{}, entryTS string, model *string) []Event {
+func ohMyPiMessageEvents(msg map[string]interface{}, entryTS string, model *string, sourceTool string) []Event {
 	role := str(msg, "role")
 	ts := ohMyPiTimestamp(msg["timestamp"], entryTS)
 
@@ -122,7 +137,7 @@ func ohMyPiMessageEvents(msg map[string]interface{}, entryTS string, model *stri
 			Timestamp:  ts,
 			Usage:      usage,
 			ModelUsed:  *model,
-			SourceTool: ohMyPiSource,
+			SourceTool: sourceTool,
 		})
 	}
 
@@ -135,7 +150,7 @@ func ohMyPiMessageEvents(msg map[string]interface{}, entryTS string, model *stri
 				Content:    content,
 				Timestamp:  ts,
 				ModelUsed:  *model,
-				SourceTool: ohMyPiSource,
+				SourceTool: sourceTool,
 			})
 		}
 	case "developer":
@@ -145,7 +160,7 @@ func ohMyPiMessageEvents(msg map[string]interface{}, entryTS string, model *stri
 				Content:    content,
 				Timestamp:  ts,
 				ModelUsed:  *model,
-				SourceTool: ohMyPiSource,
+				SourceTool: sourceTool,
 			})
 		}
 	case "assistant":
@@ -158,7 +173,7 @@ func ohMyPiMessageEvents(msg map[string]interface{}, entryTS string, model *stri
 				ToolCalls:  toolCalls,
 				Timestamp:  ts,
 				ModelUsed:  *model,
-				SourceTool: ohMyPiSource,
+				SourceTool: sourceTool,
 			})
 		}
 	case "toolResult":
@@ -169,7 +184,7 @@ func ohMyPiMessageEvents(msg map[string]interface{}, entryTS string, model *stri
 			ToolCallID: str(msg, "toolCallId"),
 			IsError:    boolValue(msg["isError"]),
 			ModelUsed:  *model,
-			SourceTool: ohMyPiSource,
+			SourceTool: sourceTool,
 		})
 	}
 	return events

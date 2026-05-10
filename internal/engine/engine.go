@@ -1,5 +1,5 @@
 // Package engine provides the core analysis engine for agenttrace.
-// Pure Go. Supports 13 agent formats: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, Qwen Code, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Oh My Pi, Aider, Cursor, Cline.
+// Pure Go. Supports 14 agent sources: Hermes Agent, Claude Code, Codex CLI, Gemini CLI, Qwen Code, OpenCode, OpenClaw, Copilot CLI, Kimi CLI, Pi, Oh My Pi, Aider, Cursor, Cline.
 package engine
 
 import (
@@ -54,6 +54,7 @@ var ToolDisplayNames = map[string]string{
 	"openclaw":          "OpenClaw",
 	"copilot_cli":       "Copilot CLI",
 	"kimi_cli":          "Kimi CLI",
+	"pi":                "Pi",
 	"oh_my_pi":          "Oh My Pi",
 	"aider":             "Aider",
 	"cursor":            "Cursor",
@@ -789,7 +790,7 @@ func Parse(path string) ([]Event, error) {
 	case "kimi_cli":
 		return parseKimiCLI(fi.Doc)
 	case "oh_my_pi":
-		return parseOhMyPiSessionJSONL(string(fi.Raw))
+		return parseOhMyPiSessionJSONL(string(fi.Raw), piSourceForPath(path))
 	case "aider_chat_history":
 		return parseAiderChatHistory(string(fi.Raw))
 	case "cursor":

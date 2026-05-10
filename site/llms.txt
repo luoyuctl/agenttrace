@@ -11,7 +11,7 @@ License: MIT
 
 ## What it does
 
-- Parses local session logs from Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, Oh My Pi, and Copilot-style traces.
+- Parses local session logs from Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, Pi, Oh My Pi, and Copilot-style traces.
 - Shows historical cost, token usage, model usage, elapsed time, latency, hanging gaps, slow tool calls, and session health across multiple agents.
 - Provides a Bubble Tea terminal UI with overview, session list, detail, diagnostics, and diff views.
 - Exports JSON, Markdown, and self-contained HTML reports.

@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+### Fixed
+
+- Show sessions from `~/.pi/agent/sessions` as Pi while keeping
+  legacy `~/.omp/agent/sessions` sessions labeled Oh My Pi.
 
 ## v0.4.5 - 2026-05-10
 
