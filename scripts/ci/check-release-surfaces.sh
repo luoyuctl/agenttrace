@@ -19,6 +19,14 @@ grep -q "agenttrace v$version" homebrew/Formula/agenttrace.rb \
   || fail "Homebrew formula test is not aligned with engine version $version"
 grep -q "\"softwareVersion\": \"$version\"" site/index.html \
   || fail "site structured metadata is not aligned with engine version $version"
+grep -q "AGENTTRACE_RELEASE_TAG=v$version node install.js" npm/README.md \
+  || fail "npm README maintainer release-tag check is not aligned with engine version $version"
+
+if grep -Eqi "not been published yet|registry 404|until the first publish" npm/README.md &&
+  grep -q "^npm install -g agenttrace$" npm/README.md &&
+  ! grep -qi "After the package is published" npm/README.md; then
+  fail "npm README must not present npm install as active while the package is unpublished"
+fi
 
 if ! grep -q "<div class=\"meta\">v$version" site/demo-report.html &&
   ! grep -qi "static sample data" site/demo-report.html; then
@@ -28,7 +36,7 @@ fi
 node -e '
 const fs = require("fs");
 const version = process.argv[1];
-const files = ["README.md", "homebrew/Formula/agenttrace.rb", "site/index.html", "site/demo-report.html"];
+const files = ["README.md", "homebrew/Formula/agenttrace.rb", "site/index.html", "site/demo-report.html", "npm/README.md"];
 const pattern = /\bv?(\d+\.\d+\.\d+)\b/g;
 for (const file of files) {
   const text = fs.readFileSync(file, "utf8");

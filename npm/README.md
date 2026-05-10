@@ -2,11 +2,11 @@
 
 TUI observability for AI coding agent sessions. It helps you inspect local agent runs across cost, token usage, latency, tool failures, anomalies, health score, and CI quality gates.
 
-This directory contains the npm wrapper for agenttrace.
+This directory contains the npm wrapper for agenttrace. The public npm package has not been published yet, so `npm install -g agenttrace` will return a registry 404 until the first publish.
 
 ## Install
 
-Use one of the supported install methods:
+Use one of the supported install methods for now:
 
 ```bash
 brew install luoyuctl/tap/agenttrace
@@ -18,7 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.
 agenttrace --version
 ```
 
-npm install path:
+After the package is published, the npm install path will be:
 
 ```bash
 npm install -g agenttrace
@@ -33,7 +33,7 @@ From this directory:
 node --check install.js
 node --check run.js
 AGENTTRACE_BIN=/path/to/agenttrace node run.js --version
-AGENTTRACE_RELEASE_TAG=v0.4.2 node install.js
+AGENTTRACE_RELEASE_TAG=v0.4.6 node install.js
 npm pack --dry-run
 ```
 
