@@ -485,6 +485,38 @@ func TestParseOhMyPiSessionJSONL_InvalidHeader(t *testing.T) {
 	}
 }
 
+func TestFindSessionFilesIncludesPiSessionDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	sessionDir := filepath.Join(home, ".pi", "agent", "sessions")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessionDir, "session.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{"type": "session", "version": 3, "id": "pi-session", "cwd": "/work/pi"},
+		map[string]interface{}{
+			"type": "message",
+			"message": map[string]interface{}{
+				"role":    "user",
+				"content": "hello from pi",
+			},
+		},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := DetectFormat(path).Format; got != "oh_my_pi" {
+		t.Fatalf("pi session format: %s", got)
+	}
+	files := FindSessionFiles("")
+	if !containsPath(files, path) {
+		t.Fatalf("expected PI session file, got %v", files)
+	}
+}
+
 func TestParseQwenCodeStreamJSONL(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "qwen-stream.jsonl")

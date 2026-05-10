@@ -2345,6 +2345,7 @@ func KnownSessionDirs() []KnownSessionDir {
 		{Name: "Gemini CLI tmp", Path: filepath.Join(home, ".gemini", "tmp")},
 		{Name: "Qwen Code", Path: filepath.Join(home, ".qwen", "projects")},
 		{Name: "Claude Code", Path: filepath.Join(home, ".claude", "projects")},
+		{Name: "Pi", Path: filepath.Join(home, ".pi", "agent", "sessions")},
 		{Name: "Oh My Pi", Path: filepath.Join(home, ".omp", "agent", "sessions")},
 	}
 	dirs = append(dirs, openCodeKnownSessionDirs(home)...)

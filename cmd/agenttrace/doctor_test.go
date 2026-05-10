@@ -79,6 +79,36 @@ func TestDoctorReportUsesReportableSQLiteBackedSources(t *testing.T) {
 	}
 }
 
+func TestDoctorReportIncludesPiSessionDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+
+	sessionDir := filepath.Join(home, ".pi", "agent", "sessions")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	raw := `{"type":"session","version":3,"id":"pi-session","cwd":"/work/pi"}
+{"type":"message","message":{"role":"user","content":"hello from pi"}}
+`
+	if err := os.WriteFile(filepath.Join(sessionDir, "session.jsonl"), []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := buildDoctorReport("", false)
+	var piRow *doctorDirReport
+	for i := range report.Directories {
+		if report.Directories[i].Name == "Pi" {
+			piRow = &report.Directories[i]
+			break
+		}
+	}
+	if piRow == nil || !piRow.Exists || piRow.Files != 1 {
+		t.Fatalf("doctor should report PI sessions, got %+v", piRow)
+	}
+}
+
 func TestDoctorReportChineseText(t *testing.T) {
 	prev := i18n.Current
 	i18n.SetLang(i18n.ZH)
