@@ -4,6 +4,12 @@
 
 No unreleased changes yet.
 
+## v0.4.3 - 2026-05-10
+
+### Changed
+
+- Updated release surfaces for the v0.4.3 distribution.
+
 ## v0.4.2 - 2026-05-05
 
 ### Changed
