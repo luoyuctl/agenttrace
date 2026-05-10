@@ -22,6 +22,10 @@ grep -q "\"softwareVersion\": \"$version\"" site/index.html \
 grep -q "AGENTTRACE_RELEASE_TAG=v$version node install.js" npm/README.md \
   || fail "npm README maintainer release-tag check is not aligned with engine version $version"
 
+npm_package_version="$(node -p 'require("./npm/package.json").version || ""')"
+[[ "$npm_package_version" == "$version" ]] \
+  || fail "npm package version $npm_package_version is not aligned with engine version $version"
+
 if grep -Eqi "not been published yet|registry 404|until the first publish" npm/README.md &&
   grep -q "^npm install -g agenttrace$" npm/README.md &&
   ! grep -qi "After the package is published" npm/README.md; then
@@ -42,7 +46,7 @@ fi
 node -e '
 const fs = require("fs");
 const version = process.argv[1];
-const files = ["README.md", "homebrew/Formula/agenttrace.rb", "site/index.html", "site/demo-report.html", "npm/README.md"];
+const files = ["README.md", "homebrew/Formula/agenttrace.rb", "site/index.html", "site/demo-report.html", "npm/README.md", "npm/package.json"];
 const pattern = /\bv?(\d+\.\d+\.\d+)\b/g;
 for (const file of files) {
   const text = fs.readFileSync(file, "utf8");
