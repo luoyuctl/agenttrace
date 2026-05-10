@@ -28,6 +28,12 @@ if grep -Eqi "not been published yet|registry 404|until the first publish" npm/R
   fail "npm README must not present npm install as active while the package is unpublished"
 fi
 
+if grep -Eqi "not been published yet|registry 404|until the first publish" npm/README.md &&
+  grep -Eqi "npm wrapper is also available|npm install -g agenttrace" README.md &&
+  ! grep -Eqi "npm wrapper package is not published yet|after the package is published" README.md; then
+  fail "README must not present npm as active while the package is unpublished"
+fi
+
 if ! grep -q "<div class=\"meta\">v$version" site/demo-report.html &&
   ! grep -qi "static sample data" site/demo-report.html; then
   fail "site demo report must use current version metadata or clearly identify static sample data"

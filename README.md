@@ -94,7 +94,7 @@ Windows:
 iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
 ```
 
-The npm wrapper is also available as `agenttrace` after each release is published.
+The npm wrapper package is not published yet; use the installer, Homebrew, or Go install paths above for now.
 
 ## Common workflows
 
