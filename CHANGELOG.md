@@ -4,6 +4,18 @@
 
 No unreleased changes yet.
 
+## v0.4.4 - 2026-05-10
+
+### Added
+
+- Added a real local-data marketing refresh script for README and site assets.
+
+### Changed
+
+- Capped overview JSON anomaly details and added anomaly total/truncation metadata
+  so large real histories stay readable for automation and promotional reports.
+- Refreshed README and site screenshots from a real local run.
+
 ## v0.4.3 - 2026-05-10
 
 ### Changed

@@ -440,6 +440,8 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	if anomalies == nil {
 		anomalies = []AnomalyTop{}
 	}
+	anomalyLimit := minReportInt(len(anomalies), 50)
+	anomaliesReturned := anomalies[:anomalyLimit]
 	trend := AnalyzeHealthTrend(orderedSessions)
 	points := make([]trendPoint, 0, len(trend.Points))
 	for _, p := range trend.Points {
@@ -449,16 +451,19 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	payload := map[string]interface{}{
 		"version": Version,
 		"summary": map[string]interface{}{
-			"total_sessions": ov.TotalSessions,
-			"healthy":        ov.Healthy,
-			"warning":        ov.Warning,
-			"critical":       ov.Critical,
-			"avg_health":     avgHealth,
-			"total_cost":     round4(ov.TotalCost),
-			"total_tokens":   totalTokens,
-			"tool_calls":     totalTools,
-			"tool_failures":  failedTools,
-			"tool_fail_rate": toolFailRate,
+			"total_sessions":      ov.TotalSessions,
+			"healthy":             ov.Healthy,
+			"warning":             ov.Warning,
+			"critical":            ov.Critical,
+			"avg_health":          avgHealth,
+			"total_cost":          round4(ov.TotalCost),
+			"total_tokens":        totalTokens,
+			"tool_calls":          totalTools,
+			"tool_failures":       failedTools,
+			"tool_fail_rate":      toolFailRate,
+			"anomalies_total":     len(anomalies),
+			"anomalies_returned":  len(anomaliesReturned),
+			"anomalies_truncated": len(anomaliesReturned) < len(anomalies),
 			"health_trend": map[string]interface{}{
 				"direction":  trend.Direction,
 				"regressing": trend.Regressing,
@@ -470,7 +475,7 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 		"by_agent":        agents,
 		"by_model":        models,
 		"recent_sessions": recent,
-		"anomalies":       anomalies,
+		"anomalies":       anomaliesReturned,
 	}
 	out, _ := json.MarshalIndent(payload, "", "  ")
 	return string(out)

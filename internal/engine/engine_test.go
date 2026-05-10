@@ -1315,12 +1315,13 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	var payload struct {
 		Version string `json:"version"`
 		Summary struct {
-			TotalSessions int     `json:"total_sessions"`
-			Critical      int     `json:"critical"`
-			TotalCost     float64 `json:"total_cost"`
-			TotalTokens   int     `json:"total_tokens"`
-			ToolFailRate  float64 `json:"tool_fail_rate"`
-			HealthTrend   struct {
+			TotalSessions  int     `json:"total_sessions"`
+			Critical       int     `json:"critical"`
+			TotalCost      float64 `json:"total_cost"`
+			TotalTokens    int     `json:"total_tokens"`
+			ToolFailRate   float64 `json:"tool_fail_rate"`
+			AnomaliesTotal int     `json:"anomalies_total"`
+			HealthTrend    struct {
 				Direction  string `json:"direction"`
 				Regressing bool   `json:"regressing"`
 				Message    string `json:"message"`
@@ -1351,12 +1352,44 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	if payload.Summary.TotalCost != 1 || payload.Summary.TotalTokens != 525 || payload.Summary.ToolFailRate != 25 {
 		t.Fatalf("missing operational totals: %+v", payload.Summary)
 	}
+	if payload.Summary.AnomaliesTotal != 1 {
+		t.Fatalf("missing anomaly total: %+v", payload.Summary)
+	}
 	if payload.Summary.HealthTrend.Direction == "" || payload.Summary.HealthTrend.Message == "" || len(payload.Summary.HealthTrend.Points) != 2 {
 		t.Fatalf("missing health trend: %+v", payload.Summary.HealthTrend)
 	}
 	if len(payload.ByAgent) != 2 || len(payload.RecentSessions) != 2 || len(payload.Anomalies) != 1 {
 		t.Fatalf("missing overview sections: agents=%d recent=%d anomalies=%d",
 			len(payload.ByAgent), len(payload.RecentSessions), len(payload.Anomalies))
+	}
+}
+
+func TestReportOverviewJSONLimitsAnomalies(t *testing.T) {
+	var sessions []Session
+	for i := 0; i < 55; i++ {
+		sessions = append(sessions, Session{
+			Name:      fmt.Sprintf("s%02d", i),
+			Health:    40,
+			Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
+		})
+	}
+
+	var payload struct {
+		Summary struct {
+			AnomaliesTotal     int  `json:"anomalies_total"`
+			AnomaliesReturned  int  `json:"anomalies_returned"`
+			AnomaliesTruncated bool `json:"anomalies_truncated"`
+		} `json:"summary"`
+		Anomalies []AnomalyTop `json:"anomalies"`
+	}
+	if err := json.Unmarshal([]byte(ReportOverviewJSON(ComputeOverview(sessions), sessions)), &payload); err != nil {
+		t.Fatalf("invalid overview json: %v", err)
+	}
+	if payload.Summary.AnomaliesTotal != 55 || payload.Summary.AnomaliesReturned != 50 || !payload.Summary.AnomaliesTruncated {
+		t.Fatalf("bad anomaly limit summary: %+v", payload.Summary)
+	}
+	if len(payload.Anomalies) != 50 {
+		t.Fatalf("expected 50 returned anomalies, got %d", len(payload.Anomalies))
 	}
 }
 
