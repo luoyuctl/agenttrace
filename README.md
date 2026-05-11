@@ -143,7 +143,14 @@ Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Her
 - Parser guide: [docs/parser-guide.md](docs/parser-guide.md)
 - Launch notes: [docs/launch-kit.md](docs/launch-kit.md)
 
-Listed in [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli), [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild), and [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills).
+Listed in:
+
+- [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli)
+- [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild)
+- [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills)
+- [awesome-x-ops](https://github.com/xlabs-club/awesome-x-ops)
+- [Awesome DevOps AI](https://github.com/hammadhaqqani/awesome-devops-ai)
+- [agentic-ai-knowledge-base](https://github.com/ankurkumarz/agentic-ai-knowledge-base)
 
 ## Contributing
 

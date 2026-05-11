@@ -394,6 +394,7 @@ figcaption span {
 .workflow,
 .commands,
 .sources,
+.proof,
 .community {
   width: min(calc(100% - 2rem), var(--max));
   margin: 0 auto;
@@ -557,6 +558,41 @@ code {
   font-size: clamp(1rem, 2vw, 1.35rem);
 }
 
+.proof {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.42fr) minmax(0, 0.58fr);
+  gap: clamp(1.5rem, 5vw, 4rem);
+  padding: clamp(4rem, 8vw, 7rem) 0;
+  border-top: 1px solid var(--line);
+}
+
+.proof h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 4.3rem);
+  line-height: 0.94;
+}
+
+.proof-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.72rem;
+}
+
+.proof-links a {
+  min-height: 4.2rem;
+  padding: 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 0.45rem;
+  background: rgba(5, 6, 7, 0.76);
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.proof-links a:hover {
+  border-color: rgba(0, 216, 255, 0.58);
+  color: var(--cyan);
+}
+
 .community {
   display: grid;
   grid-template-columns: minmax(18rem, 0.58fr) minmax(16rem, 0.42fr);
@@ -648,6 +684,7 @@ footer a {
   .screen-stack,
   .flow-rail,
   .commands,
+  .proof,
   .community {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -663,6 +700,7 @@ footer a {
 
   .section-head,
   .commands,
+  .proof,
   .community {
     grid-template-columns: 1fr;
   }
@@ -715,7 +753,8 @@ footer a {
   .live-ledger,
   .operator-grid,
   .screen-stack,
-  .flow-rail {
+  .flow-rail,
+  .proof-links {
     grid-template-columns: 1fr;
   }
 

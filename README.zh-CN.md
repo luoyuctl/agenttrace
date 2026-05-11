@@ -118,7 +118,14 @@ Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor export
 - Parser 指南：[docs/parser-guide.md](docs/parser-guide.md)
 - 发布说明草案：[docs/launch-kit.md](docs/launch-kit.md)
 
-agenttrace 已被收录在 [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli)、[Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild) 和 [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills)。
+agenttrace 已被这些项目收录：
+
+- [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli)
+- [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild)
+- [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills)
+- [awesome-x-ops](https://github.com/xlabs-club/awesome-x-ops)
+- [Awesome DevOps AI](https://github.com/hammadhaqqani/awesome-devops-ai)
+- [agentic-ai-knowledge-base](https://github.com/ankurkumarz/agentic-ai-knowledge-base)
 
 ## 贡献
 
