@@ -16,7 +16,7 @@ These are the product angles agenttrace should keep optimizing for.
 ## Product Implications
 
 - Keep startup fast and local-first.
-- Keep parser coverage broad: Claude Code, Codex CLI, Gemini CLI, Aider, Cursor exports, Hermes, OpenCode, OpenClaw, Kimi, Copilot-style logs.
+- Keep parser coverage broad: Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi CLI, Copilot-style logs, and generic JSON/JSONL traces.
 - Make the first TUI screen answer: cost, health, errors, latency, and recent bad sessions.
 - Keep JSON output and CI gates first-class.
 - Prioritize diagnostics that produce an action, not just a chart.
