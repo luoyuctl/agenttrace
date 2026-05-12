@@ -151,6 +151,11 @@ Listed in:
 - [awesome-x-ops](https://github.com/xlabs-club/awesome-x-ops)
 - [Awesome DevOps AI](https://github.com/hammadhaqqani/awesome-devops-ai)
 - [agentic-ai-knowledge-base](https://github.com/ankurkumarz/agentic-ai-knowledge-base)
+- [awesome-harness-engineering](https://github.com/walkinglabs/awesome-harness-engineering)
+- [awesome-ai-tools](https://github.com/QAInsights/awesome-ai-tools)
+- [awesome-claude-code-toolkit](https://github.com/rohitg00/awesome-claude-code-toolkit)
+- [awesome-ai-plugins](https://github.com/hashgraph-online/awesome-ai-plugins)
+- [awesome-agent-skills](https://github.com/kodustech/awesome-agent-skills)
 
 ## Contributing
 
