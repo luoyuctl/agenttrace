@@ -530,6 +530,7 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 	orderedSessions := canonicalOverviewSessions(sessions)
 	summary := overviewReportSummary(orderedSessions)
+	authority := overviewAuthoritySummary(orderedSessions)
 	trend := AnalyzeHealthTrend(orderedSessions)
 
 	var b strings.Builder
@@ -542,6 +543,25 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 	fmt.Fprintf(&b, "| %s | $%.2f |\n", i18n.T("total_cost"), ov.TotalCost)
 	fmt.Fprintf(&b, "| %s | %d |\n", i18n.T("report_total_tokens"), summary.TotalTokens)
 	fmt.Fprintf(&b, "| %s | %d / %d (%.1f%%) |\n\n", i18n.T("report_tool_failures"), summary.FailedTools, summary.TotalTools, summary.ToolFailRate)
+
+	if authority.HasData {
+		fmt.Fprintf(&b, "## %s\n\n", i18n.T("report_tool_authority"))
+		fmt.Fprintf(&b, "| %s | %s |\n|---|---:|\n", i18n.T("report_metric"), i18n.T("report_value"))
+		if authority.Highest != "" {
+			fmt.Fprintf(&b, "| %s | `%s` |\n", i18n.T("report_highest_authority"), markdownInlineCode(authority.Highest))
+		}
+		if len(authority.HighTools) > 0 {
+			fmt.Fprintf(&b, "| %s | %s |\n", i18n.T("report_high_authority_tools"), reportMarkdownCodeList(authority.HighTools))
+		}
+		if len(authority.Counts) > 0 {
+			fmt.Fprintf(&b, "\n### %s\n\n", i18n.T("report_authority_category_counts"))
+			fmt.Fprintf(&b, "| %s | %s |\n|---|---:|\n", i18n.T("report_authority_category"), i18n.T("report_count"))
+			for _, item := range authority.Counts {
+				fmt.Fprintf(&b, "| `%s` | %d |\n", markdownInlineCode(item.Category), item.Count)
+			}
+			fmt.Fprintln(&b)
+		}
+	}
 
 	fmt.Fprintf(&b, "## %s\n\n", i18n.T("incident_timeline_title"))
 	timelines := overviewIncidentTimelines(orderedSessions, 6)
@@ -1021,6 +1041,23 @@ func reportHTMLCodeList(values []string) string {
 		}
 	}
 	return strings.Join(parts, ", ")
+}
+
+func reportMarkdownCodeList(values []string) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != "" {
+			parts = append(parts, "`"+markdownInlineCode(value)+"`")
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func markdownInlineCode(value string) string {
+	value = strings.ReplaceAll(value, "`", "'")
+	value = strings.ReplaceAll(value, "|", "\\|")
+	value = strings.ReplaceAll(value, "\n", "<br>")
+	return value
 }
 
 func markdownCell(value string) string {

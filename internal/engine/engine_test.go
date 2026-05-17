@@ -1955,6 +1955,53 @@ func TestReportTextChineseLabelsAnomalySeverityAndLoopCost(t *testing.T) {
 	}
 }
 
+func TestReportOverviewMarkdownShowsAuthority(t *testing.T) {
+	sessions := []Session{
+		{
+			Name:   "build",
+			Health: 92,
+			Metrics: Metrics{
+				SourceTool:       "aider",
+				ModelUsed:        "gpt-4.1",
+				ToolCallsOK:      1,
+				ToolUsage:        map[string]int{"go test": 1},
+				ToolAuthority:    map[string]int{ToolAuthorityTestOrBuild: 1},
+				HighestAuthority: ToolAuthorityTestOrBuild,
+			},
+		},
+		{
+			Name:   "shell",
+			Health: 70,
+			Metrics: Metrics{
+				SourceTool:       "cursor",
+				ModelUsed:        "default",
+				ToolCallsOK:      1,
+				ToolUsage:        map[string]int{"bash|prod\nsecret args": 1},
+				ToolAuthority:    map[string]int{ToolAuthorityShellExec: 1},
+				HighestAuthority: ToolAuthorityShellExec,
+			},
+		},
+	}
+	out := ReportOverviewMarkdown(ComputeOverview(sessions), sessions)
+	for _, want := range []string{
+		"## Tool authority",
+		"| Highest category | `shell_exec` |",
+		"| High-authority tools | `bash\\|prod<br>secret args` |",
+		"### Authority category counts",
+		"| `test_or_build` | 1 |",
+		"| `shell_exec` | 1 |",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("markdown report missing %q:\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{"`bash|prod", "secret args` |\n|"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("markdown report did not escape high-authority tool name %q:\n%s", unwanted, out)
+		}
+	}
+}
+
 func TestReportOverviewHTMLIsShareableAndEscaped(t *testing.T) {
 	sessions := []Session{
 		{

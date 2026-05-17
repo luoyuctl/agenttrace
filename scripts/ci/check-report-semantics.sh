@@ -27,6 +27,12 @@ grep -q "$expected_cost_label" "$out_dir/semantics/overview.txt" \
   || fail "text overview missing expected cost label"
 grep -q "| $expected_cost_label |" "$out_dir/semantics/overview.md" \
   || fail "markdown overview missing expected cost label"
+grep -q "## Tool authority" "$out_dir/semantics/overview.md" \
+  || fail "markdown overview missing tool authority summary"
+grep -q "### Authority category counts" "$out_dir/semantics/overview.md" \
+  || fail "markdown overview missing authority category counts"
+grep -q '`test_or_build`' "$out_dir/semantics/overview.md" \
+  || fail "markdown overview missing highest demo authority category"
 grep -q "<span>$expected_cost_label</span>" "$out_dir/semantics/overview.html" \
   || fail "html overview missing expected cost label"
 grep -q "<div class=\"meta\">v$version" "$out_dir/semantics/overview.html" \
