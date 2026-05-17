@@ -1140,7 +1140,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 		rendered := 0
 		for _, timeline := range timelines {
 			for _, item := range timeline.Items {
-				wf("    %-30s %s: %s", textCell(timeline.Session, 30), item.Label, textCell(item.Detail, 68))
+				wf("    %-30s %s: %s", textCell(timeline.Session, 30), item.Label, textCell(item.Detail, textIncidentDetailLimit(item.Label)))
 				rendered++
 				if rendered >= 5 {
 					break
@@ -1243,6 +1243,19 @@ func textToolValues(items []string) []string {
 		parts = append(parts, textCell(item, 40))
 	}
 	return parts
+}
+
+func textIncidentDetailLimit(label string) int {
+	const lineLimit = 96
+	const indentWidth = 4
+	const sessionWidth = 30
+	const separatorsWidth = 3
+
+	limit := lineLimit - indentWidth - sessionWidth - separatorsWidth - utf8.RuneCountInString(label)
+	if limit < 24 {
+		return 24
+	}
+	return limit
 }
 
 func textWrappedKeyValues(label string, values []string, limit int) []string {

@@ -1954,6 +1954,50 @@ func TestReportOverviewTextWrapsAuthoritySummary(t *testing.T) {
 	}
 }
 
+func TestReportOverviewTextBoundsIncidentTimelineRows(t *testing.T) {
+	longTool := "terminal-" + strings.Repeat("very-long-tool-name-", 5)
+	sessions := []Session{{
+		Name:   "wide-incident",
+		Health: 90,
+		Metrics: Metrics{
+			SourceTool:     "codex_cli",
+			ModelUsed:      "gpt-5.1",
+			AssistantTurns: 3,
+			DurationSec:    180,
+			ToolCallsOK:    12,
+			ToolUsage:      map[string]int{longTool: 12},
+		},
+	}}
+
+	out := ReportOverview(ComputeOverview(sessions), sessions)
+	for _, want := range []string{"Incident timeline", "Touched surface", "..."} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("text overview missing %q:\n%s", want, out)
+		}
+	}
+
+	inTimeline := false
+	checked := 0
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "── Incident timeline ──") {
+			inTimeline = true
+			continue
+		}
+		if inTimeline && strings.TrimSpace(line) == "" {
+			break
+		}
+		if inTimeline {
+			checked++
+			if got := utf8.RuneCountInString(line); got > 100 {
+				t.Fatalf("incident line too wide (%d): %q\n%s", got, line, out)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatalf("expected incident timeline rows:\n%s", out)
+	}
+}
+
 func TestReportOverviewTextTruncatesUnicodeSafely(t *testing.T) {
 	longName := "x" + strings.Repeat("项目", 24) + "-异常会话"
 	longTool := "x" + strings.Repeat("工具", 32)
