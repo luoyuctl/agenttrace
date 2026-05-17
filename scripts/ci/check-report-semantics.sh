@@ -33,6 +33,12 @@ grep -q "<div class=\"meta\">v$version" "$out_dir/semantics/overview.html" \
   || fail "html overview missing current version metadata"
 grep -q "Estimated session cost" "$out_dir/semantics/overview.html" \
   || fail "html overview missing cost helper text"
+grep -q "Tool authority" "$out_dir/semantics/overview.html" \
+  || fail "html overview missing tool authority summary"
+grep -q "Authority category counts" "$out_dir/semantics/overview.html" \
+  || fail "html overview missing authority category counts"
+grep -q "<code>test_or_build</code>" "$out_dir/semantics/overview.html" \
+  || fail "html overview missing highest demo authority category"
 
 node -e '
 const fs = require("fs");

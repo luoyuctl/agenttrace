@@ -632,6 +632,7 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	orderedSessions := canonicalOverviewSessions(sessions)
 	summary := overviewReportSummary(orderedSessions)
+	authority := overviewAuthoritySummary(orderedSessions)
 	trend := AnalyzeHealthTrend(orderedSessions)
 	agents := sortedAgents(ov.ByAgent)
 	models := sortedModels(ov.ByModel)
@@ -667,6 +668,24 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	w(fmt.Sprintf(`<div class="metric"><span>%s</span><strong>$%.2f</strong><p>%s</p></div>`, html.EscapeString(i18n.T("total_cost")), ov.TotalCost, html.EscapeString(i18n.T("report_estimated_cost"))))
 	w(fmt.Sprintf(`<div class="metric %s"><span>%s</span><strong>%d/%d</strong><p>%s</p></div>`, html.EscapeString(failureClass(summary.ToolFailRate)), html.EscapeString(i18n.T("report_tool_failures")), summary.FailedTools, summary.TotalTools, html.EscapeString(fmt.Sprintf(i18n.T("report_failure_rate"), summary.ToolFailRate))))
 	w(`</div>`)
+	if authority.HasData {
+		w(fmt.Sprintf(`<section><h2>%s</h2>`, html.EscapeString(i18n.T("report_tool_authority"))))
+		if authority.Highest != "" {
+			w(fmt.Sprintf(`<p><strong>%s</strong>: <code>%s</code></p>`, html.EscapeString(i18n.T("report_highest_authority")), html.EscapeString(authority.Highest)))
+		}
+		if len(authority.Counts) > 0 {
+			w(fmt.Sprintf(`<table><caption>%s</caption><thead><tr><th>%s</th><th class="num">%s</th></tr></thead><tbody>`,
+				html.EscapeString(i18n.T("report_authority_category_counts")), html.EscapeString(i18n.T("report_authority_category")), html.EscapeString(i18n.T("report_count"))))
+			for _, item := range authority.Counts {
+				w(fmt.Sprintf(`<tr><td><code>%s</code></td><td class="num">%d</td></tr>`, html.EscapeString(item.Category), item.Count))
+			}
+			w(`</tbody></table>`)
+		}
+		if len(authority.HighTools) > 0 {
+			w(fmt.Sprintf(`<p><strong>%s</strong>: %s</p>`, html.EscapeString(i18n.T("report_high_authority_tools")), reportHTMLCodeList(authority.HighTools)))
+		}
+		w(`</section>`)
+	}
 	if len(orderedSessions) > 1 {
 		w(fmt.Sprintf(`<section><h2>%s</h2><p>%s</p></section>`, html.EscapeString(i18n.T("trend_title")), html.EscapeString(trend.Message)))
 	}
@@ -789,6 +808,18 @@ type overviewSummary struct {
 	ToolFailRate float64
 }
 
+type authorityCount struct {
+	Category string
+	Count    int
+}
+
+type overviewAuthority struct {
+	Highest   string
+	Counts    []authorityCount
+	HighTools []string
+	HasData   bool
+}
+
 func overviewReportSummary(sessions []Session) overviewSummary {
 	var summary overviewSummary
 	totalHealth := 0
@@ -805,6 +836,36 @@ func overviewReportSummary(sessions []Session) overviewSummary {
 		summary.ToolFailRate = round4(float64(summary.FailedTools) / float64(summary.TotalTools) * 100)
 	}
 	return summary
+}
+
+func overviewAuthoritySummary(sessions []Session) overviewAuthority {
+	counts := make(map[string]int)
+	toolSurface := make(map[string]struct{})
+	highest := ""
+	for _, s := range sessions {
+		for tool := range s.Metrics.ToolUsage {
+			toolSurface[tool] = struct{}{}
+		}
+		for category, count := range s.Metrics.ToolAuthority {
+			if count > 0 {
+				counts[category] += count
+				highest = HigherToolAuthority(highest, category)
+			}
+		}
+		highest = HigherToolAuthority(highest, s.Metrics.HighestAuthority)
+	}
+	keys := sortedReportIntKeys(counts)
+	items := make([]authorityCount, 0, len(keys))
+	for _, key := range keys {
+		items = append(items, authorityCount{Category: key, Count: counts[key]})
+	}
+	highTools := highAuthorityTools(sortedReportKeys(toolSurface))
+	return overviewAuthority{
+		Highest:   highest,
+		Counts:    items,
+		HighTools: highTools,
+		HasData:   highest != "" || len(items) > 0 || len(highTools) > 0,
+	}
 }
 
 func canonicalOverviewSessions(sessions []Session) []Session {
@@ -950,6 +1011,16 @@ func highAuthorityTools(tools []string) []string {
 		}
 	}
 	return out
+}
+
+func reportHTMLCodeList(values []string) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != "" {
+			parts = append(parts, fmt.Sprintf(`<code>%s</code>`, html.EscapeString(value)))
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func markdownCell(value string) string {

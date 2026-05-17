@@ -451,6 +451,30 @@ var translations = map[string]map[Lang]string{
 		EN: "Tool failures",
 		ZH: "工具失败",
 	},
+	"report_tool_authority": {
+		EN: "Tool authority",
+		ZH: "工具权限",
+	},
+	"report_highest_authority": {
+		EN: "Highest category",
+		ZH: "最高权限类别",
+	},
+	"report_authority_category_counts": {
+		EN: "Authority category counts",
+		ZH: "权限类别计数",
+	},
+	"report_authority_category": {
+		EN: "Authority category",
+		ZH: "权限类别",
+	},
+	"report_high_authority_tools": {
+		EN: "High-authority tools",
+		ZH: "高权限工具",
+	},
+	"report_count": {
+		EN: "Count",
+		ZH: "数量",
+	},
 	"report_failure_rate": {
 		EN: "%.1f%% failure rate",
 		ZH: "%.1f%% 失败率",
