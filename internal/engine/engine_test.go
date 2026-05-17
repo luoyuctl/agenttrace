@@ -1892,6 +1892,13 @@ func TestReportOverviewTextShowsIncidentAndAuthorityCues(t *testing.T) {
 	}
 }
 
+func TestTextCellCollapsesWhitespaceAndTruncatesUTF8(t *testing.T) {
+	got := textCell("命令\n执行  失败 😅", 8)
+	if got != "命令 执行..." {
+		t.Fatalf("unexpected UTF-8 safe text cell: %q", got)
+	}
+}
+
 func TestReportOverviewCostLabelUsesEstimatedTotalCost(t *testing.T) {
 	sessions := []Session{{
 		Name:   "demo",

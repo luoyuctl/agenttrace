@@ -1238,8 +1238,9 @@ func textAuthorityCounts(items []authorityCount) string {
 
 func textCell(value string, limit int) string {
 	value = strings.Join(strings.Fields(value), " ")
-	if limit > 3 && len(value) > limit {
-		return value[:limit-3] + "..."
+	runes := []rune(value)
+	if limit > 3 && len(runes) > limit {
+		return string(runes[:limit-3]) + "..."
 	}
 	return value
 }
