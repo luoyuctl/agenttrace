@@ -13,12 +13,33 @@ fail() {
 [[ -f "$page_dir/index.html" ]] || fail "missing index.html in $page_dir"
 [[ -f "$page_dir/demo-report.html" ]] || fail "missing demo-report.html in $page_dir"
 
+demo_report="$page_dir/demo-report.html"
 version="$(sed -nE 's/^const Version = "([^"]+)"/\1/p' "$repo_root/internal/engine/engine.go")"
 [[ -n "$version" ]] || fail "could not read internal/engine Version"
 
-if ! grep -q "<div class=\"meta\">v$version" "$page_dir/demo-report.html" &&
-  ! grep -qi "static sample data" "$page_dir/demo-report.html"; then
+if ! grep -q "<div class=\"meta\">v$version" "$demo_report" &&
+  ! grep -qi "static sample data" "$demo_report"; then
   fail "demo-report.html must use current version metadata or clearly identify static sample data"
+fi
+
+has_static_sample=false
+if grep -qi "static sample data" "$demo_report"; then
+  has_static_sample=true
+fi
+
+has_current_evidence=false
+if grep -qi "Incident timeline" "$demo_report" &&
+  grep -Eqi "tool authority|authority categories" "$demo_report"; then
+  has_current_evidence=true
+fi
+
+if [[ "$has_static_sample" == false && "$has_current_evidence" == false ]]; then
+  fail "demo-report.html must include current report evidence markers or clearly identify static sample data"
+fi
+
+if [[ "$has_static_sample" == true ]] &&
+  ! grep -Eqi "local-first|local coding-agent traces|No hosted tracing|No prompt upload|uploaded logs" "$demo_report"; then
+  fail "static demo-report.html sample must keep local-first/no-upload wording"
 fi
 
 for asset in \
