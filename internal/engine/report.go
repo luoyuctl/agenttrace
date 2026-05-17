@@ -237,6 +237,10 @@ func ReportJSON(m Metrics, anoms []Anomaly, h int) string {
 			"tool_calls_fail":   m.ToolCallsFail,
 			"tool_success_rate": toolRate,
 		},
+		"tool_authority": map[string]interface{}{
+			"highest": highestAuthorityForMetrics(m),
+			"counts":  copyReportIntMap(m.ToolAuthority),
+		},
 		"latency": map[string]float64{
 			"min":    safeCalc(gaps, func(x []float64) float64 { return x[0] }),
 			"median": safeCalc(gaps, func(x []float64) float64 { return percentile(x, 0.50) }),
@@ -357,6 +361,7 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 		Cost       float64 `json:"cost"`
 		Health     int     `json:"health"`
 		Anomalies  int     `json:"anomalies"`
+		Authority  string  `json:"highest_tool_authority"`
 	}
 	type trendPoint struct {
 		Name   string  `json:"name"`
@@ -372,6 +377,8 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	toolSurface := make(map[string]struct{})
 	fileSurface := make(map[string]struct{})
 	failureFamilies := make(map[string]struct{})
+	authorityCounts := make(map[string]int)
+	highestAuthority := ""
 	for _, s := range orderedSessions {
 		totalTokens += s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
 		totalTools += s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
@@ -389,6 +396,13 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 				failureFamilies[anomaly.Type] = struct{}{}
 			}
 		}
+		for authority, count := range s.Metrics.ToolAuthority {
+			if count > 0 {
+				authorityCounts[authority] += count
+				highestAuthority = HigherToolAuthority(highestAuthority, authority)
+			}
+		}
+		highestAuthority = HigherToolAuthority(highestAuthority, s.Metrics.HighestAuthority)
 	}
 	avgHealth := 0.0
 	if len(orderedSessions) > 0 {
@@ -450,6 +464,7 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 			Cost:       round4(s.Metrics.CostEstimated),
 			Health:     s.Health,
 			Anomalies:  len(s.Anomalies),
+			Authority:  highestAuthorityForMetrics(s.Metrics),
 		})
 	}
 	anomalies := ov.AnomaliesTop
@@ -489,11 +504,16 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 				"message":    trend.Message,
 				"points":     points,
 			},
+			"tool_authority": map[string]interface{}{
+				"highest": highestAuthority,
+				"counts":  authorityCounts,
+			},
 		},
 		"failure_families": sortedReportKeys(failureFamilies),
 		"surfaces": map[string]interface{}{
 			"tools":                sortedReportKeys(toolSurface),
 			"files":                sortedReportKeys(fileSurface),
+			"authority_categories": sortedReportIntKeys(authorityCounts),
 			"high_authority_tools": highAuthorityTools(sortedReportKeys(toolSurface)),
 		},
 		"by_agent":           agents,
@@ -891,36 +911,45 @@ func sortedReportKeys(items map[string]struct{}) []string {
 	return out
 }
 
-func highAuthorityTools(tools []string) []string {
-	var out []string
-	for _, tool := range tools {
-		if isHighAuthorityTool(tool) {
-			out = append(out, tool)
+func sortedReportIntKeys(items map[string]int) []string {
+	out := make([]string, 0, len(items))
+	for item, count := range items {
+		if item != "" && count > 0 {
+			out = append(out, item)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func copyReportIntMap(items map[string]int) map[string]int {
+	out := make(map[string]int, len(items))
+	for item, count := range items {
+		if item != "" && count > 0 {
+			out[item] = count
 		}
 	}
 	return out
 }
 
-func isHighAuthorityTool(tool string) bool {
-	name := strings.ToLower(tool)
-	for _, marker := range []string{
-		"apply_patch",
-		"bash",
-		"delete",
-		"edit",
-		"exec",
-		"remove",
-		"rm",
-		"run_command",
-		"shell",
-		"terminal",
-		"write",
-	} {
-		if strings.Contains(name, marker) {
-			return true
+func highestAuthorityForMetrics(m Metrics) string {
+	highest := m.HighestAuthority
+	for authority, count := range m.ToolAuthority {
+		if count > 0 {
+			highest = HigherToolAuthority(highest, authority)
 		}
 	}
-	return false
+	return highest
+}
+
+func highAuthorityTools(tools []string) []string {
+	out := make([]string, 0)
+	for _, tool := range tools {
+		if IsHighAuthorityCategory(ClassifyToolAuthority(ToolCall{Name: tool})) {
+			out = append(out, tool)
+		}
+	}
+	return out
 }
 
 func markdownCell(value string) string {

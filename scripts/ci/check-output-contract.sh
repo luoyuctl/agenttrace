@@ -39,6 +39,10 @@ if (!Array.isArray(report.recent_sessions) || report.recent_sessions.length < 1)
 if (!report.surfaces || !Array.isArray(report.surfaces.tools) || !Array.isArray(report.surfaces.files)) {
   throw new Error("missing comparison surfaces");
 }
+if (!Array.isArray(report.surfaces.authority_categories)) throw new Error("missing authority categories");
+if (!report.summary.tool_authority || typeof report.summary.tool_authority.highest !== "string") {
+  throw new Error("missing overview tool authority summary");
+}
 ' "$out_dir/agenttrace-demo.json"
 
 "$bin" --demo --overview -f json \
@@ -53,7 +57,7 @@ node -e '
 const report = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
 const cmp = report.baseline_comparison;
 if (!cmp) throw new Error("missing baseline_comparison");
-for (const key of ["slower_than_baseline", "cost_delta_pct", "token_delta_pct", "new_failure_families", "broader_tool_surface", "broader_file_surface", "new_high_authority_tool_use"]) {
+for (const key of ["slower_than_baseline", "cost_delta_pct", "token_delta_pct", "new_failure_families", "broader_tool_surface", "broader_file_surface", "new_tool_authority_categories", "new_high_authority_tool_use"]) {
   if (!(key in cmp)) throw new Error(`missing baseline comparison field ${key}`);
 }
 if (cmp.slower_than_baseline || cmp.cost_delta_pct !== 0 || cmp.token_delta_pct !== 0) {

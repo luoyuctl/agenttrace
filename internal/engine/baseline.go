@@ -14,32 +14,34 @@ type BaselineThresholds struct {
 }
 
 type BaselineComparison struct {
-	BaselinePath            string             `json:"baseline_path"`
-	Thresholds              BaselineThresholds `json:"thresholds"`
-	Current                 baselineSnapshot   `json:"current"`
-	Baseline                baselineSnapshot   `json:"baseline"`
-	DurationDeltaPct        float64            `json:"duration_delta_pct"`
-	CostDeltaPct            float64            `json:"cost_delta_pct"`
-	TokenDeltaPct           float64            `json:"token_delta_pct"`
-	SlowerThanBaseline      bool               `json:"slower_than_baseline"`
-	CostAboveThreshold      bool               `json:"cost_above_threshold"`
-	TokensAboveThreshold    bool               `json:"tokens_above_threshold"`
-	NewFailureFamilies      []string           `json:"new_failure_families"`
-	BroaderToolSurface      bool               `json:"broader_tool_surface"`
-	NewTools                []string           `json:"new_tools"`
-	BroaderFileSurface      bool               `json:"broader_file_surface"`
-	NewFiles                []string           `json:"new_files"`
-	NewHighAuthorityToolUse []string           `json:"new_high_authority_tool_use"`
+	BaselinePath               string             `json:"baseline_path"`
+	Thresholds                 BaselineThresholds `json:"thresholds"`
+	Current                    baselineSnapshot   `json:"current"`
+	Baseline                   baselineSnapshot   `json:"baseline"`
+	DurationDeltaPct           float64            `json:"duration_delta_pct"`
+	CostDeltaPct               float64            `json:"cost_delta_pct"`
+	TokenDeltaPct              float64            `json:"token_delta_pct"`
+	SlowerThanBaseline         bool               `json:"slower_than_baseline"`
+	CostAboveThreshold         bool               `json:"cost_above_threshold"`
+	TokensAboveThreshold       bool               `json:"tokens_above_threshold"`
+	NewFailureFamilies         []string           `json:"new_failure_families"`
+	BroaderToolSurface         bool               `json:"broader_tool_surface"`
+	NewTools                   []string           `json:"new_tools"`
+	BroaderFileSurface         bool               `json:"broader_file_surface"`
+	NewFiles                   []string           `json:"new_files"`
+	NewToolAuthorityCategories []string           `json:"new_tool_authority_categories"`
+	NewHighAuthorityToolUse    []string           `json:"new_high_authority_tool_use"`
 }
 
 type baselineSnapshot struct {
-	DurationSeconds    float64  `json:"duration_seconds"`
-	Cost               float64  `json:"cost"`
-	Tokens             int      `json:"tokens"`
-	FailureFamilies    []string `json:"failure_families"`
-	Tools              []string `json:"tools"`
-	Files              []string `json:"files"`
-	HighAuthorityTools []string `json:"high_authority_tools"`
+	DurationSeconds     float64  `json:"duration_seconds"`
+	Cost                float64  `json:"cost"`
+	Tokens              int      `json:"tokens"`
+	FailureFamilies     []string `json:"failure_families"`
+	Tools               []string `json:"tools"`
+	Files               []string `json:"files"`
+	AuthorityCategories []string `json:"authority_categories"`
+	HighAuthorityTools  []string `json:"high_authority_tools"`
 }
 
 type overviewBaselineReport struct {
@@ -51,9 +53,10 @@ type overviewBaselineReport struct {
 	} `json:"summary"`
 	FailureFamilies []string `json:"failure_families"`
 	Surfaces        struct {
-		Tools              []string `json:"tools"`
-		Files              []string `json:"files"`
-		HighAuthorityTools []string `json:"high_authority_tools"`
+		Tools               []string `json:"tools"`
+		Files               []string `json:"files"`
+		AuthorityCategories []string `json:"authority_categories"`
+		HighAuthorityTools  []string `json:"high_authority_tools"`
 	} `json:"surfaces"`
 }
 
@@ -116,34 +119,36 @@ func compareOverviewBaseline(current, baseline overviewBaselineReport, baselineP
 	newTools := setDiff(currentSnapshot.Tools, baselineSnapshot.Tools)
 	newFiles := setDiff(currentSnapshot.Files, baselineSnapshot.Files)
 	return BaselineComparison{
-		BaselinePath:            baselinePath,
-		Thresholds:              thresholds,
-		Current:                 currentSnapshot,
-		Baseline:                baselineSnapshot,
-		DurationDeltaPct:        durationDelta,
-		CostDeltaPct:            costDelta,
-		TokenDeltaPct:           tokenDelta,
-		SlowerThanBaseline:      durationDelta > thresholds.MaxDurationDeltaPct,
-		CostAboveThreshold:      costDelta > thresholds.MaxCostDeltaPct,
-		TokensAboveThreshold:    tokenDelta > thresholds.MaxTokenDeltaPct,
-		NewFailureFamilies:      setDiff(currentSnapshot.FailureFamilies, baselineSnapshot.FailureFamilies),
-		BroaderToolSurface:      len(newTools) > 0,
-		NewTools:                newTools,
-		BroaderFileSurface:      len(newFiles) > 0,
-		NewFiles:                newFiles,
-		NewHighAuthorityToolUse: setDiff(currentSnapshot.HighAuthorityTools, baselineSnapshot.HighAuthorityTools),
+		BaselinePath:               baselinePath,
+		Thresholds:                 thresholds,
+		Current:                    currentSnapshot,
+		Baseline:                   baselineSnapshot,
+		DurationDeltaPct:           durationDelta,
+		CostDeltaPct:               costDelta,
+		TokenDeltaPct:              tokenDelta,
+		SlowerThanBaseline:         durationDelta > thresholds.MaxDurationDeltaPct,
+		CostAboveThreshold:         costDelta > thresholds.MaxCostDeltaPct,
+		TokensAboveThreshold:       tokenDelta > thresholds.MaxTokenDeltaPct,
+		NewFailureFamilies:         setDiff(currentSnapshot.FailureFamilies, baselineSnapshot.FailureFamilies),
+		BroaderToolSurface:         len(newTools) > 0,
+		NewTools:                   newTools,
+		BroaderFileSurface:         len(newFiles) > 0,
+		NewFiles:                   newFiles,
+		NewToolAuthorityCategories: setDiff(currentSnapshot.AuthorityCategories, baselineSnapshot.AuthorityCategories),
+		NewHighAuthorityToolUse:    setDiff(currentSnapshot.HighAuthorityTools, baselineSnapshot.HighAuthorityTools),
 	}
 }
 
 func baselineSnapshotFromReport(report overviewBaselineReport) baselineSnapshot {
 	return baselineSnapshot{
-		DurationSeconds:    round4(report.Summary.TotalDurationSeconds),
-		Cost:               round4(report.Summary.TotalCost),
-		Tokens:             report.Summary.TotalTokens,
-		FailureFamilies:    sortedStringSet(report.FailureFamilies),
-		Tools:              sortedStringSet(report.Surfaces.Tools),
-		Files:              sortedStringSet(report.Surfaces.Files),
-		HighAuthorityTools: sortedStringSet(report.Surfaces.HighAuthorityTools),
+		DurationSeconds:     round4(report.Summary.TotalDurationSeconds),
+		Cost:                round4(report.Summary.TotalCost),
+		Tokens:              report.Summary.TotalTokens,
+		FailureFamilies:     sortedStringSet(report.FailureFamilies),
+		Tools:               sortedStringSet(report.Surfaces.Tools),
+		Files:               sortedStringSet(report.Surfaces.Files),
+		AuthorityCategories: sortedStringSet(report.Surfaces.AuthorityCategories),
+		HighAuthorityTools:  sortedStringSet(report.Surfaces.HighAuthorityTools),
 	}
 }
 
@@ -162,7 +167,7 @@ func setDiff(current, baseline []string) []string {
 	for _, item := range baseline {
 		seen[item] = struct{}{}
 	}
-	var out []string
+	out := make([]string, 0)
 	for _, item := range sortedStringSet(current) {
 		if _, ok := seen[item]; !ok {
 			out = append(out, item)

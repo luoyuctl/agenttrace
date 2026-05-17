@@ -87,34 +87,36 @@ type ToolCall struct {
 // ── Metrics ──
 
 type Metrics struct {
-	EventsTotal     int
-	UserMessages    int
-	AssistantTurns  int
-	ToolResults     int
-	ToolCallsTotal  int
-	ToolCallsOK     int
-	ToolCallsFail   int
-	ToolUsage       map[string]int
-	FileUsage       map[string]int
-	ReasoningBlocks int
-	ReasoningChars  int
-	ReasoningLens   []int
-	ReasoningRedact int
-	TokensInput     int
-	TokensOutput    int
-	TokensCacheW    int
-	TokensCacheR    int
-	Timestamps      []time.Time
-	GapsSec         []float64
-	ModelUsed       string
-	SourceTool      string
-	SessionStart    string
-	SessionEnd      string
-	DurationSec     float64
-	CostEstimated   float64
-	LoopRetryEvents int     `json:"-"`
-	LoopGroups      int     `json:"-"`
-	LoopCostEst     float64 `json:"-"`
+	EventsTotal      int
+	UserMessages     int
+	AssistantTurns   int
+	ToolResults      int
+	ToolCallsTotal   int
+	ToolCallsOK      int
+	ToolCallsFail    int
+	ToolUsage        map[string]int
+	FileUsage        map[string]int
+	ToolAuthority    map[string]int
+	HighestAuthority string
+	ReasoningBlocks  int
+	ReasoningChars   int
+	ReasoningLens    []int
+	ReasoningRedact  int
+	TokensInput      int
+	TokensOutput     int
+	TokensCacheW     int
+	TokensCacheR     int
+	Timestamps       []time.Time
+	GapsSec          []float64
+	ModelUsed        string
+	SourceTool       string
+	SessionStart     string
+	SessionEnd       string
+	DurationSec      float64
+	CostEstimated    float64
+	LoopRetryEvents  int     `json:"-"`
+	LoopGroups       int     `json:"-"`
+	LoopCostEst      float64 `json:"-"`
 }
 
 // ── Anomaly ──
@@ -1881,9 +1883,10 @@ func parseGeneric(raw string) ([]Event, error) {
 
 func Analyze(events []Event, model string) Metrics {
 	m := Metrics{
-		ModelUsed: model,
-		ToolUsage: make(map[string]int),
-		FileUsage: make(map[string]int),
+		ModelUsed:     model,
+		ToolUsage:     make(map[string]int),
+		FileUsage:     make(map[string]int),
+		ToolAuthority: make(map[string]int),
 	}
 
 	pricing := LookupPrice(model)
@@ -1947,6 +1950,9 @@ func Analyze(events []Event, model string) Metrics {
 					name = "unknown"
 				}
 				m.ToolUsage[name]++
+				authority := ClassifyToolAuthority(tc)
+				m.ToolAuthority[authority]++
+				m.HighestAuthority = HigherToolAuthority(m.HighestAuthority, authority)
 				for _, file := range extractToolCallFiles(tc.Args) {
 					m.FileUsage[file]++
 				}

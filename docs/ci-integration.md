@@ -57,8 +57,8 @@ agenttrace --overview -f json \
 
 The JSON report includes `baseline_comparison` with deterministic fields for
 duration, cost, token deltas, new failure families, broader tool/file surfaces,
-and new high-authority tool use. Baseline reports must be local JSON artifacts
-from the same agenttrace version.
+new tool authority categories, and new high-authority tool use. Baseline reports
+must be local JSON artifacts from the same agenttrace version.
 
 ## GitHub Actions
 

@@ -47,6 +47,12 @@ if (!Array.isArray(report.failure_families)) throw new Error("missing failure_fa
 if (!report.surfaces || !Array.isArray(report.surfaces.tools) || !Array.isArray(report.surfaces.high_authority_tools)) {
   throw new Error("missing deterministic comparison surfaces");
 }
+if (!Array.isArray(report.surfaces.authority_categories) || !report.surfaces.authority_categories.includes("test_or_build")) {
+  throw new Error("missing deterministic authority categories");
+}
+if (!report.summary.tool_authority || report.summary.tool_authority.highest !== "test_or_build") {
+  throw new Error("demo should expose test_or_build as highest authority");
+}
 ' "$out_dir/semantics/overview.json" "$version"
 
 "$bin" --demo --overview -f json --baseline "$out_dir/semantics/overview.json" \
@@ -59,7 +65,7 @@ if (!cmp) throw new Error("missing baseline comparison");
 if (cmp.duration_delta_pct !== 0 || cmp.cost_delta_pct !== 0 || cmp.token_delta_pct !== 0) {
   throw new Error("identical baseline should have zero deltas");
 }
-if (!("slower_than_baseline" in cmp) || !("broader_tool_surface" in cmp) || !("new_high_authority_tool_use" in cmp)) {
+if (!("slower_than_baseline" in cmp) || !("broader_tool_surface" in cmp) || !("new_tool_authority_categories" in cmp) || !("new_high_authority_tool_use" in cmp)) {
   throw new Error("baseline comparison missing regression fields");
 }
 ' "$out_dir/semantics/baseline-compare.json"

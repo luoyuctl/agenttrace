@@ -4176,6 +4176,13 @@ func safeReportMetrics(m engine.Metrics) engine.Metrics {
 		}
 		m.ToolUsage = toolUsage
 	}
+	if len(m.ToolAuthority) > 0 {
+		toolAuthority := make(map[string]int, len(m.ToolAuthority))
+		for name, count := range m.ToolAuthority {
+			toolAuthority[name] = nonNegativeInt(count)
+		}
+		m.ToolAuthority = toolAuthority
+	}
 	return m
 }
 

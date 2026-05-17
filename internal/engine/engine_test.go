@@ -1350,6 +1350,40 @@ func TestAnalyze(t *testing.T) {
 	if m.FileUsage["README.md"] != 1 {
 		t.Fatalf("expected file surface from tool args, got %+v", m.FileUsage)
 	}
+	if m.ToolAuthority[ToolAuthorityReadOnlyFiles] != 1 || m.HighestAuthority != ToolAuthorityReadOnlyFiles {
+		t.Fatalf("expected read-only authority, got highest=%q counts=%+v", m.HighestAuthority, m.ToolAuthority)
+	}
+}
+
+func TestClassifyToolAuthority(t *testing.T) {
+	tests := []struct {
+		name string
+		call ToolCall
+		want string
+	}{
+		{name: "read", call: ToolCall{Name: "read_file", Args: `{"path":"README.md"}`}, want: ToolAuthorityReadOnlyFiles},
+		{name: "write", call: ToolCall{Name: "write_file", Args: `{"path":"README.md"}`}, want: ToolAuthorityWriteFiles},
+		{name: "test", call: ToolCall{Name: "terminal", Args: `{"cmd":"go test ./..."}`}, want: ToolAuthorityTestOrBuild},
+		{name: "package", call: ToolCall{Name: "bash", Args: `{"cmd":"npm install"}`}, want: ToolAuthorityPackageInstall},
+		{name: "shell", call: ToolCall{Name: "terminal", Args: `{"cmd":"sed -n '1,20p' main.go"}`}, want: ToolAuthorityShellExec},
+		{name: "git", call: ToolCall{Name: "bash", Args: `{"cmd":"git push origin HEAD"}`}, want: ToolAuthorityGitWrite},
+		{name: "network", call: ToolCall{Name: "bash", Args: `{"cmd":"curl https://example.com"}`}, want: ToolAuthorityNetworkAccess},
+		{name: "publish", call: ToolCall{Name: "bash", Args: `{"cmd":"npm publish"}`}, want: ToolAuthorityExternalPublish},
+		{name: "unknown", call: ToolCall{Name: "mystery", Args: `{"value":"x"}`}, want: ToolAuthorityUnknown},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyToolAuthority(tt.call); got != tt.want {
+				t.Fatalf("ClassifyToolAuthority() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+	if got := HigherToolAuthority(ToolAuthorityShellExec, ToolAuthorityUnknown); got != ToolAuthorityUnknown {
+		t.Fatalf("unknown authority should rank conservatively, got %q", got)
+	}
+	if !IsHighAuthorityCategory(ToolAuthorityWriteFiles) || IsHighAuthorityCategory(ToolAuthorityReadOnlyFiles) {
+		t.Fatalf("unexpected high-authority category boundary")
+	}
 }
 
 func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
@@ -1358,18 +1392,20 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 			Name:   "good",
 			Health: 90,
 			Metrics: Metrics{
-				SourceTool:    "claude_code_jsonl",
-				ModelUsed:     "claude-sonnet-4",
-				TokensInput:   100,
-				TokensOutput:  50,
-				TokensCacheW:  25,
-				TokensCacheR:  50,
-				ToolCallsOK:   9,
-				ToolCallsFail: 1,
-				ToolUsage:     map[string]int{"read_file": 1},
-				FileUsage:     map[string]int{"README.md": 1},
-				CostEstimated: 0.25,
-				DurationSec:   60,
+				SourceTool:       "claude_code_jsonl",
+				ModelUsed:        "claude-sonnet-4",
+				TokensInput:      100,
+				TokensOutput:     50,
+				TokensCacheW:     25,
+				TokensCacheR:     50,
+				ToolCallsOK:      9,
+				ToolCallsFail:    1,
+				ToolUsage:        map[string]int{"read_file": 1},
+				FileUsage:        map[string]int{"README.md": 1},
+				ToolAuthority:    map[string]int{ToolAuthorityReadOnlyFiles: 1},
+				HighestAuthority: ToolAuthorityReadOnlyFiles,
+				CostEstimated:    0.25,
+				DurationSec:      60,
 			},
 		},
 		{
@@ -1377,15 +1413,17 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 			Health:    40,
 			Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
 			Metrics: Metrics{
-				SourceTool:    "codex_cli",
-				ModelUsed:     "gpt-5.1",
-				TokensInput:   200,
-				TokensOutput:  100,
-				ToolCallsFail: 2,
-				ToolUsage:     map[string]int{"bash": 1},
-				FileUsage:     map[string]int{"cmd/agenttrace/main.go": 1},
-				CostEstimated: 0.75,
-				DurationSec:   180,
+				SourceTool:       "codex_cli",
+				ModelUsed:        "gpt-5.1",
+				TokensInput:      200,
+				TokensOutput:     100,
+				ToolCallsFail:    2,
+				ToolUsage:        map[string]int{"bash": 1},
+				FileUsage:        map[string]int{"cmd/agenttrace/main.go": 1},
+				ToolAuthority:    map[string]int{ToolAuthorityShellExec: 1},
+				HighestAuthority: ToolAuthorityShellExec,
+				CostEstimated:    0.75,
+				DurationSec:      180,
 			},
 		},
 	}
@@ -1400,7 +1438,11 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 			TotalTokens    int     `json:"total_tokens"`
 			ToolFailRate   float64 `json:"tool_fail_rate"`
 			AnomaliesTotal int     `json:"anomalies_total"`
-			HealthTrend    struct {
+			ToolAuthority  struct {
+				Highest string         `json:"highest"`
+				Counts  map[string]int `json:"counts"`
+			} `json:"tool_authority"`
+			HealthTrend struct {
 				Direction  string `json:"direction"`
 				Regressing bool   `json:"regressing"`
 				Message    string `json:"message"`
@@ -1412,9 +1454,10 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 		} `json:"summary"`
 		FailureFamilies []string `json:"failure_families"`
 		Surfaces        struct {
-			Tools              []string `json:"tools"`
-			Files              []string `json:"files"`
-			HighAuthorityTools []string `json:"high_authority_tools"`
+			Tools               []string `json:"tools"`
+			Files               []string `json:"files"`
+			AuthorityCategories []string `json:"authority_categories"`
+			HighAuthorityTools  []string `json:"high_authority_tools"`
 		} `json:"surfaces"`
 		ByAgent []struct {
 			Name     string  `json:"name"`
@@ -1425,6 +1468,7 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 			Name      string `json:"name"`
 			Health    int    `json:"health"`
 			Anomalies int    `json:"anomalies"`
+			Authority string `json:"highest_tool_authority"`
 		} `json:"recent_sessions"`
 		Anomalies []AnomalyTop `json:"anomalies"`
 	}
@@ -1446,8 +1490,18 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	if !containsString(payload.FailureFamilies, "hanging") ||
 		!containsString(payload.Surfaces.Tools, "bash") ||
 		!containsString(payload.Surfaces.Files, "README.md") ||
+		!containsString(payload.Surfaces.AuthorityCategories, ToolAuthorityReadOnlyFiles) ||
+		!containsString(payload.Surfaces.AuthorityCategories, ToolAuthorityShellExec) ||
 		!containsString(payload.Surfaces.HighAuthorityTools, "bash") {
 		t.Fatalf("missing deterministic comparison surfaces: families=%v surfaces=%+v", payload.FailureFamilies, payload.Surfaces)
+	}
+	if payload.Summary.ToolAuthority.Highest != ToolAuthorityShellExec || payload.Summary.ToolAuthority.Counts[ToolAuthorityReadOnlyFiles] != 1 {
+		t.Fatalf("missing tool authority summary: %+v", payload.Summary.ToolAuthority)
+	}
+	for _, recent := range payload.RecentSessions {
+		if recent.Authority == "" {
+			t.Fatalf("recent session missing highest authority: %+v", payload.RecentSessions)
+		}
 	}
 	if len(payload.ByAgent) != 2 || len(payload.RecentSessions) != 2 || len(payload.Anomalies) != 1 {
 		t.Fatalf("missing overview sections: agents=%d recent=%d anomalies=%d",
@@ -1461,12 +1515,14 @@ func TestAddBaselineComparisonFlagsDeterministicRegressions(t *testing.T) {
 		Health:    90,
 		Anomalies: []Anomaly{{Type: "tool_failures"}},
 		Metrics: Metrics{
-			TokensInput:   100,
-			ToolCallsOK:   1,
-			ToolUsage:     map[string]int{"read_file": 1},
-			FileUsage:     map[string]int{"README.md": 1},
-			CostEstimated: 0.10,
-			DurationSec:   100,
+			TokensInput:      100,
+			ToolCallsOK:      1,
+			ToolUsage:        map[string]int{"read_file": 1},
+			FileUsage:        map[string]int{"README.md": 1},
+			ToolAuthority:    map[string]int{ToolAuthorityReadOnlyFiles: 1},
+			HighestAuthority: ToolAuthorityReadOnlyFiles,
+			CostEstimated:    0.10,
+			DurationSec:      100,
 		},
 	}}
 	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
@@ -1479,12 +1535,14 @@ func TestAddBaselineComparisonFlagsDeterministicRegressions(t *testing.T) {
 		Health:    40,
 		Anomalies: []Anomaly{{Type: "hanging"}, {Type: "tool_failures"}},
 		Metrics: Metrics{
-			TokensInput:   150,
-			ToolCallsOK:   1,
-			ToolUsage:     map[string]int{"bash": 1, "read_file": 1},
-			FileUsage:     map[string]int{"README.md": 1, "cmd/agenttrace/main.go": 1},
-			CostEstimated: 0.13,
-			DurationSec:   120,
+			TokensInput:      150,
+			ToolCallsOK:      1,
+			ToolUsage:        map[string]int{"bash": 1, "read_file": 1},
+			FileUsage:        map[string]int{"README.md": 1, "cmd/agenttrace/main.go": 1},
+			ToolAuthority:    map[string]int{ToolAuthorityShellExec: 1, ToolAuthorityReadOnlyFiles: 1},
+			HighestAuthority: ToolAuthorityShellExec,
+			CostEstimated:    0.13,
+			DurationSec:      120,
 		},
 	}}
 	out, err := AddBaselineComparison(
@@ -1514,6 +1572,7 @@ func TestAddBaselineComparisonFlagsDeterministicRegressions(t *testing.T) {
 		!containsString(cmp.NewTools, "bash") ||
 		!cmp.BroaderFileSurface ||
 		!containsString(cmp.NewFiles, "cmd/agenttrace/main.go") ||
+		!containsString(cmp.NewToolAuthorityCategories, ToolAuthorityShellExec) ||
 		!containsString(cmp.NewHighAuthorityToolUse, "bash") {
 		t.Fatalf("missing comparison surface regressions: %+v", cmp)
 	}

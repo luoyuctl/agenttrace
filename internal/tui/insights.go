@@ -34,6 +34,9 @@ func buildSessionInsight(s engine.Session, fixes []engine.FixSuggestion, alert e
 		Confidence: i18n.T("insight_medium"),
 		Color:      lipgloss.Color("42"),
 	}
+	if authority := met.HighestAuthority; authority != "" {
+		ins.Evidence += fmt.Sprintf(i18n.T("insight_authority_suffix"), authority)
+	}
 
 	if len(s.Anomalies) > 0 {
 		a := s.Anomalies[0]
