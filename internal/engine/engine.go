@@ -95,6 +95,7 @@ type Metrics struct {
 	ToolCallsOK     int
 	ToolCallsFail   int
 	ToolUsage       map[string]int
+	FileUsage       map[string]int
 	ReasoningBlocks int
 	ReasoningChars  int
 	ReasoningLens   []int
@@ -1882,6 +1883,7 @@ func Analyze(events []Event, model string) Metrics {
 	m := Metrics{
 		ModelUsed: model,
 		ToolUsage: make(map[string]int),
+		FileUsage: make(map[string]int),
 	}
 
 	pricing := LookupPrice(model)
@@ -1945,6 +1947,9 @@ func Analyze(events []Event, model string) Metrics {
 					name = "unknown"
 				}
 				m.ToolUsage[name]++
+				for _, file := range extractToolCallFiles(tc.Args) {
+					m.FileUsage[file]++
+				}
 			}
 
 		case "tool":
@@ -2002,6 +2007,64 @@ func Analyze(events []Event, model string) Metrics {
 	)
 
 	return m
+}
+
+func extractToolCallFiles(args string) []string {
+	if strings.TrimSpace(args) == "" {
+		return nil
+	}
+	var raw interface{}
+	if err := json.Unmarshal([]byte(args), &raw); err != nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	collectToolCallFiles(raw, "", seen)
+	files := make([]string, 0, len(seen))
+	for file := range seen {
+		files = append(files, file)
+	}
+	sort.Strings(files)
+	return files
+}
+
+func collectToolCallFiles(raw interface{}, key string, seen map[string]struct{}) {
+	switch v := raw.(type) {
+	case map[string]interface{}:
+		for k, child := range v {
+			collectToolCallFiles(child, strings.ToLower(k), seen)
+		}
+	case []interface{}:
+		for _, child := range v {
+			collectToolCallFiles(child, key, seen)
+		}
+	case string:
+		if !isFileSurfaceKey(key) {
+			return
+		}
+		file := normalizeToolCallFile(v)
+		if file != "" {
+			seen[file] = struct{}{}
+		}
+	}
+}
+
+func isFileSurfaceKey(key string) bool {
+	key = strings.ReplaceAll(strings.ToLower(key), "-", "_")
+	switch key {
+	case "path", "file", "files", "filename", "file_name", "filepath", "file_path", "target", "target_file", "uri":
+		return true
+	default:
+		return strings.Contains(key, "file") || strings.Contains(key, "path")
+	}
+}
+
+func normalizeToolCallFile(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.Contains(value, "\n") || strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		return ""
+	}
+	value = strings.TrimPrefix(value, "file://")
+	return filepath.ToSlash(filepath.Clean(value))
 }
 
 // ═══════════════════════════════════════════════════════════════

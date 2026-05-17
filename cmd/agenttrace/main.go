@@ -35,6 +35,10 @@ func main() {
 	failUnderHealth := flag.Int("fail-under-health", 0, "Exit non-zero when overview average health is below this score")
 	failOnCritical := flag.Bool("fail-on-critical", false, "Exit non-zero when overview contains critical sessions")
 	maxToolFailRate := flag.Float64("max-tool-fail-rate", -1, "Exit non-zero when overview tool failure rate exceeds this percent")
+	baseline := flag.String("baseline", "", "Compare --overview -f json against a local baseline JSON report")
+	baselineMaxDurationDeltaPct := flag.Float64("baseline-max-duration-delta-pct", 0, "Allowed overview duration increase percent versus --baseline")
+	baselineMaxCostDeltaPct := flag.Float64("baseline-max-cost-delta-pct", 0, "Allowed overview cost increase percent versus --baseline")
+	baselineMaxTokenDeltaPct := flag.Float64("baseline-max-token-delta-pct", 0, "Allowed overview token increase percent versus --baseline")
 	lang := flag.String("lang", "en", "Language for report output: en, zh")
 	flag.Parse()
 
@@ -127,7 +131,7 @@ func main() {
 		return
 	}
 
-	hasAction := path != "" || *latest || *compare || *overview || *wasteFlag
+	hasAction := path != "" || *latest || *compare || *overview || *wasteFlag || *baseline != ""
 
 	if !hasAction {
 		// Launch TUI
@@ -138,6 +142,10 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+	if *baseline != "" && !*overview {
+		fmt.Fprintln(os.Stderr, "--baseline requires --overview -f json")
+		os.Exit(1)
 	}
 
 	// Overview mode
@@ -161,9 +169,25 @@ func main() {
 		}
 		ov := engine.ComputeOverview(sessions)
 		out := engine.ReportOverview(ov, sessions)
+		if *baseline != "" && strings.ToLower(*format) != "json" {
+			fmt.Fprintln(os.Stderr, "--baseline requires --overview -f json")
+			os.Exit(1)
+		}
 		switch *format {
 		case "json":
 			out = engine.ReportOverviewJSON(ov, sessions)
+			if *baseline != "" {
+				var baselineErr error
+				out, baselineErr = engine.AddBaselineComparison(out, *baseline, engine.BaselineThresholds{
+					MaxDurationDeltaPct: *baselineMaxDurationDeltaPct,
+					MaxCostDeltaPct:     *baselineMaxCostDeltaPct,
+					MaxTokenDeltaPct:    *baselineMaxTokenDeltaPct,
+				})
+				if baselineErr != nil {
+					fmt.Fprintf(os.Stderr, i18n.T("cli_error"), baselineErr)
+					os.Exit(1)
+				}
+			}
 		case "markdown", "md":
 			out = engine.ReportOverviewMarkdown(ov, sessions)
 		case "html":

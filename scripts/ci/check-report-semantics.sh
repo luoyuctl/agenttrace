@@ -40,6 +40,26 @@ const version = process.argv[2];
 const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
 if (report.version !== version) throw new Error(`json version ${report.version} != ${version}`);
 if (!report.summary || typeof report.summary.total_cost !== "number") throw new Error("missing total_cost");
+if (typeof report.summary.total_duration_seconds !== "number") throw new Error("missing total_duration_seconds");
 if (report.summary.total_sessions !== 3) throw new Error("demo summary should contain 3 sessions");
 if (!Array.isArray(report.recent_sessions) || report.recent_sessions.length !== 3) throw new Error("demo should contain 3 recent sessions");
+if (!Array.isArray(report.failure_families)) throw new Error("missing failure_families");
+if (!report.surfaces || !Array.isArray(report.surfaces.tools) || !Array.isArray(report.surfaces.high_authority_tools)) {
+  throw new Error("missing deterministic comparison surfaces");
+}
 ' "$out_dir/semantics/overview.json" "$version"
+
+"$bin" --demo --overview -f json --baseline "$out_dir/semantics/overview.json" \
+  >"$out_dir/semantics/baseline-compare.json"
+node -e '
+const fs = require("fs");
+const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const cmp = report.baseline_comparison;
+if (!cmp) throw new Error("missing baseline comparison");
+if (cmp.duration_delta_pct !== 0 || cmp.cost_delta_pct !== 0 || cmp.token_delta_pct !== 0) {
+  throw new Error("identical baseline should have zero deltas");
+}
+if (!("slower_than_baseline" in cmp) || !("broader_tool_surface" in cmp) || !("new_high_authority_tool_use" in cmp)) {
+  throw new Error("baseline comparison missing regression fields");
+}
+' "$out_dir/semantics/baseline-compare.json"

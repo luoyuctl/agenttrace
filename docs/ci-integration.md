@@ -43,6 +43,23 @@ agenttrace --overview -f json \
   -o agenttrace-overview.json
 ```
 
+To compare a current run with a local CI baseline artifact, keep a previous
+`--overview -f json` report and pass it back with explicit delta thresholds:
+
+```bash
+agenttrace --overview -f json \
+  --baseline agenttrace-baseline.json \
+  --baseline-max-duration-delta-pct 10 \
+  --baseline-max-cost-delta-pct 15 \
+  --baseline-max-token-delta-pct 20 \
+  -o agenttrace-overview.json
+```
+
+The JSON report includes `baseline_comparison` with deterministic fields for
+duration, cost, token deltas, new failure families, broader tool/file surfaces,
+and new high-authority tool use. Baseline reports must be local JSON artifacts
+from the same agenttrace version.
+
 ## GitHub Actions
 
 ```yaml
@@ -68,6 +85,15 @@ jobs:
             --fail-under-health 80 \
             --fail-on-critical \
             --max-tool-fail-rate 15 \
+            -o agenttrace-overview.json
+      - name: Compare against local baseline
+        if: hashFiles('agenttrace-baseline.json') != ''
+        run: |
+          agenttrace --overview -f json \
+            --baseline agenttrace-baseline.json \
+            --baseline-max-duration-delta-pct 10 \
+            --baseline-max-cost-delta-pct 15 \
+            --baseline-max-token-delta-pct 20 \
             -o agenttrace-overview.json
       - name: Write Markdown summary
         if: always()
@@ -104,6 +130,7 @@ scripts/ci/check-pages-artifact.sh site
 These checks cover:
 
 - demo JSON, Markdown, HTML, and doctor smoke output
+- local baseline comparison JSON contract and deterministic fields
 - `-o` stdout/stderr behavior and failing gate exit code `2`
 - repeated demo latest/overview JSON determinism
 - report cost-label and version metadata consistency
