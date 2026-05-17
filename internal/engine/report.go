@@ -1107,6 +1107,8 @@ func LoopCostSection(lc LoopCost) string {
 
 // ReportOverview generates the CLI overview dashboard text.
 func ReportOverview(ov Overview, sessions []Session) string {
+	orderedSessions := canonicalOverviewSessions(sessions)
+	authority := overviewAuthoritySummary(orderedSessions)
 	sep := strings.Repeat(i18n.T("separator_double"), 70)
 	var b strings.Builder
 	w := func(s string) { b.WriteString(s + "\n") }
@@ -1130,6 +1132,39 @@ func ReportOverview(ov Overview, sessions []Session) string {
 	wf("  🔴 "+i18n.T("overview_critical")+":   %d (%d%%)", ov.Critical, critPct)
 	wf("  💰 "+i18n.T("total_cost")+":      $%.2f", ov.TotalCost)
 	w("")
+
+	timelines := overviewIncidentTimelines(orderedSessions, 3)
+	if len(timelines) > 0 {
+		w("  ── " + i18n.T("incident_timeline_title") + " ──")
+		rendered := 0
+		for _, timeline := range timelines {
+			for _, item := range timeline.Items {
+				wf("    %-30s %s: %s", textCell(timeline.Session, 30), item.Label, textCell(item.Detail, 68))
+				rendered++
+				if rendered >= 5 {
+					break
+				}
+			}
+			if rendered >= 5 {
+				break
+			}
+		}
+		w("")
+	}
+
+	if authority.HasData {
+		w("  ── " + i18n.T("report_tool_authority") + " ──")
+		if authority.Highest != "" {
+			wf("    %s: %s", i18n.T("report_highest_authority"), authority.Highest)
+		}
+		if len(authority.Counts) > 0 {
+			wf("    %s: %s", i18n.T("report_authority_category_counts"), textAuthorityCounts(authority.Counts))
+		}
+		if len(authority.HighTools) > 0 {
+			wf("    %s: %s", i18n.T("report_high_authority_tools"), textCell(strings.Join(authority.HighTools, ", "), 68))
+		}
+		w("")
+	}
 
 	// By agent
 	w("  ── " + i18n.T("overview_agents") + " ──")
@@ -1191,4 +1226,20 @@ func ReportOverview(ov Overview, sessions []Session) string {
 	w("")
 	w(sep)
 	return b.String()
+}
+
+func textAuthorityCounts(items []authorityCount) string {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		parts = append(parts, fmt.Sprintf("%s=%d", item.Category, item.Count))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func textCell(value string, limit int) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if limit > 3 && len(value) > limit {
+		return value[:limit-3] + "..."
+	}
+	return value
 }

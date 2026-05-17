@@ -25,6 +25,12 @@ grep -q "AGENTTRACE v$version" "$out_dir/semantics/overview.txt" \
   || fail "text overview missing current version"
 grep -q "$expected_cost_label" "$out_dir/semantics/overview.txt" \
   || fail "text overview missing expected cost label"
+grep -q "Incident timeline" "$out_dir/semantics/overview.txt" \
+  || fail "text overview missing incident timeline evidence"
+grep -q "Tool authority" "$out_dir/semantics/overview.txt" \
+  || fail "text overview missing tool authority summary"
+grep -q "test_or_build" "$out_dir/semantics/overview.txt" \
+  || fail "text overview missing highest demo authority category"
 grep -q "| $expected_cost_label |" "$out_dir/semantics/overview.md" \
   || fail "markdown overview missing expected cost label"
 grep -q "## Tool authority" "$out_dir/semantics/overview.md" \

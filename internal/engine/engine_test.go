@@ -1859,6 +1859,39 @@ func TestReportOverviewJSONIncludesIncidentTimelines(t *testing.T) {
 	}
 }
 
+func TestReportOverviewTextShowsIncidentAndAuthorityCues(t *testing.T) {
+	sessions := []Session{{
+		Name:   "risky",
+		Health: 45,
+		Metrics: Metrics{
+			SourceTool:       "codex_cli",
+			ModelUsed:        "gpt-5.1",
+			AssistantTurns:   3,
+			DurationSec:      180,
+			GapsSec:          []float64{90},
+			ToolCallsOK:      1,
+			ToolCallsFail:    2,
+			ToolUsage:        map[string]int{"terminal": 3},
+			ToolAuthority:    map[string]int{ToolAuthorityTestOrBuild: 1},
+			HighestAuthority: ToolAuthorityTestOrBuild,
+		},
+	}}
+	out := ReportOverview(ComputeOverview(sessions), sessions)
+	for _, want := range []string{
+		"Incident timeline",
+		"Last milestone",
+		"Touched surface",
+		"Tool authority",
+		"Highest category: test_or_build",
+		"Authority category counts: test_or_build=1",
+		"High-authority tools: terminal",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("text overview missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestReportOverviewCostLabelUsesEstimatedTotalCost(t *testing.T) {
 	sessions := []Session{{
 		Name:   "demo",
