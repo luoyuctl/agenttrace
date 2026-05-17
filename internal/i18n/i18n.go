@@ -471,6 +471,26 @@ var translations = map[string]map[Lang]string{
 		EN: "Recent anomalies",
 		ZH: "近期异常",
 	},
+	"incident_timeline_title": {
+		EN: "Incident timeline",
+		ZH: "事件时间线",
+	},
+	"incident_timeline_no_evidence": {
+		EN: "No incident timeline evidence yet.",
+		ZH: "暂无事件时间线证据。",
+	},
+	"incident_timeline_signal": {
+		EN: "Signal",
+		ZH: "信号",
+	},
+	"incident_timeline_evidence": {
+		EN: "Evidence",
+		ZH: "证据",
+	},
+	"incident_timeline_severity": {
+		EN: "Severity",
+		ZH: "严重度",
+	},
 	"report_agent": {
 		EN: "Agent",
 		ZH: "Agent",
@@ -963,6 +983,40 @@ var translations = map[string]map[Lang]string{
 	"detail_metric_title":     {EN: "Key metrics", ZH: "关键指标"},
 	"detail_raw_report_title": {EN: "Raw performance report", ZH: "原始性能报告"},
 	"detail_tools_metric":     {EN: "%d/%d ok / %d fail", ZH: "%d/%d 成功 / %d 失败"},
+	"unknown_tool":            {EN: "unknown tool", ZH: "未知工具"},
+	"incident_milestone":      {EN: "Last milestone", ZH: "最后里程碑"},
+	"incident_milestone_detail": {
+		EN: "%d assistant turn(s) completed over %s",
+		ZH: "%d 轮助手输出，持续 %s",
+	},
+	"incident_idle_gap": {EN: "Longest idle gap", ZH: "最长空闲间隔"},
+	"incident_idle_gap_detail": {
+		EN: "%.1fs gap between recorded events",
+		ZH: "记录事件之间间隔 %.1fs",
+	},
+	"incident_failure_loop": {EN: "Failure loop", ZH: "失败循环"},
+	"incident_failure_loop_detail": {
+		EN: "%s repeated the same result %d time(s)",
+		ZH: "%s 重复相同结果 %d 次",
+	},
+	"incident_failure_rate_detail": {
+		EN: "%d failed tool result(s) out of %d (%.1f%%)",
+		ZH: "%d/%d 次工具结果失败 (%.1f%%)",
+	},
+	"incident_touched_surface": {EN: "Touched surface", ZH: "触达面"},
+	"incident_touched_surface_detail": {
+		EN: "%d unique tool(s), %d total calls; top tool %s x%d",
+		ZH: "%d 个不同工具，%d 次调用；最高频 %s x%d",
+	},
+	"incident_burn_divergence": {EN: "Burn divergence", ZH: "消耗偏离"},
+	"incident_burn_loop_detail": {
+		EN: "$%.4f loop cost inside $%.4f total",
+		ZH: "循环成本 $%.4f，总成本 $%.4f",
+	},
+	"incident_burn_tokens_detail": {
+		EN: "%d tokens per assistant turn across %d turn(s)",
+		ZH: "%d tokens/助手轮，共 %d 轮",
+	},
 	"diag_for":                {EN: "Diagnostics for: %s", ZH: "诊断对象: %s"},
 	"diag_simple_loop":        {EN: "⚠ Simple loop detected (cost $%.4f) — see Detail view", ZH: "⚠ 检测到简单循环 (成本 $%.4f) — 查看详情视图"},
 	"diag_score":              {EN: "Diagnostic score %d/100", ZH: "诊断评分 %d/100"},

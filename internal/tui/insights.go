@@ -88,6 +88,40 @@ func (m Model) renderDiagnosticSummary() string {
 	return styleForOuterWidth(style, cardW).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
+func (m Model) renderIncidentTimeline(s engine.Session) string {
+	timeline := engine.BuildIncidentTimeline(s)
+	if len(timeline.Items) == 0 {
+		return ""
+	}
+	cardW := minInt(maxInt(20, m.detailViewportWidth()), 140)
+	bodyW := maxInt(8, cardW-4)
+	lines := []string{boldStyle.Render(i18n.T("incident_timeline_title"))}
+	for _, item := range timeline.Items {
+		color := incidentTimelineColor(item.Severity)
+		line := fmt.Sprintf("%s %s — %s",
+			lipgloss.NewStyle().Foreground(color).Render("•"),
+			lipgloss.NewStyle().Foreground(color).Render(item.Label),
+			item.Detail)
+		lines = append(lines, truncate(line, bodyW))
+	}
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("39")).
+		Padding(0, 1)
+	return styleForOuterWidth(style, cardW).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
+func incidentTimelineColor(severity string) lipgloss.Color {
+	switch severity {
+	case engine.SeverityHigh:
+		return lipgloss.Color("196")
+	case engine.SeverityMedium:
+		return lipgloss.Color("220")
+	default:
+		return lipgloss.Color("42")
+	}
+}
+
 func buildDiffInsight(dr engine.SessionDiff) (winner string, explanation string) {
 	scoreA, scoreB := 0, 0
 	var drivers []string

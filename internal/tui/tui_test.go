@@ -2025,6 +2025,8 @@ func TestDetailViewportPrioritizesDiagnosisBeforeRawReport(t *testing.T) {
 		i18n.T("duration_col"),
 		i18n.T("tools"),
 		i18n.T("diff_field_anomalies"),
+		i18n.T("incident_timeline_title"),
+		i18n.T("incident_failure_loop"),
 		i18n.T("detail_raw_report_title"),
 	} {
 		if !strings.Contains(content, want) {
@@ -2033,9 +2035,10 @@ func TestDetailViewportPrioritizesDiagnosisBeforeRawReport(t *testing.T) {
 	}
 
 	metricsIdx := strings.Index(content, i18n.T("detail_metric_title"))
+	timelineIdx := strings.Index(content, i18n.T("incident_timeline_title"))
 	rawIdx := strings.Index(content, i18n.T("detail_raw_report_title"))
-	if metricsIdx < 0 || rawIdx < 0 || rawIdx <= metricsIdx {
-		t.Fatalf("raw report should sit below diagnosis-first metrics, metrics=%d raw=%d:\n%s", metricsIdx, rawIdx, content)
+	if metricsIdx < 0 || timelineIdx < 0 || rawIdx < 0 || timelineIdx <= metricsIdx || rawIdx <= timelineIdx {
+		t.Fatalf("raw report should sit below metrics and incident timeline, metrics=%d timeline=%d raw=%d:\n%s", metricsIdx, timelineIdx, rawIdx, content)
 	}
 }
 

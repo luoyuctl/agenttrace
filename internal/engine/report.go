@@ -447,6 +447,7 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	for _, p := range trend.Points {
 		points = append(points, trendPoint{Name: p.Name, Health: p.Health, Cost: round4(p.Cost)})
 	}
+	incidentTimelines := overviewIncidentTimelines(orderedSessions, 10)
 
 	payload := map[string]interface{}{
 		"version": Version,
@@ -472,10 +473,11 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 				"points":     points,
 			},
 		},
-		"by_agent":        agents,
-		"by_model":        models,
-		"recent_sessions": recent,
-		"anomalies":       anomaliesReturned,
+		"by_agent":           agents,
+		"by_model":           models,
+		"recent_sessions":    recent,
+		"incident_timelines": incidentTimelines,
+		"anomalies":          anomaliesReturned,
 	}
 	out, _ := json.MarshalIndent(payload, "", "  ")
 	return string(out)
@@ -497,6 +499,25 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 	fmt.Fprintf(&b, "| %s | $%.2f |\n", i18n.T("total_cost"), ov.TotalCost)
 	fmt.Fprintf(&b, "| %s | %d |\n", i18n.T("report_total_tokens"), summary.TotalTokens)
 	fmt.Fprintf(&b, "| %s | %d / %d (%.1f%%) |\n\n", i18n.T("report_tool_failures"), summary.FailedTools, summary.TotalTools, summary.ToolFailRate)
+
+	fmt.Fprintf(&b, "## %s\n\n", i18n.T("incident_timeline_title"))
+	timelines := overviewIncidentTimelines(orderedSessions, 6)
+	if len(timelines) == 0 {
+		fmt.Fprintf(&b, "%s\n\n", i18n.T("incident_timeline_no_evidence"))
+	} else {
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n|---|---|---|---|\n",
+			i18n.T("report_session"), i18n.T("incident_timeline_signal"), i18n.T("incident_timeline_evidence"), i18n.T("incident_timeline_severity"))
+		for _, timeline := range timelines {
+			for _, item := range timeline.Items {
+				fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+					markdownCell(timeline.Session),
+					markdownCell(item.Label),
+					markdownCell(item.Detail),
+					markdownCell(reportSeverityLabel(item.Severity)))
+			}
+		}
+		fmt.Fprintln(&b)
+	}
 
 	fmt.Fprintf(&b, "## %s\n\n", i18n.T("report_by_agent"))
 	fmt.Fprintf(&b, "| %s | %s | %s |\n|---|---:|---:|\n", i18n.T("report_agent"), i18n.T("report_sessions"), i18n.T("report_cost"))
@@ -606,6 +627,26 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 	if len(orderedSessions) > 1 {
 		w(fmt.Sprintf(`<section><h2>%s</h2><p>%s</p></section>`, html.EscapeString(i18n.T("trend_title")), html.EscapeString(trend.Message)))
 	}
+
+	w(fmt.Sprintf(`<section><h2>%s</h2>`, html.EscapeString(i18n.T("incident_timeline_title"))))
+	timelines := overviewIncidentTimelines(orderedSessions, 8)
+	if len(timelines) == 0 {
+		w(fmt.Sprintf(`<p>%s</p>`, html.EscapeString(i18n.T("incident_timeline_no_evidence"))))
+	} else {
+		w(fmt.Sprintf(`<table><thead><tr><th>%s</th><th>%s</th><th>%s</th><th>%s</th></tr></thead><tbody>`,
+			html.EscapeString(i18n.T("report_session")), html.EscapeString(i18n.T("incident_timeline_signal")), html.EscapeString(i18n.T("incident_timeline_evidence")), html.EscapeString(i18n.T("incident_timeline_severity"))))
+		for _, timeline := range timelines {
+			for _, item := range timeline.Items {
+				w(fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`,
+					html.EscapeString(timeline.Session),
+					html.EscapeString(item.Label),
+					html.EscapeString(item.Detail),
+					html.EscapeString(reportSeverityLabel(item.Severity))))
+			}
+		}
+		w(`</tbody></table>`)
+	}
+	w(`</section>`)
 
 	w(fmt.Sprintf(`<section><h2>%s</h2><table><thead><tr><th>%s</th><th>%s</th><th>%s</th><th class="num">%s</th><th class="num">%s</th><th class="num">%s</th><th class="num">%s</th></tr></thead><tbody>`,
 		html.EscapeString(i18n.T("report_recent_sessions")), html.EscapeString(i18n.T("report_session")), html.EscapeString(i18n.T("report_source")), html.EscapeString(i18n.T("report_model")), html.EscapeString(i18n.T("report_total_tokens")), html.EscapeString(i18n.T("report_cost")), html.EscapeString(i18n.T("report_health")), html.EscapeString(i18n.T("report_anomalies"))))
@@ -820,6 +861,27 @@ func markdownCell(value string) string {
 	value = strings.ReplaceAll(value, "|", "\\|")
 	value = strings.ReplaceAll(value, "\n", "<br>")
 	return value
+}
+
+func overviewIncidentTimelines(sessions []Session, limit int) []IncidentTimelineSummary {
+	if limit <= 0 {
+		return []IncidentTimelineSummary{}
+	}
+	items := make([]IncidentTimelineSummary, 0, minReportInt(len(sessions), limit))
+	for _, s := range sessions {
+		timeline := BuildIncidentTimeline(s)
+		if len(timeline.Items) == 0 {
+			continue
+		}
+		items = append(items, timeline)
+		if len(items) >= limit {
+			break
+		}
+	}
+	if items == nil {
+		return []IncidentTimelineSummary{}
+	}
+	return items
 }
 
 // LoopCostSection generates the loop cost breakdown section for text reports.

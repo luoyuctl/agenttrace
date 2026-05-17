@@ -892,6 +892,9 @@ func (m Model) renderDetailViewportContent(s engine.Session) string {
 		"",
 		m.renderDetailMetricChips(s),
 	}
+	if timelineSection := m.renderIncidentTimeline(s); timelineSection != "" {
+		sections = append(sections, "", timelineSection)
+	}
 	if loopSection := m.renderLoopAnalysis(); loopSection != "" {
 		sections = append(sections, "", loopSection)
 	}

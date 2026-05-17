@@ -1587,15 +1587,18 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 			Name:   "good|session",
 			Health: 92,
 			Metrics: Metrics{
-				SourceTool:    "aider",
-				ModelUsed:     "gpt-4.1",
-				TokensInput:   1000,
-				TokensOutput:  500,
-				TokensCacheW:  25,
-				TokensCacheR:  50,
-				ToolCallsOK:   4,
-				ToolCallsFail: 1,
-				CostEstimated: 0.12,
+				SourceTool:     "aider",
+				ModelUsed:      "gpt-4.1",
+				TokensInput:    1000,
+				TokensOutput:   500,
+				TokensCacheW:   25,
+				TokensCacheR:   50,
+				ToolCallsOK:    4,
+				ToolCallsFail:  1,
+				ToolUsage:      map[string]int{"read_file": 5},
+				AssistantTurns: 2,
+				DurationSec:    45,
+				CostEstimated:  0.12,
 			},
 		},
 		{
@@ -1603,12 +1606,14 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 			Health:    30,
 			Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
 			Metrics: Metrics{
-				SourceTool:    "cursor",
-				ModelUsed:     "default",
-				TokensInput:   300,
-				TokensOutput:  200,
-				ToolCallsFail: 5,
-				CostEstimated: 0.34,
+				SourceTool:     "cursor",
+				ModelUsed:      "default",
+				TokensInput:    300,
+				TokensOutput:   200,
+				ToolCallsFail:  5,
+				AssistantTurns: 1,
+				DurationSec:    90,
+				CostEstimated:  0.34,
 			},
 		},
 	}
@@ -1619,6 +1624,9 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 		"| Total tokens | 2075 |",
 		"| Health Trend |",
 		"| Tool failures | 6 / 10 (60.0%) |",
+		"## Incident timeline",
+		"Last milestone",
+		"Touched surface",
 		"| Aider | 1 |",
 		"| Cursor | 1 |",
 		"good\\|session",
@@ -1627,6 +1635,67 @@ func TestReportOverviewMarkdownIncludesCISummary(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("markdown report missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestBuildIncidentTimelineKeepsEvidenceCompact(t *testing.T) {
+	got := BuildIncidentTimeline(Session{
+		Name: "incident",
+		Metrics: Metrics{
+			AssistantTurns: 4,
+			DurationSec:    125,
+			GapsSec:        []float64{2, 75},
+			ToolCallsOK:    3,
+			ToolCallsFail:  2,
+			ToolUsage:      map[string]int{"read_file": 2, "shell\nsecret args": 3},
+			TokensInput:    42000,
+			TokensOutput:   9000,
+			CostEstimated:  0.80,
+		},
+		LoopFingerprints: []LoopFingerprint{{ToolName: "shell\nsecret args", Count: 3, Severity: "critical"}},
+		LoopCost:         LoopCost{TotalLoopCost: 0.30},
+	})
+	if len(got.Items) < 5 {
+		t.Fatalf("expected compact incident evidence, got %+v", got.Items)
+	}
+	kinds := map[string]bool{}
+	for _, item := range got.Items {
+		kinds[item.Kind] = true
+		if strings.Contains(item.Detail, "\n") {
+			t.Fatalf("timeline detail should stay one-line and redacted enough for reports: %+v", item)
+		}
+		if strings.Contains(item.Detail, "secret") {
+			t.Fatalf("timeline detail should not expose whitespace-suffixed tool text: %+v", item)
+		}
+	}
+	for _, want := range []string{"milestone", "idle_gap", "failure_loop", "touched_surface", "burn_divergence"} {
+		if !kinds[want] {
+			t.Fatalf("missing incident timeline kind %q in %+v", want, got.Items)
+		}
+	}
+}
+
+func TestReportOverviewJSONIncludesIncidentTimelines(t *testing.T) {
+	sessions := []Session{{
+		Name:   "slow",
+		Health: 45,
+		Metrics: Metrics{
+			AssistantTurns: 3,
+			DurationSec:    180,
+			GapsSec:        []float64{90},
+			ToolCallsOK:    1,
+			ToolCallsFail:  2,
+			ToolUsage:      map[string]int{"shell": 3},
+		},
+	}}
+	var payload struct {
+		IncidentTimelines []IncidentTimelineSummary `json:"incident_timelines"`
+	}
+	if err := json.Unmarshal([]byte(ReportOverviewJSON(ComputeOverview(sessions), sessions)), &payload); err != nil {
+		t.Fatalf("parse overview json: %v", err)
+	}
+	if len(payload.IncidentTimelines) != 1 || len(payload.IncidentTimelines[0].Items) == 0 {
+		t.Fatalf("expected incident timeline JSON evidence, got %+v", payload.IncidentTimelines)
 	}
 }
 
