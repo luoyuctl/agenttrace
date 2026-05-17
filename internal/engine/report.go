@@ -6,6 +6,7 @@ import (
 	"html"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
@@ -1216,11 +1217,7 @@ func ReportOverview(ov Overview, sessions []Session) string {
 		}
 		for i := 0; i < limit; i++ {
 			a := ov.AnomaliesTop[i]
-			name := a.Session
-			if len(name) > 30 {
-				name = name[:30]
-			}
-			wf("    ⚠️  %-30s %s", name, reportAnomalyTypeLabel(a.Type))
+			wf("    ⚠️  %-30s %s", textCell(a.Session, 30), reportAnomalyTypeLabel(a.Type))
 		}
 	}
 	w("")
@@ -1238,8 +1235,25 @@ func textAuthorityCounts(items []authorityCount) string {
 
 func textCell(value string, limit int) string {
 	value = strings.Join(strings.Fields(value), " ")
-	if limit > 3 && len(value) > limit {
-		return value[:limit-3] + "..."
+	if limit > 3 {
+		return truncateTextRunes(value, limit, "...")
 	}
 	return value
+}
+
+func truncateTextRunes(value string, limit int, suffix string) string {
+	if limit <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(value) <= limit {
+		return value
+	}
+	cut := limit
+	if suffixRunes := utf8.RuneCountInString(suffix); suffix != "" && suffixRunes < limit {
+		cut = limit - suffixRunes
+	} else {
+		suffix = ""
+	}
+	runes := []rune(value)
+	return string(runes[:cut]) + suffix
 }

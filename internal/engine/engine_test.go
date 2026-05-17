@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/luoyuctl/agenttrace/internal/i18n"
 )
@@ -1889,6 +1890,47 @@ func TestReportOverviewTextShowsIncidentAndAuthorityCues(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("text overview missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestReportOverviewTextTruncatesUnicodeSafely(t *testing.T) {
+	longName := "x" + strings.Repeat("项目", 24) + "-异常会话"
+	longTool := "x" + strings.Repeat("工具", 32)
+	sessions := []Session{{
+		Name:      longName,
+		Health:    45,
+		Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
+		Metrics: Metrics{
+			SourceTool:       "codex_cli",
+			ModelUsed:        "gpt-5.1",
+			AssistantTurns:   3,
+			DurationSec:      180,
+			GapsSec:          []float64{90},
+			ToolCallsOK:      1,
+			ToolCallsFail:    2,
+			ToolUsage:        map[string]int{longTool: 3},
+			ToolAuthority:    map[string]int{ToolAuthorityTestOrBuild: 1},
+			HighestAuthority: ToolAuthorityTestOrBuild,
+		},
+	}}
+
+	out := ReportOverview(ComputeOverview(sessions), sessions)
+	if !utf8.ValidString(out) {
+		t.Fatalf("text overview should stay valid UTF-8 after truncation:\n%x", out)
+	}
+	for _, want := range []string{
+		"Incident timeline",
+		"Touched surface",
+		"Tool authority",
+		"Recent Anomalies",
+		"...",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("text overview missing %q:\n%s", want, out)
+		}
+	}
+	if strings.ContainsRune(out, '\uFFFD') {
+		t.Fatalf("text overview contains replacement characters after truncation:\n%s", out)
 	}
 }
 

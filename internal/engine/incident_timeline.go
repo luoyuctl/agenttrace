@@ -155,8 +155,5 @@ func incidentSafeName(value string) string {
 	if fields := strings.Fields(value); len(fields) > 0 {
 		value = fields[0]
 	}
-	if len(value) > 48 {
-		value = value[:48]
-	}
-	return value
+	return truncateTextRunes(value, 48, "")
 }
