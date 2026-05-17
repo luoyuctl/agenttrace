@@ -1328,7 +1328,7 @@ func TestAnalyze(t *testing.T) {
 	events := []Event{
 		{Role: "user", Content: "hello", SourceTool: "h", Timestamp: "2026-01-01T00:00:00Z"},
 		{Role: "assistant", Content: "hi", SourceTool: "h", Timestamp: "2026-01-01T00:00:01Z"},
-		{Role: "assistant", ToolCalls: []ToolCall{{Name: "read_file", ID: "t1"}}, SourceTool: "h", Timestamp: "2026-01-01T00:00:02Z"},
+		{Role: "assistant", ToolCalls: []ToolCall{{Name: "read_file", ID: "t1", Args: `{"path":"README.md"}`}}, SourceTool: "h", Timestamp: "2026-01-01T00:00:02Z"},
 		{Role: "tool", Content: "ok", ToolCallID: "t1", SourceTool: "h", Timestamp: "2026-01-01T00:00:03Z"},
 	}
 	m := Analyze(events, "default")
@@ -1347,6 +1347,9 @@ func TestAnalyze(t *testing.T) {
 	if m.CostEstimated < 0 {
 		t.Error("cost should be >=0")
 	}
+	if m.FileUsage["README.md"] != 1 {
+		t.Fatalf("expected file surface from tool args, got %+v", m.FileUsage)
+	}
 }
 
 func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
@@ -1363,7 +1366,10 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 				TokensCacheR:  50,
 				ToolCallsOK:   9,
 				ToolCallsFail: 1,
+				ToolUsage:     map[string]int{"read_file": 1},
+				FileUsage:     map[string]int{"README.md": 1},
 				CostEstimated: 0.25,
+				DurationSec:   60,
 			},
 		},
 		{
@@ -1376,7 +1382,10 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 				TokensInput:   200,
 				TokensOutput:  100,
 				ToolCallsFail: 2,
+				ToolUsage:     map[string]int{"bash": 1},
+				FileUsage:     map[string]int{"cmd/agenttrace/main.go": 1},
 				CostEstimated: 0.75,
+				DurationSec:   180,
 			},
 		},
 	}
@@ -1387,6 +1396,7 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 			TotalSessions  int     `json:"total_sessions"`
 			Critical       int     `json:"critical"`
 			TotalCost      float64 `json:"total_cost"`
+			TotalDuration  float64 `json:"total_duration_seconds"`
 			TotalTokens    int     `json:"total_tokens"`
 			ToolFailRate   float64 `json:"tool_fail_rate"`
 			AnomaliesTotal int     `json:"anomalies_total"`
@@ -1400,6 +1410,12 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 				} `json:"points"`
 			} `json:"health_trend"`
 		} `json:"summary"`
+		FailureFamilies []string `json:"failure_families"`
+		Surfaces        struct {
+			Tools              []string `json:"tools"`
+			Files              []string `json:"files"`
+			HighAuthorityTools []string `json:"high_authority_tools"`
+		} `json:"surfaces"`
 		ByAgent []struct {
 			Name     string  `json:"name"`
 			Sessions int     `json:"sessions"`
@@ -1418,7 +1434,7 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	if payload.Version != Version || payload.Summary.TotalSessions != 2 || payload.Summary.Critical != 1 {
 		t.Fatalf("bad summary: %+v", payload.Summary)
 	}
-	if payload.Summary.TotalCost != 1 || payload.Summary.TotalTokens != 525 || payload.Summary.ToolFailRate != 25 {
+	if payload.Summary.TotalCost != 1 || payload.Summary.TotalDuration != 240 || payload.Summary.TotalTokens != 525 || payload.Summary.ToolFailRate != 25 {
 		t.Fatalf("missing operational totals: %+v", payload.Summary)
 	}
 	if payload.Summary.AnomaliesTotal != 1 {
@@ -1427,9 +1443,94 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	if payload.Summary.HealthTrend.Direction == "" || payload.Summary.HealthTrend.Message == "" || len(payload.Summary.HealthTrend.Points) != 2 {
 		t.Fatalf("missing health trend: %+v", payload.Summary.HealthTrend)
 	}
+	if !containsString(payload.FailureFamilies, "hanging") ||
+		!containsString(payload.Surfaces.Tools, "bash") ||
+		!containsString(payload.Surfaces.Files, "README.md") ||
+		!containsString(payload.Surfaces.HighAuthorityTools, "bash") {
+		t.Fatalf("missing deterministic comparison surfaces: families=%v surfaces=%+v", payload.FailureFamilies, payload.Surfaces)
+	}
 	if len(payload.ByAgent) != 2 || len(payload.RecentSessions) != 2 || len(payload.Anomalies) != 1 {
 		t.Fatalf("missing overview sections: agents=%d recent=%d anomalies=%d",
 			len(payload.ByAgent), len(payload.RecentSessions), len(payload.Anomalies))
+	}
+}
+
+func TestAddBaselineComparisonFlagsDeterministicRegressions(t *testing.T) {
+	baselineSessions := []Session{{
+		Name:      "base",
+		Health:    90,
+		Anomalies: []Anomaly{{Type: "tool_failures"}},
+		Metrics: Metrics{
+			TokensInput:   100,
+			ToolCallsOK:   1,
+			ToolUsage:     map[string]int{"read_file": 1},
+			FileUsage:     map[string]int{"README.md": 1},
+			CostEstimated: 0.10,
+			DurationSec:   100,
+		},
+	}}
+	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
+	if err := os.WriteFile(baselinePath, []byte(ReportOverviewJSON(ComputeOverview(baselineSessions), baselineSessions)), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	currentSessions := []Session{{
+		Name:      "current",
+		Health:    40,
+		Anomalies: []Anomaly{{Type: "hanging"}, {Type: "tool_failures"}},
+		Metrics: Metrics{
+			TokensInput:   150,
+			ToolCallsOK:   1,
+			ToolUsage:     map[string]int{"bash": 1, "read_file": 1},
+			FileUsage:     map[string]int{"README.md": 1, "cmd/agenttrace/main.go": 1},
+			CostEstimated: 0.13,
+			DurationSec:   120,
+		},
+	}}
+	out, err := AddBaselineComparison(
+		ReportOverviewJSON(ComputeOverview(currentSessions), currentSessions),
+		baselinePath,
+		BaselineThresholds{MaxDurationDeltaPct: 10, MaxCostDeltaPct: 20, MaxTokenDeltaPct: 25},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var payload struct {
+		BaselineComparison BaselineComparison `json:"baseline_comparison"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("invalid comparison json: %v", err)
+	}
+	cmp := payload.BaselineComparison
+	if !cmp.SlowerThanBaseline || !cmp.CostAboveThreshold || !cmp.TokensAboveThreshold {
+		t.Fatalf("expected threshold regressions, got %+v", cmp)
+	}
+	if cmp.DurationDeltaPct != 20 || cmp.CostDeltaPct != 30 || cmp.TokenDeltaPct != 50 {
+		t.Fatalf("unexpected deltas: %+v", cmp)
+	}
+	if !containsString(cmp.NewFailureFamilies, "hanging") ||
+		!cmp.BroaderToolSurface ||
+		!containsString(cmp.NewTools, "bash") ||
+		!cmp.BroaderFileSurface ||
+		!containsString(cmp.NewFiles, "cmd/agenttrace/main.go") ||
+		!containsString(cmp.NewHighAuthorityToolUse, "bash") {
+		t.Fatalf("missing comparison surface regressions: %+v", cmp)
+	}
+}
+
+func TestAddBaselineComparisonRejectsMissingOrIncompatibleBaseline(t *testing.T) {
+	current := ReportOverviewJSON(ComputeOverview([]Session{{Metrics: Metrics{TokensInput: 1}}}), []Session{{Metrics: Metrics{TokensInput: 1}}})
+	if _, err := AddBaselineComparison(current, filepath.Join(t.TempDir(), "missing.json"), BaselineThresholds{}); err == nil || !strings.Contains(err.Error(), "missing baseline report") {
+		t.Fatalf("expected missing baseline diagnostic, got %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "baseline.json")
+	if err := os.WriteFile(path, []byte(`{"version":"v0.0.0","summary":{"total_tokens":1}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddBaselineComparison(current, path, BaselineThresholds{}); err == nil || !strings.Contains(err.Error(), "incompatible") {
+		t.Fatalf("expected incompatible baseline diagnostic, got %v", err)
 	}
 }
 
@@ -2131,4 +2232,13 @@ func TestWasteReportClampsLoopWasteToTotal(t *testing.T) {
 	if report.TotalWasted > s.Metrics.CostEstimated {
 		t.Fatalf("total wasted should not exceed total cost for loop-only waste: got %.4f total %.4f", report.TotalWasted, s.Metrics.CostEstimated)
 	}
+}
+
+func containsString(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }

@@ -367,12 +367,28 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	totalTokens := 0
 	totalTools := 0
 	failedTools := 0
+	totalDuration := 0.0
 	totalHealth := 0
+	toolSurface := make(map[string]struct{})
+	fileSurface := make(map[string]struct{})
+	failureFamilies := make(map[string]struct{})
 	for _, s := range orderedSessions {
 		totalTokens += s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
 		totalTools += s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
 		failedTools += s.Metrics.ToolCallsFail
+		totalDuration += s.Metrics.DurationSec
 		totalHealth += s.Health
+		for tool := range s.Metrics.ToolUsage {
+			toolSurface[tool] = struct{}{}
+		}
+		for file := range s.Metrics.FileUsage {
+			fileSurface[file] = struct{}{}
+		}
+		for _, anomaly := range s.Anomalies {
+			if anomaly.Type != "" {
+				failureFamilies[anomaly.Type] = struct{}{}
+			}
+		}
 	}
 	avgHealth := 0.0
 	if len(orderedSessions) > 0 {
@@ -451,19 +467,20 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 	payload := map[string]interface{}{
 		"version": Version,
 		"summary": map[string]interface{}{
-			"total_sessions":      ov.TotalSessions,
-			"healthy":             ov.Healthy,
-			"warning":             ov.Warning,
-			"critical":            ov.Critical,
-			"avg_health":          avgHealth,
-			"total_cost":          round4(ov.TotalCost),
-			"total_tokens":        totalTokens,
-			"tool_calls":          totalTools,
-			"tool_failures":       failedTools,
-			"tool_fail_rate":      toolFailRate,
-			"anomalies_total":     len(anomalies),
-			"anomalies_returned":  len(anomaliesReturned),
-			"anomalies_truncated": len(anomaliesReturned) < len(anomalies),
+			"total_sessions":         ov.TotalSessions,
+			"healthy":                ov.Healthy,
+			"warning":                ov.Warning,
+			"critical":               ov.Critical,
+			"avg_health":             avgHealth,
+			"total_cost":             round4(ov.TotalCost),
+			"total_duration_seconds": round4(totalDuration),
+			"total_tokens":           totalTokens,
+			"tool_calls":             totalTools,
+			"tool_failures":          failedTools,
+			"tool_fail_rate":         toolFailRate,
+			"anomalies_total":        len(anomalies),
+			"anomalies_returned":     len(anomaliesReturned),
+			"anomalies_truncated":    len(anomaliesReturned) < len(anomalies),
 			"health_trend": map[string]interface{}{
 				"direction":  trend.Direction,
 				"regressing": trend.Regressing,
@@ -471,6 +488,12 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 				"message":    trend.Message,
 				"points":     points,
 			},
+		},
+		"failure_families": sortedReportKeys(failureFamilies),
+		"surfaces": map[string]interface{}{
+			"tools":                sortedReportKeys(toolSurface),
+			"files":                sortedReportKeys(fileSurface),
+			"high_authority_tools": highAuthorityTools(sortedReportKeys(toolSurface)),
 		},
 		"by_agent":        agents,
 		"by_model":        models,
@@ -814,6 +837,49 @@ func minReportInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func sortedReportKeys(items map[string]struct{}) []string {
+	out := make([]string, 0, len(items))
+	for item := range items {
+		if item != "" {
+			out = append(out, item)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func highAuthorityTools(tools []string) []string {
+	var out []string
+	for _, tool := range tools {
+		if isHighAuthorityTool(tool) {
+			out = append(out, tool)
+		}
+	}
+	return out
+}
+
+func isHighAuthorityTool(tool string) bool {
+	name := strings.ToLower(tool)
+	for _, marker := range []string{
+		"apply_patch",
+		"bash",
+		"delete",
+		"edit",
+		"exec",
+		"remove",
+		"rm",
+		"run_command",
+		"shell",
+		"terminal",
+		"write",
+	} {
+		if strings.Contains(name, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func markdownCell(value string) string {

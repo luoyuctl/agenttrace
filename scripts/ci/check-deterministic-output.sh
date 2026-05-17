@@ -17,6 +17,11 @@ for i in 1 2 3; do
   "$bin" --demo --overview -f json >"$out_dir/determinism/overview-$i.json"
 done
 
+for i in 1 2 3; do
+  "$bin" --demo --overview -f json --baseline "$out_dir/determinism/overview-1.json" \
+    >"$out_dir/determinism/baseline-$i.json"
+done
+
 for path in "$out_dir"/determinism/*.json; do
   node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$path" \
     || fail "invalid JSON: $path"
@@ -30,3 +35,7 @@ cmp -s "$out_dir/determinism/overview-1.json" "$out_dir/determinism/overview-2.j
   || fail "--demo --overview -f json changed between run 1 and 2"
 cmp -s "$out_dir/determinism/overview-1.json" "$out_dir/determinism/overview-3.json" \
   || fail "--demo --overview -f json changed between run 1 and 3"
+cmp -s "$out_dir/determinism/baseline-1.json" "$out_dir/determinism/baseline-2.json" \
+  || fail "--demo --overview -f json --baseline changed between run 1 and 2"
+cmp -s "$out_dir/determinism/baseline-1.json" "$out_dir/determinism/baseline-3.json" \
+  || fail "--demo --overview -f json --baseline changed between run 1 and 3"

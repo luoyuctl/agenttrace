@@ -34,8 +34,32 @@ node -e '
 const report = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
 if (!report.version) throw new Error("missing version");
 if (!report.summary || report.summary.total_sessions < 1) throw new Error("missing demo summary");
+if (typeof report.summary.total_duration_seconds !== "number") throw new Error("missing duration summary");
 if (!Array.isArray(report.recent_sessions) || report.recent_sessions.length < 1) throw new Error("missing recent sessions");
+if (!report.surfaces || !Array.isArray(report.surfaces.tools) || !Array.isArray(report.surfaces.files)) {
+  throw new Error("missing comparison surfaces");
+}
 ' "$out_dir/agenttrace-demo.json"
+
+"$bin" --demo --overview -f json \
+  --baseline "$out_dir/agenttrace-demo.json" \
+  --baseline-max-duration-delta-pct 0 \
+  --baseline-max-cost-delta-pct 0 \
+  --baseline-max-token-delta-pct 0 \
+  >"$out_dir/agenttrace-baseline-compare.json"
+require_file "$out_dir/agenttrace-baseline-compare.json"
+require_json "$out_dir/agenttrace-baseline-compare.json"
+node -e '
+const report = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+const cmp = report.baseline_comparison;
+if (!cmp) throw new Error("missing baseline_comparison");
+for (const key of ["slower_than_baseline", "cost_delta_pct", "token_delta_pct", "new_failure_families", "broader_tool_surface", "broader_file_surface", "new_high_authority_tool_use"]) {
+  if (!(key in cmp)) throw new Error(`missing baseline comparison field ${key}`);
+}
+if (cmp.slower_than_baseline || cmp.cost_delta_pct !== 0 || cmp.token_delta_pct !== 0) {
+  throw new Error("identical demo baseline should not regress");
+}
+' "$out_dir/agenttrace-baseline-compare.json"
 
 "$bin" --demo --overview -f markdown \
   -o "$out_dir/agenttrace-demo.md" \
