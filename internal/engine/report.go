@@ -1159,10 +1159,14 @@ func ReportOverview(ov Overview, sessions []Session) string {
 			wf("    %s: %s", i18n.T("report_highest_authority"), authority.Highest)
 		}
 		if len(authority.Counts) > 0 {
-			wf("    %s: %s", i18n.T("report_authority_category_counts"), textAuthorityCounts(authority.Counts))
+			for _, line := range textWrappedKeyValues(i18n.T("report_authority_category_counts"), textAuthorityCountValues(authority.Counts), 96) {
+				wf("    %s", line)
+			}
 		}
 		if len(authority.HighTools) > 0 {
-			wf("    %s: %s", i18n.T("report_high_authority_tools"), textCell(strings.Join(authority.HighTools, ", "), 68))
+			for _, line := range textWrappedKeyValues(i18n.T("report_high_authority_tools"), textToolValues(authority.HighTools), 96) {
+				wf("    %s", line)
+			}
 		}
 		w("")
 	}
@@ -1225,12 +1229,52 @@ func ReportOverview(ov Overview, sessions []Session) string {
 	return b.String()
 }
 
-func textAuthorityCounts(items []authorityCount) string {
+func textAuthorityCountValues(items []authorityCount) []string {
 	parts := make([]string, 0, len(items))
 	for _, item := range items {
 		parts = append(parts, fmt.Sprintf("%s=%d", item.Category, item.Count))
 	}
-	return strings.Join(parts, ", ")
+	return parts
+}
+
+func textToolValues(items []string) []string {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		parts = append(parts, textCell(item, 40))
+	}
+	return parts
+}
+
+func textWrappedKeyValues(label string, values []string, limit int) []string {
+	if len(values) == 0 {
+		return []string{label + ":"}
+	}
+	prefix := label + ": "
+	continuation := strings.Repeat(" ", utf8.RuneCountInString(label)+2)
+	lines := make([]string, 0, 1)
+	current := prefix
+	for _, value := range values {
+		separator := ""
+		if current != prefix && current != continuation {
+			separator = ", "
+		}
+		next := separator + value
+		if utf8.RuneCountInString(current)+utf8.RuneCountInString(next) > limit && current != prefix && current != continuation {
+			lines = append(lines, current)
+			current = continuation + value
+			continue
+		}
+		if utf8.RuneCountInString(current)+utf8.RuneCountInString(next) > limit {
+			valueLimit := limit - utf8.RuneCountInString(current)
+			if valueLimit < 4 {
+				valueLimit = 4
+			}
+			next = textCell(value, valueLimit)
+		}
+		current += next
+	}
+	lines = append(lines, current)
+	return lines
 }
 
 func textCell(value string, limit int) string {

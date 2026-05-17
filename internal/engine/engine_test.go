@@ -1893,6 +1893,67 @@ func TestReportOverviewTextShowsIncidentAndAuthorityCues(t *testing.T) {
 	}
 }
 
+func TestReportOverviewTextWrapsAuthoritySummary(t *testing.T) {
+	tools := map[string]int{}
+	for i := 0; i < 10; i++ {
+		tools[fmt.Sprintf("terminal-very-long-authority-tool-%02d", i)] = 1
+	}
+	sessions := []Session{{
+		Name:   "wide-authority",
+		Health: 90,
+		Metrics: Metrics{
+			SourceTool: "codex_cli",
+			ModelUsed:  "gpt-5.1",
+			ToolUsage:  tools,
+			ToolAuthority: map[string]int{
+				ToolAuthorityReadOnlyFiles:   11,
+				ToolAuthorityTestOrBuild:     12,
+				ToolAuthorityWriteFiles:      13,
+				ToolAuthorityPackageInstall:  14,
+				ToolAuthorityNetworkAccess:   15,
+				ToolAuthorityShellExec:       16,
+				ToolAuthorityGitWrite:        17,
+				ToolAuthorityExternalPublish: 18,
+				ToolAuthorityUnknown:         19,
+			},
+			HighestAuthority: ToolAuthorityUnknown,
+		},
+	}}
+
+	out := ReportOverview(ComputeOverview(sessions), sessions)
+	for _, want := range []string{
+		"Tool authority",
+		"Highest category",
+		"Authority category counts",
+		"High-authority tools",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("text overview missing %q:\n%s", want, out)
+		}
+	}
+
+	var authorityLines []string
+	inAuthority := false
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "── Tool authority ──") {
+			inAuthority = true
+			continue
+		}
+		if inAuthority && strings.TrimSpace(line) == "" {
+			break
+		}
+		if inAuthority {
+			authorityLines = append(authorityLines, line)
+			if got := utf8.RuneCountInString(line); got > 100 {
+				t.Fatalf("authority line too wide (%d): %q\n%s", got, line, out)
+			}
+		}
+	}
+	if len(authorityLines) < 5 {
+		t.Fatalf("expected wrapped authority evidence lines, got %d:\n%s", len(authorityLines), out)
+	}
+}
+
 func TestReportOverviewTextTruncatesUnicodeSafely(t *testing.T) {
 	longName := "x" + strings.Repeat("项目", 24) + "-异常会话"
 	longTool := "x" + strings.Repeat("工具", 32)
