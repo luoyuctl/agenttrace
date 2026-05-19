@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-v0.5.1 release candidate notes:
+v0.5.2 release candidate notes:
+
+### Fixed
+
+- Fixed Claude Code JSONL metrics for assistant messages that include thinking,
+  text, and a parallel `tool_use` batch so the report keeps one assistant turn,
+  multiple tool calls, cache token attribution, and failed `tool_result`
+  counting aligned. (#243)
+
+## v0.5.1 - 2026-05-19
 
 ### Fixed
 
