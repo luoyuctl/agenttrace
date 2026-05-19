@@ -1536,6 +1536,9 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 					}
 				}
 				if content, ok := msg["content"].([]interface{}); ok {
+					var assistantParts []string
+					var reasoningParts []string
+					var toolCalls []ToolCall
 					for _, blk := range content {
 						b, ok := blk.(map[string]interface{})
 						if !ok {
@@ -1545,16 +1548,14 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 						switch bt {
 						case "text":
 							text, _ := b["text"].(string)
-							events = append(events, Event{
-								Role: "assistant", Content: text, Timestamp: ts,
-								ModelUsed: modelName, SourceTool: "claude_code",
-							})
+							if text != "" {
+								assistantParts = append(assistantParts, text)
+							}
 						case "thinking":
 							think, _ := b["thinking"].(string)
-							events = append(events, Event{
-								Role: "assistant", Reasoning: think, Timestamp: ts,
-								ModelUsed: modelName, SourceTool: "claude_code",
-							})
+							if think != "" {
+								reasoningParts = append(reasoningParts, think)
+							}
 						case "tool_use":
 							id, _ := b["id"].(string)
 							name, _ := b["name"].(string)
@@ -1562,11 +1563,7 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 							if args == "" {
 								args = jsonish(b["arguments"])
 							}
-							events = append(events, Event{
-								Role: "assistant", Timestamp: ts,
-								ToolCalls: []ToolCall{{ID: id, Name: name, Args: args}},
-								ModelUsed: modelName, SourceTool: "claude_code",
-							})
+							toolCalls = append(toolCalls, ToolCall{ID: id, Name: name, Args: args})
 						case "tool_result":
 							tid, _ := b["tool_use_id"].(string)
 							isErr, _ := b["is_error"].(bool)
@@ -1577,6 +1574,17 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 								SourceTool: "claude_code",
 							})
 						}
+					}
+					if len(assistantParts) > 0 || len(reasoningParts) > 0 || len(toolCalls) > 0 {
+						events = append(events, Event{
+							Role:       "assistant",
+							Content:    strings.Join(assistantParts, "\n"),
+							Reasoning:  strings.Join(reasoningParts, "\n"),
+							Timestamp:  ts,
+							ToolCalls:  toolCalls,
+							ModelUsed:  modelName,
+							SourceTool: "claude_code",
+						})
 					}
 				}
 			}

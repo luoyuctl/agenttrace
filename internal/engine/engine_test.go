@@ -290,6 +290,28 @@ func TestParseClaudeCodeJSONLDeduplicatesAssistantUsage(t *testing.T) {
 	}
 }
 
+func TestParseClaudeCodeJSONLParallelToolBatchIsSingleTurn(t *testing.T) {
+	raw := strings.Join([]string{
+		`{"type":"assistant","timestamp":"2026-05-03T10:00:00Z","message":{"id":"msg_parallel","role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":200,"output_tokens":30,"cache_read_input_tokens":70,"cache_creation_input_tokens":8},"content":[{"type":"thinking","thinking":"Need to inspect and test in parallel."},{"type":"text","text":"I'll inspect both files."},{"type":"tool_use","id":"tool_read","name":"Read","input":{"file_path":"README.md"}},{"type":"tool_use","id":"tool_test","name":"Bash","input":{"command":"go test ./..."}}]}}`,
+		`{"type":"user","timestamp":"2026-05-03T10:00:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool_read","content":"readme text","is_error":false}]}}`,
+		`{"type":"user","timestamp":"2026-05-03T10:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool_test","content":"test failed","is_error":true}]}}`,
+	}, "\n")
+	events, err := parseClaudeCodeJSONL(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Analyze(events, "claude-sonnet-4-6")
+	if m.AssistantTurns != 1 || m.ToolCallsTotal != 2 || m.ToolCallsOK != 1 || m.ToolCallsFail != 1 {
+		t.Fatalf("expected one assistant turn with two tool calls and one failure: %+v", m)
+	}
+	if m.TokensInput != 200 || m.TokensOutput != 30 || m.TokensCacheR != 70 || m.TokensCacheW != 8 {
+		t.Fatalf("bad cache/token attribution for parallel tool batch: %+v", m)
+	}
+	if m.ReasoningBlocks != 1 || m.ToolUsage["Read"] != 1 || m.ToolUsage["Bash"] != 1 {
+		t.Fatalf("bad reasoning/tool usage for parallel tool batch: %+v", m)
+	}
+}
+
 func TestParseClaudeCodeJSONLWithPreambleMalformed(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "broken-claude.jsonl")
