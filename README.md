@@ -20,7 +20,7 @@
   <a href="https://goreportcard.com/report/github.com/luoyuctl/agenttrace"><img src="https://goreportcard.com/badge/github.com/luoyuctl/agenttrace" alt="Go Report Card"></a>
   <img src="https://img.shields.io/badge/go-1.25+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.4.6-2bbc8a.svg" alt="Homebrew">
+  <img src="https://img.shields.io/badge/Homebrew-v0.5.0-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <p align="center">
@@ -64,7 +64,7 @@ agenttrace
 That local run found:
 
 ```text
-AGENTTRACE v0.4.6
+AGENTTRACE v0.5.0
 ```
 
 | Signal | What agenttrace found |

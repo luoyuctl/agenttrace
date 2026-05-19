@@ -2,7 +2,31 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+v0.5.0 release candidate notes:
+
+### Added
+
+- Added local baseline comparison for overview reports so a later run can be
+  checked against a saved local JSON baseline. (#203)
+- Added incident timeline evidence to the TUI and report surfaces. (#204)
+- Added tool authority summaries to HTML, Markdown, and text overview reports.
+  (#210, #212, #214, #219, #221)
+
+### Changed
+
+- Improved overview report readability for Unicode text, incident rows, and
+  terminal-readable authority summaries. (#216, #217, #219, #221)
+- Aligned public README, docs, site metadata, and discovery surfaces with the
+  current local coding-agent session coverage. (#197, #202, #228, #229, #230,
+  #231, #232)
+- Removed stale package-channel and launch-kit surfaces so release-facing
+  install guidance stays limited to available channels. (#225, #226)
+
+### Validation
+
+- Added and refreshed release-surface, report-semantics, Pages artifact, and
+  parser-coverage checks for the v0.5.0 release train. (#178, #182, #184, #205,
+  #208)
 
 ## v0.4.6 - 2026-05-10
 
