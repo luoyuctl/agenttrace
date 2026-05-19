@@ -11,7 +11,7 @@ License: MIT
 
 ## What it does
 
-- Parses local session logs from Claude Code, Codex CLI, Gemini CLI, Qwen Code, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Kimi CLI, Pi, Oh My Pi, and Copilot-style traces.
+- Parses local sessions from Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi CLI, Copilot-style logs, and generic JSON/JSONL traces.
 - Shows historical cost, token usage, model usage, elapsed time, latency, hanging gaps, slow tool calls, and session health across multiple agents.
 - Provides a Bubble Tea terminal UI with overview, session list, detail, diagnostics, and diff views.
 - Exports JSON, Markdown, and self-contained HTML reports.
@@ -50,4 +50,4 @@ agenttrace is useful when developers want to understand what multiple AI coding 
 
 ## Search and discovery terms
 
-agenttrace is relevant for AI coding agent session history, Claude Code log analysis, Codex CLI session logs, Gemini CLI session triage, Cursor agent traces, Aider chat history, local-first LLM observability, token cost tracking, time tracking, slow agent task diagnosis, tool latency analysis, agent health scoring, and CI gates for AI coding agents.
+agenttrace is relevant for AI coding agent session history, Claude Code log analysis, Codex CLI session logs, Gemini CLI session triage, Qwen Code sessions, Cline task history, Cursor agent traces, Aider chat history, OpenCode storage, OpenClaw sessions, Kimi CLI traces, Pi and Oh My Pi sessions, Copilot-style logs, generic JSON/JSONL traces, local-first LLM observability, token cost tracking, time tracking, slow agent task diagnosis, tool latency analysis, agent health scoring, and CI gates for AI coding agents.
