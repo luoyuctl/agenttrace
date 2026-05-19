@@ -29,7 +29,7 @@
 
 ---
 
-**agenttrace** 是一个本地 TUI 和报告生成工具，用来分析 AI 编程 Agent 的历史会话。它会读取 Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cursor、Aider、OpenCode、OpenClaw、Hermes Agent、Kimi CLI 和 Copilot 风格日志，主要帮你做两件事：汇总多个 Agent 历史会话的成本、Token 和耗时；定位某次任务为什么跑得慢。
+**agenttrace** 是一个本地 TUI 和报告生成工具，用来分析 AI 编程 Agent 的历史会话。它会读取 Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor exports、Hermes Agent、OpenCode、OpenClaw、Pi、Oh My Pi、Kimi CLI、Copilot-style logs 和通用 JSON/JSONL traces，主要帮你做两件事：汇总多个 Agent 历史会话的成本、Token 和耗时；定位某次任务为什么跑得慢。
 
 ## 为什么需要 agenttrace？
 
