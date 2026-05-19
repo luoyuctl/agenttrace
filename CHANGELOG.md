@@ -41,7 +41,7 @@ No unreleased changes yet.
 ### Changed
 
 - Refreshed README GIF and screenshots from a real local run with color enabled.
-- Updated release surfaces for the v0.4.2 Homebrew and npm distribution.
+- Updated release surfaces for the v0.4.2 install paths.
 
 ### Fixed
 

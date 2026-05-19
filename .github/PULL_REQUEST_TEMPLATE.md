@@ -20,7 +20,6 @@ What changed and why?
 - [ ] `scripts/ci/check-release-surfaces.sh`
 - [ ] `scripts/ci/check-docs-commands.sh`
 - [ ] `scripts/ci/check-pages-artifact.sh site`
-- [ ] `node --check npm/install.js && node --check npm/run.js`
 - [ ] `ruby -c homebrew/Formula/agenttrace.rb`
 
 ## Notes

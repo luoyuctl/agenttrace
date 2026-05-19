@@ -22,8 +22,6 @@ Run the relevant checks before opening a PR:
 ```bash
 go test ./...
 go build -o /tmp/agenttrace ./cmd/agenttrace
-node --check npm/install.js
-node --check npm/run.js
 ruby -c homebrew/Formula/agenttrace.rb
 ```
 
