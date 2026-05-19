@@ -5,7 +5,7 @@
 <h1 align="center">AgentTrace</h1>
 
 <p align="center">
-  Review AI coding agent history across cost, tokens, and time, then find why a run was slow.
+  Local-first TUI and reports for AI coding-agent session history, cost, tokens, time, and slow-run diagnosis.
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@
 
 ---
 
-**agenttrace** is a local TUI and report generator for AI coding agent session history. It reads Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi CLI, Copilot-style logs, and generic JSON/JSONL traces, then helps with two daily jobs: see what multiple agents spent across cost, tokens, and time; and diagnose why a task ran slowly.
+**agenttrace** is a local-first terminal TUI and report generator for AI coding-agent session history. It reads Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi CLI, Copilot-style logs, and generic JSON/JSONL traces, then helps with two daily jobs: see what multiple agents spent across cost, tokens, and time; and diagnose why a task ran slowly.
 
 ## Why agenttrace?
 
