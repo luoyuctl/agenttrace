@@ -25,7 +25,7 @@ while IFS= read -r file; do
 done < <(git ls-files 'npm/*')
 
 if grep -R -Eqi "npm (wrapper|package)|npm install -g agenttrace|AGENTTRACE_RELEASE_TAG|npm/" \
-  README.md CONTRIBUTING.md CHANGELOG.md site homebrew; then
+  README.md CONTRIBUTING.md CHANGELOG.md docs/launch-kit.md site homebrew; then
   fail "public release surfaces must not advertise npm package support"
 fi
 
