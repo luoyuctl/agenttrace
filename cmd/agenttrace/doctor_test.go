@@ -125,6 +125,42 @@ func TestDoctorReportChineseText(t *testing.T) {
 	}
 }
 
+func TestDoctorReportTextClarifiesColdParsedSessionCache(t *testing.T) {
+	prev := i18n.Current
+	i18n.SetLang(i18n.EN)
+	t.Cleanup(func() { i18n.SetLang(prev) })
+
+	report := doctorReport{
+		Version:      engine.Version,
+		Mode:         i18n.T("doctor_mode_auto"),
+		CachePath:    filepath.Join(t.TempDir(), "sessions.json"),
+		CacheEntries: 7,
+		CacheDirs:    2,
+		CachedValid:  0,
+		Sessions:     3,
+		Directories: []doctorDirReport{{
+			Name:   "Codex CLI",
+			Path:   t.TempDir(),
+			Exists: true,
+			Files:  3,
+		}},
+	}
+	report.Recommendations = doctorRecommendations(report, "", false)
+
+	out := doctorReportText(report)
+	for _, want := range []string{
+		"7 parsed session cache entries",
+		"0 reusable for this scan",
+		"2 cached directory listings",
+		"No reusable parsed session entries for this scan",
+		"Cached directory listings may still speed discovery",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("doctor output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func writeDoctorHermesStateDBForTest(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
