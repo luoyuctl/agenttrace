@@ -6,19 +6,19 @@
     <title>agenttrace - local AI coding agent observability</title>
     <meta
       name="description"
-      content="Local-first observability for AI coding agent sessions. Compare agent spend, tokens, latency, health, and slow-run evidence from Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and more."
+      content="Local-first observability for AI coding agent sessions. Compare spend, tokens, latency, health, baseline deltas, incident timelines, and tool authority evidence from local logs."
     />
     <meta name="keywords" content="AI coding agent observability, AI agent session history, AI agent cost tracking, Claude Code logs, Codex CLI logs, Gemini CLI sessions, Cursor agent traces, Aider chat history, token cost tracking, slow agent task diagnosis, local-first developer tools" />
     <link rel="canonical" href="https://luoyuctl.github.io/agenttrace/" />
     <meta property="og:title" content="agenttrace - local AI coding agent observability" />
-    <meta property="og:description" content="Know what your agents spent, rank slow runs, and diagnose failures from local session logs." />
+    <meta property="og:description" content="Know what your agents spent, rank slow runs, and explain regressions with local baseline, incident, and tool authority evidence." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://luoyuctl.github.io/agenttrace/" />
     <meta property="og:image" content="https://luoyuctl.github.io/agenttrace/assets/readme-real-overview.png" />
     <meta property="og:image:alt" content="agenttrace terminal dashboard showing real AI coding agent session metrics" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="agenttrace - local AI coding agent observability" />
-    <meta name="twitter:description" content="Compare AI coding agent cost, tokens, time, and health, then diagnose slow runs locally." />
+    <meta name="twitter:description" content="Compare AI coding agent cost, tokens, time, health, baseline deltas, and incident evidence locally." />
     <meta name="twitter:image" content="https://luoyuctl.github.io/agenttrace/assets/readme-real-overview.png" />
     <link rel="icon" href="assets/logo-icon.png" />
     <link rel="stylesheet" href="styles.css" />
@@ -31,11 +31,12 @@
         "applicationSubCategory": "AI agent session observability",
         "operatingSystem": "macOS, Linux, Windows",
         "softwareVersion": "0.4.6",
-        "description": "Local-first TUI and report generator for reviewing AI coding agent cost, tokens, health, latency, failures, and slow-run evidence across historical sessions.",
+        "description": "Local-first TUI and report generator for reviewing AI coding agent cost, tokens, health, latency, failures, baseline deltas, incident timelines, and tool authority evidence across historical sessions.",
         "keywords": "AI coding agent observability, Claude Code logs, Codex CLI logs, Gemini CLI sessions, Cursor agent traces, Aider chat history, token cost tracking, local-first TUI",
         "featureList": [
           "Cost, token, model, health, and elapsed-time tracking across AI coding agent sessions",
-          "Slow-run diagnosis with long gaps, hanging sessions, retry loops, slow tools, large params, and context pressure",
+          "Slow-run diagnosis with long gaps, hanging sessions, retry loops, slow tools, large params, context pressure, and incident timelines",
+          "Local baseline comparison and conservative tool authority categories for report evidence",
           "Local-first TUI for Claude Code, Codex CLI, Gemini CLI, Cursor, Aider, and other session logs",
           "JSON, Markdown, and HTML reports for reviews, issues, and CI evidence"
         ],
@@ -113,7 +114,7 @@
         <article>
           <span>01 / Observe</span>
           <h2>One local timeline for messy agent history.</h2>
-          <p>Bring together multi-agent runs, source tools, models, turns, tokens, cost, latency, and health without sending prompts to another service.</p>
+          <p>Bring together multi-agent runs, source tools, models, turns, tokens, cost, latency, health, and local baseline deltas without sending prompts to another service.</p>
         </article>
         <article>
           <span>02 / Rank</span>
@@ -123,7 +124,7 @@
         <article>
           <span>03 / Diagnose</span>
           <h2>Move from slow to a specific reason.</h2>
-          <p>Surface hanging gaps, slow tools, retry chains, repeated loops, large params, rare tools, context pressure, and concrete next actions.</p>
+          <p>Surface hanging gaps, slow tools, retry chains, repeated loops, large params, incident timelines, conservative tool authority categories, and concrete next actions.</p>
         </article>
       </section>
 
@@ -131,7 +132,7 @@
         <div class="section-head">
           <p class="terminal-label">real local screenshots</p>
           <h2>Built around the debugging path, not a vanity dashboard.</h2>
-          <p>Overview points you at the trouble. Session List ranks the blast radius. Detail and Diagnostics explain the slowdown. Diff compares adjacent runs when a regression appears.</p>
+          <p>Overview points you at the trouble. Session List ranks the blast radius. Detail and Diagnostics explain the slowdown. Diff compares adjacent runs when a regression appears, and reports preserve incident and authority evidence.</p>
         </div>
         <div class="screen-stack">
           <figure class="screen-shot large">
@@ -167,6 +168,7 @@
         <div>
           <p class="terminal-label">reports and gates</p>
           <h2>Same evidence, outside the TUI.</h2>
+          <p>Reports can carry local baseline comparison, incident timelines, and conservative tool authority categories for PR review or CI artifacts.</p>
         </div>
         <div class="command-list">
           <article>

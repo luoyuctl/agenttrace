@@ -41,6 +41,7 @@ It helps you answer:
 
 - **What did my agents spend?** Compare historical sessions by agent source, model, input/output/cache tokens, estimated cost, and wall-clock time.
 - **Why was this task slow?** Catch long gaps, hanging sessions, retry loops, slow tool calls, large parameters, and context pressure.
+- **Did a run regress?** Compare against a local baseline when supplied, then inspect incident timelines and conservative tool authority categories in reports.
 - **What should I inspect first?** Rank sessions by cost, duration, turns, health, failures, anomalies, model, source, or text search.
 - **Can I inspect this privately?** Everything runs locally; prompts, code, and logs do not need to leave your machine.
 
@@ -109,6 +110,12 @@ agenttrace --overview -f json
 # Create a self-contained report for CI artifacts or issue links
 agenttrace --overview -f html -o agenttrace-overview.html
 
+# Save a local baseline, then compare a later run
+agenttrace --overview -f json -o agenttrace-baseline.json
+agenttrace --overview -f json \
+  --baseline agenttrace-baseline.json \
+  -o agenttrace-overview.json
+
 # Fail CI on unhealthy agent runs
 agenttrace --overview \
   --fail-under-health 80 \
@@ -128,6 +135,7 @@ Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Her
 |---|---|
 | Historical spend review | Sessions grouped across agents with token totals, model pricing, estimated cost, and elapsed time |
 | Slow-task diagnosis | Latency stats, long gaps, hanging sessions, retry loops, slow tools, large params, and context pressure |
+| Regression evidence | Local baseline comparison when supplied, incident timelines, and conservative tool authority categories in reports |
 | First-session triage | Sort and filter by cost, duration, health, failures, anomalies, model, source, or text search |
 | Shareable evidence | JSON, Markdown, and self-contained HTML reports |
 | Local-first inspection | No hosted backend required |

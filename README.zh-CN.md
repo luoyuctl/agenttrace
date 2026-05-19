@@ -41,6 +41,7 @@ AI 编程 Agent 越来越像一套小型构建系统：会调用工具、重试�
 
 - **Agent 花了多少？** 按来源、模型、input/output/cache token、估算成本和真实耗时对比历史会话。
 - **任务为什么慢？** 发现长时间空档、挂起会话、重试循环、慢工具调用、大参数和上下文压力。
+- **这次有没有退化？** 在提供本地 baseline 时对比回归，再从报告里查看 incident timeline 和保守的 tool authority 分类。
 - **先看哪一次？** 按成本、耗时、轮次、健康分、失败、异常、模型、来源或文本搜索排序。
 - **能不能本地看？** 所有分析都在本机完成，不需要上传 prompt、代码和日志。
 
@@ -91,6 +92,12 @@ agenttrace --overview -f json
 
 # 生成可放到 CI artifact 或 issue 里的独立 HTML 报告
 agenttrace --overview -f html -o agenttrace-overview.html
+
+# 保存本地 baseline，再对比后续运行
+agenttrace --overview -f json -o agenttrace-baseline.json
+agenttrace --overview -f json \
+  --baseline agenttrace-baseline.json \
+  -o agenttrace-overview.json
 ```
 
 ## 支持哪些Agent
@@ -105,6 +112,7 @@ Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor export
 |---|---|
 | 历史消耗总览 | 跨 Agent 会话聚合，展示 token 总量、模型价格、估算成本和真实耗时 |
 | 慢任务诊断 | 延迟统计、长间隔、挂起会话、重试循环、慢工具、大参数和上下文压力 |
+| 回归证据 | 在提供本地 baseline 时进行对比，并在报告中展示 incident timeline 和保守的 tool authority 分类 |
 | 优先级排序 | 按成本、耗时、轮次、健康分、失败、异常、模型、来源或文本搜索筛选 |
 | 可分享证据 | JSON、Markdown 和独立 HTML 报告 |
 
