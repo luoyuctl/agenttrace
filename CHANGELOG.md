@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+v0.5.1 release candidate notes:
+
+### Fixed
+
+- Clarified `agenttrace --doctor` cache-state wording so users can distinguish
+  parsed session cache entries, entries reusable for the current scan, and
+  cached directory listings. (#239)
+
 v0.5.0 release candidate notes:
 
 ### Added
