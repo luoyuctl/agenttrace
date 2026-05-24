@@ -36,6 +36,9 @@ if (!report.version) throw new Error("missing version");
 if (!report.summary || report.summary.total_sessions < 1) throw new Error("missing demo summary");
 if (typeof report.summary.total_duration_seconds !== "number") throw new Error("missing duration summary");
 if (!Array.isArray(report.recent_sessions) || report.recent_sessions.length < 1) throw new Error("missing recent sessions");
+if (!report.recent_sessions.some((session) => typeof session.possible_cost_driver === "string" && session.possible_cost_driver.includes("possible driver"))) {
+  throw new Error("missing possible cost driver note");
+}
 if (!report.surfaces || !Array.isArray(report.surfaces.tools) || !Array.isArray(report.surfaces.files)) {
   throw new Error("missing comparison surfaces");
 }

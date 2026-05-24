@@ -70,6 +70,7 @@ type Event struct {
 	Timestamp  string
 	Reasoning  string
 	Redacted   bool
+	CWD        string     `json:"cwd,omitempty"`
 	ToolCalls  []ToolCall `json:"tool_calls"`
 	ToolCallID string     `json:"tool_call_id"`
 	IsError    bool       `json:"is_error"`
@@ -133,6 +134,7 @@ type Anomaly struct {
 type Session struct {
 	Name      string
 	Path      string
+	CWD       string
 	Metrics   Metrics
 	Anomalies []Anomaly
 	Health    int
@@ -1452,6 +1454,7 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 	sessionID := ""
 	modelName := "unknown"
 	seenUsageSnapshots := make(map[string]bool)
+	cwd := ""
 
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -1468,6 +1471,15 @@ func parseClaudeCodeJSONL(raw string) ([]Event, error) {
 		// Track session ID from any event that has it
 		if sid, ok := obj["sessionId"].(string); ok && sid != "" && sessionID == "" {
 			sessionID = sid
+		}
+		if bodyCWD, ok := obj["cwd"].(string); ok && bodyCWD != "" && cwd == "" {
+			cwd = bodyCWD
+			events = append(events, Event{
+				Role:       "session_meta",
+				CWD:        bodyCWD,
+				ModelUsed:  modelName,
+				SourceTool: "claude_code",
+			})
 		}
 
 		switch typ {
@@ -2213,9 +2225,15 @@ func LoadSession(path string) (*Session, error) {
 
 	// Determine model from events
 	model := "default"
+	cwd := ""
 	for _, ev := range events {
 		if ev.ModelUsed != "" && ev.ModelUsed != "unknown" {
 			model = ev.ModelUsed
+		}
+		if cwd == "" && ev.CWD != "" {
+			cwd = ev.CWD
+		}
+		if model != "default" && cwd != "" {
 			break
 		}
 	}
@@ -2237,7 +2255,7 @@ func LoadSession(path string) (*Session, error) {
 	toolWarnings := ValidateToolPatterns(events)
 
 	return &Session{
-		Name: name, Path: path,
+		Name: name, Path: path, CWD: cwd,
 		Metrics:            m,
 		Anomalies:          a,
 		Health:             h,

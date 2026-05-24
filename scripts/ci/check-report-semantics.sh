@@ -61,6 +61,9 @@ if (!report.summary || typeof report.summary.total_cost !== "number") throw new 
 if (typeof report.summary.total_duration_seconds !== "number") throw new Error("missing total_duration_seconds");
 if (report.summary.total_sessions !== 3) throw new Error("demo summary should contain 3 sessions");
 if (!Array.isArray(report.recent_sessions) || report.recent_sessions.length !== 3) throw new Error("demo should contain 3 recent sessions");
+if (!report.recent_sessions.some((session) => typeof session.possible_cost_driver === "string" && session.possible_cost_driver.includes("possible driver"))) {
+  throw new Error("demo should expose possible cost driver evidence");
+}
 if (!Array.isArray(report.failure_families)) throw new Error("missing failure_families");
 if (!report.surfaces || !Array.isArray(report.surfaces.tools) || !Array.isArray(report.surfaces.high_authority_tools)) {
   throw new Error("missing deterministic comparison surfaces");

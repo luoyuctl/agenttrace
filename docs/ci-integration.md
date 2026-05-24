@@ -60,6 +60,12 @@ duration, cost, token deltas, new failure families, broader tool/file surfaces,
 new tool authority categories, and new high-authority tool use. Baseline reports
 must be local JSON artifacts from the same agenttrace version.
 
+Each `recent_sessions` item can also include local-only project metadata such as
+`cwd` when the source log exposes it, plus a conservative
+`possible_cost_driver` note when existing evidence points to context pressure,
+large parameters/output, retry loops, tool failures, or high tokens per turn.
+These notes are diagnostic clues, not guaranteed savings claims.
+
 ## GitHub Actions
 
 ```yaml

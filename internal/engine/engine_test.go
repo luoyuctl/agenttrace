@@ -275,6 +275,54 @@ func TestCollectSessionFilesIncludesClaudeSubagents(t *testing.T) {
 	}
 }
 
+func TestClaudeCodeCWDComesFromJSONLBody(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".claude", "projects")
+	encodedDir := filepath.Join(root, "-tmp-worktree-alpha")
+	if err := os.MkdirAll(encodedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(encodedDir, "session-abc.jsonl")
+	raw := makeJSONL([]interface{}{
+		map[string]interface{}{
+			"type":      "user",
+			"sessionId": "session-abc",
+			"cwd":       "/real/worktree/alpha",
+			"timestamp": "2026-05-20T10:00:00Z",
+			"message": map[string]interface{}{
+				"role":    "user",
+				"content": "inspect cwd provenance",
+			},
+		},
+		map[string]interface{}{
+			"type":      "assistant",
+			"sessionId": "session-abc",
+			"timestamp": "2026-05-20T10:00:01Z",
+			"message": map[string]interface{}{
+				"role":  "assistant",
+				"model": "claude-sonnet-4",
+				"content": []interface{}{map[string]interface{}{
+					"type": "text",
+					"text": "ok",
+				}},
+			},
+		},
+	})
+	if err := os.WriteFile(path, []byte(raw), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	session, err := LoadSession(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.CWD != "/real/worktree/alpha" {
+		t.Fatalf("cwd should come from JSONL body, got %q", session.CWD)
+	}
+	if strings.Contains(session.CWD, "-tmp-worktree-alpha") {
+		t.Fatalf("cwd should not be derived from encoded Claude project dir: %q", session.CWD)
+	}
+}
+
 func TestParseClaudeCodeJSONLDeduplicatesAssistantUsage(t *testing.T) {
 	raw := strings.Join([]string{
 		`{"type":"assistant","timestamp":"2026-05-03T10:00:00Z","message":{"id":"msg_1","role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10},"content":[{"type":"text","text":"hello"}]}}`,
@@ -1413,6 +1461,7 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 	sessions := []Session{
 		{
 			Name:   "good",
+			CWD:    "/repo/good",
 			Health: 90,
 			Metrics: Metrics{
 				SourceTool:       "claude_code_jsonl",
@@ -1433,6 +1482,7 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 		},
 		{
 			Name:      "bad",
+			CWD:       "/repo/bad",
 			Health:    40,
 			Anomalies: []Anomaly{{Type: "hanging", Severity: SeverityHigh}},
 			Metrics: Metrics{
@@ -1492,6 +1542,8 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 			Health    int    `json:"health"`
 			Anomalies int    `json:"anomalies"`
 			Authority string `json:"highest_tool_authority"`
+			CWD       string `json:"cwd"`
+			Driver    string `json:"possible_cost_driver"`
 		} `json:"recent_sessions"`
 		Anomalies []AnomalyTop `json:"anomalies"`
 	}
@@ -1526,9 +1578,60 @@ func TestReportOverviewJSONIncludesOperationalSummary(t *testing.T) {
 			t.Fatalf("recent session missing highest authority: %+v", payload.RecentSessions)
 		}
 	}
+	hasCWD := false
+	hasDriver := false
+	for _, recent := range payload.RecentSessions {
+		hasCWD = hasCWD || recent.CWD != ""
+		hasDriver = hasDriver || recent.Driver != ""
+	}
+	if !hasCWD {
+		t.Fatalf("recent session missing cwd metadata: %+v", payload.RecentSessions)
+	}
+	if !hasDriver {
+		t.Fatalf("recent session missing possible cost driver: %+v", payload.RecentSessions)
+	}
 	if len(payload.ByAgent) != 2 || len(payload.RecentSessions) != 2 || len(payload.Anomalies) != 1 {
 		t.Fatalf("missing overview sections: agents=%d recent=%d anomalies=%d",
 			len(payload.ByAgent), len(payload.RecentSessions), len(payload.Anomalies))
+	}
+}
+
+func TestReportOverviewFormatsIncludePossibleCostDrivers(t *testing.T) {
+	sessions := []Session{{
+		Name:   "costly",
+		Health: 55,
+		Metrics: Metrics{
+			SourceTool:     "codex_cli",
+			ModelUsed:      "gpt-5.1",
+			AssistantTurns: 1,
+			TokensInput:    120000,
+			TokensOutput:   1000,
+			CostEstimated:  0.42,
+		},
+		LargeParams: []LargeParamCall{{ToolName: "bash", ParamSize: 12000, Risk: "medium"}},
+	}}
+	ov := ComputeOverview(sessions)
+
+	var payload struct {
+		RecentSessions []struct {
+			Driver string `json:"possible_cost_driver"`
+		} `json:"recent_sessions"`
+	}
+	if err := json.Unmarshal([]byte(ReportOverviewJSON(ov, sessions)), &payload); err != nil {
+		t.Fatalf("invalid overview json: %v", err)
+	}
+	if len(payload.RecentSessions) != 1 || !strings.Contains(payload.RecentSessions[0].Driver, "possible driver") {
+		t.Fatalf("missing JSON possible cost driver: %+v", payload.RecentSessions)
+	}
+
+	for name, out := range map[string]string{
+		"text":     ReportOverview(ov, sessions),
+		"markdown": ReportOverviewMarkdown(ov, sessions),
+		"html":     ReportOverviewHTML(ov, sessions),
+	} {
+		if !strings.Contains(out, "Possible cost drivers") || !strings.Contains(out, "large tool parameter") {
+			t.Fatalf("%s overview missing possible cost driver:\n%s", name, out)
+		}
 	}
 }
 

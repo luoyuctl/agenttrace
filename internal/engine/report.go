@@ -353,16 +353,18 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 		Cost     float64 `json:"cost"`
 	}
 	type recentSession struct {
-		Name       string  `json:"name"`
-		SourceTool string  `json:"source_tool"`
-		Model      string  `json:"model"`
-		Turns      int     `json:"turns"`
-		Tools      int     `json:"tools"`
-		Tokens     int     `json:"tokens"`
-		Cost       float64 `json:"cost"`
-		Health     int     `json:"health"`
-		Anomalies  int     `json:"anomalies"`
-		Authority  string  `json:"highest_tool_authority"`
+		Name               string  `json:"name"`
+		SourceTool         string  `json:"source_tool"`
+		Model              string  `json:"model"`
+		CWD                string  `json:"cwd,omitempty"`
+		Turns              int     `json:"turns"`
+		Tools              int     `json:"tools"`
+		Tokens             int     `json:"tokens"`
+		Cost               float64 `json:"cost"`
+		Health             int     `json:"health"`
+		Anomalies          int     `json:"anomalies"`
+		Authority          string  `json:"highest_tool_authority"`
+		PossibleCostDriver string  `json:"possible_cost_driver,omitempty"`
 	}
 	type trendPoint struct {
 		Name   string  `json:"name"`
@@ -456,16 +458,18 @@ func ReportOverviewJSON(ov Overview, sessions []Session) string {
 			break
 		}
 		recent = append(recent, recentSession{
-			Name:       s.Name,
-			SourceTool: s.Metrics.SourceTool,
-			Model:      s.Metrics.ModelUsed,
-			Turns:      s.Metrics.AssistantTurns,
-			Tools:      s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail,
-			Tokens:     s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR,
-			Cost:       round4(s.Metrics.CostEstimated),
-			Health:     s.Health,
-			Anomalies:  len(s.Anomalies),
-			Authority:  highestAuthorityForMetrics(s.Metrics),
+			Name:               s.Name,
+			SourceTool:         s.Metrics.SourceTool,
+			Model:              s.Metrics.ModelUsed,
+			CWD:                s.CWD,
+			Turns:              s.Metrics.AssistantTurns,
+			Tools:              s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail,
+			Tokens:             s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR,
+			Cost:               round4(s.Metrics.CostEstimated),
+			Health:             s.Health,
+			Anomalies:          len(s.Anomalies),
+			Authority:          highestAuthorityForMetrics(s.Metrics),
+			PossibleCostDriver: possibleCostDriverNote(s),
 		})
 	}
 	anomalies := ov.AnomaliesTop
@@ -562,6 +566,14 @@ func ReportOverviewMarkdown(ov Overview, sessions []Session) string {
 			}
 			fmt.Fprintln(&b)
 		}
+	}
+
+	if notes := overviewCostDriverNotes(orderedSessions, 6); len(notes) > 0 {
+		fmt.Fprintf(&b, "## %s\n\n", i18n.T("report_possible_cost_drivers"))
+		for _, note := range notes {
+			fmt.Fprintf(&b, "- **%s**: %s\n", markdownCell(note.Session), markdownCell(note.Note))
+		}
+		fmt.Fprintln(&b)
 	}
 
 	fmt.Fprintf(&b, "## %s\n\n", i18n.T("incident_timeline_title"))
@@ -707,6 +719,14 @@ func ReportOverviewHTML(ov Overview, sessions []Session) string {
 		}
 		w(`</section>`)
 	}
+	if notes := overviewCostDriverNotes(orderedSessions, 8); len(notes) > 0 {
+		w(fmt.Sprintf(`<section><h2>%s</h2><table><thead><tr><th>%s</th><th>%s</th></tr></thead><tbody>`,
+			html.EscapeString(i18n.T("report_possible_cost_drivers")), html.EscapeString(i18n.T("report_session")), html.EscapeString(i18n.T("report_evidence"))))
+		for _, note := range notes {
+			w(fmt.Sprintf(`<tr><td>%s</td><td>%s</td></tr>`, html.EscapeString(note.Session), html.EscapeString(note.Note)))
+		}
+		w(`</tbody></table></section>`)
+	}
 	if len(orderedSessions) > 1 {
 		w(fmt.Sprintf(`<section><h2>%s</h2><p>%s</p></section>`, html.EscapeString(i18n.T("trend_title")), html.EscapeString(trend.Message)))
 	}
@@ -839,6 +859,63 @@ type overviewAuthority struct {
 	Counts    []authorityCount
 	HighTools []string
 	HasData   bool
+}
+
+type costDriverNote struct {
+	Session string
+	Note    string
+}
+
+func overviewCostDriverNotes(sessions []Session, limit int) []costDriverNote {
+	if limit <= 0 {
+		return nil
+	}
+	notes := make([]costDriverNote, 0, minReportInt(len(sessions), limit))
+	for _, s := range sessions {
+		note := possibleCostDriverNote(s)
+		if note == "" {
+			continue
+		}
+		notes = append(notes, costDriverNote{Session: s.Name, Note: note})
+		if len(notes) >= limit {
+			break
+		}
+	}
+	return notes
+}
+
+func possibleCostDriverNote(s Session) string {
+	if s.ContextUtil.RiskLevel == "critical" || s.ContextUtil.RiskLevel == "warning" {
+		return fmt.Sprintf(i18n.T("cost_driver_context_pressure"), s.ContextUtil.RiskLevel, s.ContextUtil.UtilizationPct)
+	}
+	if len(s.LargeParams) > 0 {
+		return fmt.Sprintf(i18n.T("cost_driver_large_params"), len(s.LargeParams))
+	}
+	if s.LoopCost.TotalLoopCost > 0 || s.LoopResultData.HasLoop || s.Metrics.LoopRetryEvents > 0 || len(s.LoopFingerprints) > 0 {
+		return i18n.T("cost_driver_retry_loop")
+	}
+	totalTools := s.Metrics.ToolCallsOK + s.Metrics.ToolCallsFail
+	if totalTools > 0 {
+		failRate := float64(s.Metrics.ToolCallsFail) / float64(totalTools) * 100
+		if failRate >= 25 {
+			return fmt.Sprintf(i18n.T("cost_driver_tool_failures"), s.Metrics.ToolCallsFail, totalTools, failRate)
+		}
+	}
+	if tokensPerAssistantTurn(s) >= 50000 {
+		return fmt.Sprintf(i18n.T("cost_driver_high_tokens_per_turn"), tokensPerAssistantTurn(s), s.Metrics.AssistantTurns)
+	}
+	return ""
+}
+
+func tokensPerAssistantTurn(s Session) int {
+	if s.Metrics.AssistantTurns <= 0 {
+		return 0
+	}
+	totalTokens := s.Metrics.TokensInput + s.Metrics.TokensOutput + s.Metrics.TokensCacheW + s.Metrics.TokensCacheR
+	if totalTokens <= 0 {
+		return 0
+	}
+	return totalTokens / s.Metrics.AssistantTurns
 }
 
 func overviewReportSummary(sessions []Session) overviewSummary {
@@ -1167,6 +1244,14 @@ func ReportOverview(ov Overview, sessions []Session) string {
 			for _, line := range textWrappedKeyValues(i18n.T("report_high_authority_tools"), textToolValues(authority.HighTools), 96) {
 				wf("    %s", line)
 			}
+		}
+		w("")
+	}
+
+	if notes := overviewCostDriverNotes(orderedSessions, 3); len(notes) > 0 {
+		w("  ── " + i18n.T("report_possible_cost_drivers") + " ──")
+		for _, note := range notes {
+			wf("    %-30s %s", textCell(note.Session, 30), textCell(note.Note, 80))
 		}
 		w("")
 	}
