@@ -32,6 +32,8 @@ func main() {
 	version := flag.Bool("version", false, "Show version")
 	demo := flag.Bool("demo", false, "Use built-in demo sessions")
 	doctor := flag.Bool("doctor", false, "Check detected session directories, cache status, and next steps")
+	searchQuery := flag.String("search", "", "Search session metadata, tools, files, anomalies, and diagnostic evidence")
+	searchLimit := flag.Int("search-limit", 20, "Maximum --search results")
 	failUnderHealth := flag.Int("fail-under-health", 0, "Exit non-zero when overview average health is below this score")
 	failOnCritical := flag.Bool("fail-on-critical", false, "Exit non-zero when overview contains critical sessions")
 	maxToolFailRate := flag.Float64("max-tool-fail-rate", -1, "Exit non-zero when overview tool failure rate exceeds this percent")
@@ -66,7 +68,7 @@ func main() {
 		}
 		fmt.Printf(i18n.T("cli_loaded_pricing"), n)
 		fmt.Printf(i18n.T("cli_cache_saved"), engine.CachePath())
-		if !hasPostPricingAction(flag.Arg(0), *listModels, *testMatch, *doctor, *latest, *compare, *overview, *wasteFlag) {
+		if !hasPostPricingAction(flag.Arg(0), *listModels, *testMatch, *doctor, *latest, *compare, *overview, *wasteFlag, *searchQuery) {
 			return
 		}
 	}
@@ -131,7 +133,7 @@ func main() {
 		return
 	}
 
-	hasAction := path != "" || *latest || *compare || *overview || *wasteFlag || *baseline != ""
+	hasAction := path != "" || *latest || *compare || *overview || *wasteFlag || *baseline != "" || strings.TrimSpace(*searchQuery) != ""
 
 	if !hasAction {
 		// Launch TUI
@@ -146,6 +148,29 @@ func main() {
 	if *baseline != "" && !*overview {
 		fmt.Fprintln(os.Stderr, "--baseline requires --overview -f json")
 		os.Exit(1)
+	}
+
+	if strings.TrimSpace(*searchQuery) != "" {
+		sessions := engine.LoadAll(sessionsDir)
+		if len(sessions) == 0 {
+			fmt.Fprintf(os.Stderr, i18n.T("no_session_files")+"\n", sessionsDir)
+			os.Exit(1)
+		}
+		results := engine.SearchSessions(sessions, *searchQuery, *searchLimit)
+		var out string
+		switch *format {
+		case "json":
+			out = engine.ReportSearchJSON(results)
+		default:
+			out = engine.ReportSearchText(results, *searchQuery)
+		}
+		if *output != "" {
+			os.MkdirAll(filepath.Dir(*output), 0755)
+			os.WriteFile(*output, []byte(out+"\n"), 0644)
+			fmt.Fprintf(os.Stderr, i18n.T("cli_saved"), *output)
+		}
+		fmt.Print(out)
+		return
 	}
 
 	// Overview mode
@@ -395,6 +420,6 @@ func isTTYOpenError(err error) bool {
 		strings.Contains(msg, "could not open a new tty")
 }
 
-func hasPostPricingAction(path string, listModels, testMatch, doctor, latest, compare, overview, waste bool) bool {
-	return path != "" || listModels || testMatch || doctor || latest || compare || overview || waste
+func hasPostPricingAction(path string, listModels, testMatch, doctor, latest, compare, overview, waste bool, search string) bool {
+	return path != "" || listModels || testMatch || doctor || latest || compare || overview || waste || strings.TrimSpace(search) != ""
 }

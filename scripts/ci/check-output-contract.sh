@@ -48,6 +48,25 @@ if (!report.summary.tool_authority || typeof report.summary.tool_authority.highe
 }
 ' "$out_dir/agenttrace-demo.json"
 
+"$bin" --demo --search terminal >"$out_dir/search.txt"
+require_file "$out_dir/search.txt"
+grep -q '^Search results: "terminal"' "$out_dir/search.txt" \
+  || fail "search text should include query header"
+grep -q 'tool: terminal' "$out_dir/search.txt" \
+  || fail "search text should include tool metadata evidence"
+
+"$bin" --demo --search internal/ws -f json >"$out_dir/search.json"
+require_file "$out_dir/search.json"
+require_json "$out_dir/search.json"
+node -e '
+const report = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+if (!report.version) throw new Error("missing search version");
+if (report.count < 1 || !Array.isArray(report.results)) throw new Error("missing search results");
+if (!report.results.some((result) => result.matches.some((match) => match.includes("internal/ws")))) {
+  throw new Error("search JSON should include file/path evidence");
+}
+' "$out_dir/search.json"
+
 "$bin" --demo --overview -f json \
   --baseline "$out_dir/agenttrace-demo.json" \
   --baseline-max-duration-delta-pct 0 \

@@ -13,6 +13,7 @@ func TestHasPostPricingAction(t *testing.T) {
 		compare    bool
 		overview   bool
 		waste      bool
+		search     string
 		want       bool
 	}{
 		{name: "update pricing alone exits", want: false},
@@ -23,12 +24,14 @@ func TestHasPostPricingAction(t *testing.T) {
 		{name: "latest continues", latest: true, want: true},
 		{name: "compare continues", compare: true, want: true},
 		{name: "waste continues", waste: true, want: true},
+		{name: "search continues", search: "billing", want: true},
+		{name: "blank search exits", search: "   ", want: false},
 		{name: "path continues", path: "session.jsonl", want: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := hasPostPricingAction(tt.path, tt.listModels, tt.testMatch, tt.doctor, tt.latest, tt.compare, tt.overview, tt.waste)
+			got := hasPostPricingAction(tt.path, tt.listModels, tt.testMatch, tt.doctor, tt.latest, tt.compare, tt.overview, tt.waste, tt.search)
 			if got != tt.want {
 				t.Fatalf("hasPostPricingAction() = %v, want %v", got, tt.want)
 			}

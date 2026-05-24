@@ -107,6 +107,10 @@ agenttrace --doctor
 # Generate machine-readable evidence
 agenttrace --overview -f json
 
+# Search local session metadata without indexing prompt text
+agenttrace --search billing
+agenttrace --search internal/ws -f json
+
 # Create a self-contained report for CI artifacts or issue links
 agenttrace --overview -f html -o agenttrace-overview.html
 

@@ -97,6 +97,7 @@ type Metrics struct {
 	ToolCallsFail    int
 	ToolUsage        map[string]int
 	FileUsage        map[string]int
+	ToolArgUsage     map[string]int `json:"-"`
 	ToolAuthority    map[string]int
 	HighestAuthority string
 	ReasoningBlocks  int
@@ -1906,6 +1907,7 @@ func Analyze(events []Event, model string) Metrics {
 		ModelUsed:     model,
 		ToolUsage:     make(map[string]int),
 		FileUsage:     make(map[string]int),
+		ToolArgUsage:  make(map[string]int),
 		ToolAuthority: make(map[string]int),
 	}
 
@@ -1970,6 +1972,9 @@ func Analyze(events []Event, model string) Metrics {
 					name = "unknown"
 				}
 				m.ToolUsage[name]++
+				for _, arg := range searchableToolArgs(tc.Args) {
+					m.ToolArgUsage[arg]++
+				}
 				authority := ClassifyToolAuthority(tc)
 				m.ToolAuthority[authority]++
 				m.HighestAuthority = HigherToolAuthority(m.HighestAuthority, authority)
@@ -2051,6 +2056,43 @@ func extractToolCallFiles(args string) []string {
 	}
 	sort.Strings(files)
 	return files
+}
+
+func searchableToolArgs(args string) []string {
+	args = strings.TrimSpace(args)
+	if args == "" || strings.Contains(args, "\n") || len(args) > 512 {
+		return nil
+	}
+	var raw interface{}
+	if err := json.Unmarshal([]byte(args), &raw); err != nil {
+		return []string{args}
+	}
+	seen := make(map[string]struct{})
+	collectSearchableToolArgs(raw, seen)
+	items := make([]string, 0, len(seen))
+	for item := range seen {
+		items = append(items, item)
+	}
+	sort.Strings(items)
+	return items
+}
+
+func collectSearchableToolArgs(raw interface{}, seen map[string]struct{}) {
+	switch v := raw.(type) {
+	case map[string]interface{}:
+		for _, child := range v {
+			collectSearchableToolArgs(child, seen)
+		}
+	case []interface{}:
+		for _, child := range v {
+			collectSearchableToolArgs(child, seen)
+		}
+	case string:
+		item := strings.TrimSpace(v)
+		if item != "" && !strings.Contains(item, "\n") && len(item) <= 512 {
+			seen[item] = struct{}{}
+		}
+	}
 }
 
 func collectToolCallFiles(raw interface{}, key string, seen map[string]struct{}) {

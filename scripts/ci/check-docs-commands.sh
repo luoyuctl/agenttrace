@@ -17,6 +17,8 @@ mkdir -p "$out_dir/docs"
 "$bin" --demo --latest -f json >"$out_dir/docs/latest.json"
 "$bin" --demo --latest --lang zh -f json >"$out_dir/docs/latest-zh.json"
 "$bin" --demo --overview -f json >"$out_dir/docs/overview.json"
+"$bin" --demo --search billing >"$out_dir/docs/search.txt"
+"$bin" --demo --search internal/ws -f json >"$out_dir/docs/search.json"
 "$bin" --demo --overview -f markdown -o "$out_dir/docs/overview.md" >/tmp/agenttrace-docs-md.stdout
 "$bin" --demo --overview -f html -o "$out_dir/docs/overview.html" >/tmp/agenttrace-docs-html.stdout
 

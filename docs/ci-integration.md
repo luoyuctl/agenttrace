@@ -66,6 +66,16 @@ Each `recent_sessions` item can also include local-only project metadata such as
 large parameters/output, retry loops, tool failures, or high tokens per turn.
 These notes are diagnostic clues, not guaranteed savings claims.
 
+For lightweight local lookup without adding an indexer, `agenttrace --search`
+matches session metadata, source/model names, cwd/path metadata, tools, files,
+anomaly labels, authority categories, and diagnostic evidence. It does not
+search prompt or assistant message text by default:
+
+```bash
+agenttrace --search billing
+agenttrace --search internal/ws -f json
+```
+
 ## GitHub Actions
 
 ```yaml
@@ -136,6 +146,7 @@ scripts/ci/check-pages-artifact.sh site
 These checks cover:
 
 - demo JSON, Markdown, HTML, and doctor smoke output
+- metadata-only session search text and JSON output
 - local baseline comparison JSON contract and deterministic fields
 - `-o` stdout/stderr behavior and failing gate exit code `2`
 - repeated demo latest/overview JSON determinism
