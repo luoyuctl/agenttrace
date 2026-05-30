@@ -1,0 +1,29 @@
+[workspace]
+members = [
+  "crates/agenttrace-core",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.6.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+description = "Local-first TUI and reports for AI coding-agent session history, cost, tokens, time, and slow-run diagnosis."
+repository = "https://github.com/luoyuctl/agenttrace"
+homepage = "https://luoyuctl.github.io/agenttrace/"
+readme = "README.md"
+keywords = ["agent", "observability", "tui", "cli", "ai"]
+categories = ["command-line-utilities", "development-tools"]
+
+[workspace.dependencies]
+anyhow = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+clap = { version = "4.5", features = ["derive"] }
+crossterm = "0.28"
+ratatui = "0.30"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+thiserror = "2.0"
+ureq = "2.12"
