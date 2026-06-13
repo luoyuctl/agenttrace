@@ -1,0 +1,25 @@
+[package]
+name = "agenttrace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = false
+
+[[bin]]
+name = "agenttrace"
+path = "src/main.rs"
+
+[dependencies]
+agenttrace-core = { version = "0.6.0", path = "../agenttrace-core" }
+agenttrace-tui = { version = "0.6.0", path = "../agenttrace-tui" }
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+serde_json.workspace = true
