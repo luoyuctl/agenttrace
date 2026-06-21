@@ -1,0 +1,4 @@
+{"type":"metadata","protocol_version":"2"}
+{"timestamp":1736035200.0,"message":{"type":"TurnBegin","payload":{"user_input":"inspect"}}}
+{"timestamp":1736035201.0,"message":{"type":"ToolCall","payload":{"id":"c1","name":"Read","arguments":{"path":"a.rs"}}}}
+{"timestamp":1736035202.0,"message":{"type":"ToolResult","payload":{"id":"c1","result":"ok"}}}

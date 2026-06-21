@@ -1,0 +1,2 @@
+{"role":"assistant","content":"SHOULD_NOT_LEAK_CONTENT","timestamp":"2025-01-02T00:00:00Z","tool_calls":[{"id":"secret-1","name":"Shell","args":{"token":"SHOULD_NOT_LEAK_ARGS"}}],"ModelUsed":"gpt-5","SourceTool":"generic"}
+{"role":"tool","content":"SHOULD_NOT_LEAK_RESULT","tool_call_id":"secret-1","timestamp":"2025-01-02T00:00:01Z","SourceTool":"generic"}

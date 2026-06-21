@@ -1,0 +1,5 @@
+{"type":"session.start","timestamp":"2025-01-04T00:00:00Z","data":{"context":{"cwd":"/tmp/copilot"}}}
+{"type":"user.message","timestamp":"2025-01-04T00:00:01Z","data":{"content":"inspect"}}
+{"type":"tool.execution_start","timestamp":"2025-01-04T00:00:02Z","data":{"toolName":"Read","toolCallId":"c1","arguments":{"path":"a.rs"}}}
+{"type":"tool.execution_complete","timestamp":"2025-01-04T00:00:03Z","data":{"toolCallId":"c1","success":true}}
+{"type":"session.shutdown","timestamp":"2025-01-04T00:00:04Z","data":{"modelMetrics":{"gpt-5":{"usage":{"inputTokens":100,"outputTokens":20}}}}}

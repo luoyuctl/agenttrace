@@ -1,0 +1,3 @@
+{"type":"message","role":"user","content":[{"type":"input_text","text":"inspect"}],"timestamp":1735689600000,"sessionId":"s1","cwd":"/tmp/project","providerData":{"agent":"cli"}}
+{"type":"function_call","name":"Read","callId":"c1","arguments":"{\"path\":\"a.rs\"}","timestamp":1735689601000,"sessionId":"s1","cwd":"/tmp/project","providerData":{"model":"glm-5.2","agent":"cli"}}
+{"type":"function_call_result","name":"Read","callId":"c1","status":"completed","output":{"type":"text","text":"ok"},"timestamp":1735689602000,"sessionId":"s1","cwd":"/tmp/project","providerData":{"model":"glm-5.2","agent":"cli"}}

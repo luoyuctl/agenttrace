@@ -1,0 +1,3 @@
+{"type":"session","version":3,"id":"pi-1","timestamp":"2025-01-06T00:00:00Z","cwd":"/tmp/pi"}
+{"type":"message","timestamp":"2025-01-06T00:00:01Z","message":{"role":"user","content":[{"type":"text","text":"inspect"}]}}
+{"type":"message","timestamp":"2025-01-06T00:00:02Z","message":{"role":"assistant","content":[{"type":"text","text":"done"}],"model":"gpt-5"}}

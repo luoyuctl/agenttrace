@@ -1,0 +1,1 @@
+{"provider":"openclaw","model":"claude-sonnet-4","usage":{"input_tokens":10,"output_tokens":2},"messages":[{"role":"user","content":"inspect"},{"role":"assistant","content":[{"type":"tool_use","id":"c1","name":"Read","input":{"path":"a.rs"}}]},{"role":"tool","tool_call_id":"c1","content":"ok"}]}

@@ -1,0 +1,4 @@
+{"role":"user","content":"inspect","timestamp":"2025-01-01T00:00:00Z","ModelUsed":"gpt-5","SourceTool":"generic"}
+{"role":"assistant","content":"checking","timestamp":"2025-01-01T00:00:01Z","tool_calls":[{"id":"ok-1","name":"Read","args":{"path":"a.rs"}},{"id":"bad-1","name":"Shell","args":{"cmd":"false"}},{"id":"missing-1","name":"Search","args":{"query":"x"}}],"ModelUsed":"gpt-5","SourceTool":"generic"}
+{"role":"tool","content":"ok","tool_call_id":"ok-1","timestamp":"2025-01-01T00:00:02Z","SourceTool":"generic"}
+{"role":"tool","content":"failed","tool_call_id":"bad-1","timestamp":"2025-01-01T00:00:04Z","is_error":true,"SourceTool":"generic"}
