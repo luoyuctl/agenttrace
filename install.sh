@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# agenttrace — single binary install (Go + Bubble Tea)
+# agenttrace — single binary install (Rust + ratatui)
 # Usage: curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
 
 REPO="luoyuctl/agenttrace"
@@ -48,7 +48,7 @@ TMP=$(mktemp)
 if ! curl -fsSL -o "$TMP" "$RELEASE_URL"; then
   rm -f "$TMP"
   echo "❌ No binary found for ${OS}/${ARCH}"
-  echo "   Build from source: git clone https://github.com/${REPO}.git && cd agenttrace && go build -ldflags='-s -w' -o agenttrace ./cmd/agenttrace/"
+  echo "   Build from source: git clone https://github.com/${REPO}.git && cd agenttrace && cargo build --release -p agenttrace"
   exit 1
 fi
 chmod +x "$TMP"

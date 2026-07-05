@@ -8,50 +8,60 @@ on:
   schedule:
     - cron: "17 3 * * *"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test and build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
         with:
-          go-version-file: go.mod
+          toolchain: stable
 
-      - name: Check Go formatting
-        run: test -z "$(gofmt -l .)"
+      - name: Check Rust formatting
+        run: cargo fmt --check
 
-      - name: Go vet
-        run: go vet ./...
+      - name: Clippy
+        run: cargo clippy -- -D warnings
 
-      - name: Go tests
-        run: go test ./...
+      - name: Rust tests
+        run: cargo test
 
-      - name: Race tests
-        if: github.event_name != 'pull_request'
-        run: go test -race ./...
+      - name: Generated testdata is current
+        run: python3 scripts/generate-testdata.py --check
 
       - name: Build CLI
-        run: go build -o /tmp/agenttrace ./cmd/agenttrace
+        run: cargo build --release -p agenttrace
+
+      - name: Single binary CLI and TUI entrypoints
+        run: python3 scripts/ci/check-single-binary-entrypoints.py
 
       - name: Demo and report output contract
         run: |
-          AGENTTRACE_BIN=/tmp/agenttrace \
+          AGENTTRACE_BIN=target/release/agenttrace \
           AGENTTRACE_CI_OUT=ci-artifacts \
             scripts/ci/check-output-contract.sh
 
       - name: Deterministic demo output
         run: |
-          AGENTTRACE_BIN=/tmp/agenttrace \
+          AGENTTRACE_BIN=target/release/agenttrace \
           AGENTTRACE_CI_OUT=ci-artifacts \
             scripts/ci/check-deterministic-output.sh
 
       - name: Report semantic consistency
         run: |
-          AGENTTRACE_BIN=/tmp/agenttrace \
+          AGENTTRACE_BIN=target/release/agenttrace \
           AGENTTRACE_CI_OUT=ci-artifacts \
             scripts/ci/check-report-semantics.sh
 
@@ -60,12 +70,27 @@ jobs:
 
       - name: Documented command smoke tests
         run: |
-          AGENTTRACE_BIN=/tmp/agenttrace \
+          AGENTTRACE_BIN=target/release/agenttrace \
           AGENTTRACE_CI_OUT=ci-artifacts \
             scripts/ci/check-docs-commands.sh
 
       - name: Pages source artifact check
         run: scripts/ci/check-pages-artifact.sh site
+
+      - name: Rust CLI fixture smoke
+        run: |
+          AGENTTRACE_BIN=target/release/agenttrace \
+          AGENTTRACE_REAL_CLI_DIR=testdata \
+          AGENTTRACE_REAL_CLI_QUERY=internal/ws \
+          AGENTTRACE_REAL_CLI_FILE_LIMIT=20 \
+          AGENTTRACE_REAL_CLI_OUT=ci-artifacts/real-cli-smoke \
+            scripts/ci/check-rust-real-cli-smoke.sh
+
+      - name: Rust TUI real-data smoke
+        if: env.AGENTTRACE_TUI_REAL_DIR != ''
+        run: |
+          AGENTTRACE_BIN=target/release/agenttrace \
+            scripts/ci/check-rust-tui-real-smoke.sh
 
       - name: Upload demo report artifacts
         if: always()
@@ -77,6 +102,9 @@ jobs:
 
       - name: Validate Homebrew formula syntax
         run: ruby -c homebrew/Formula/agenttrace.rb
+
+      - name: Validate Cargo manifests
+        run: scripts/ci/check-cargo-manifests.sh
 
       - name: Validate helper scripts
         run: bash -n scripts/record-demo.sh scripts/ci/*.sh

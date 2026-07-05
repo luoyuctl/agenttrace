@@ -12,10 +12,11 @@ fail() {
 [[ -d "$page_dir" ]] || fail "page directory not found: $page_dir"
 [[ -f "$page_dir/index.html" ]] || fail "missing index.html in $page_dir"
 [[ -f "$page_dir/demo-report.html" ]] || fail "missing demo-report.html in $page_dir"
+[[ -f "$page_dir/llms.txt" ]] || fail "missing llms.txt in $page_dir"
 
 demo_report="$page_dir/demo-report.html"
-version="$(sed -nE 's/^const Version = "([^"]+)"/\1/p' "$repo_root/internal/engine/engine.go")"
-[[ -n "$version" ]] || fail "could not read internal/engine Version"
+version="$(sed -nE 's/^version = "([^"]+)"/\1/p' "$repo_root/Cargo.toml" | head -1)"
+[[ -n "$version" ]] || fail "could not read workspace package version"
 
 if ! grep -q "<div class=\"meta\">v$version" "$demo_report" &&
   ! grep -qi "static sample data" "$demo_report"; then
@@ -54,6 +55,11 @@ for asset in \
     fail "missing Pages asset: $asset"
   fi
 done
+
+if grep -R -Eqi "built in Go|Bubble Tea terminal UI|crates.io/crates/agenttrace" \
+  "$page_dir/index.html" "$page_dir/llms.txt"; then
+  fail "Pages metadata contains a stale implementation or unavailable package link"
+fi
 
 node - "$page_dir" "$repo_root" <<'NODE'
 const fs = require("fs");

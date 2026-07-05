@@ -31,7 +31,7 @@ if ($Version -eq "latest") {
 
 if (-not $assets) {
     Write-Host "❌ No binary found for windows/${ARCH}" -ForegroundColor Red
-    Write-Host "   Build from source: git clone https://github.com/$REPO.git && cd agenttrace && go build -ldflags='-s -w' -o agenttrace.exe ./cmd/agenttrace/"
+    Write-Host "   Build from source: git clone https://github.com/$REPO.git && cd agenttrace && cargo build --release -p agenttrace"
     exit 1
 }
 

@@ -2,16 +2,16 @@ class Agenttrace < Formula
   desc "TUI observability for AI coding agent sessions, cost, latency, and anomalies"
   homepage "https://github.com/luoyuctl/agenttrace"
   url "https://github.com/luoyuctl/agenttrace.git", branch: "master"
-  version "0.5.4"
+  version "0.6.0"
   license "MIT"
 
-  depends_on "go" => :build
+  depends_on "rust" => :build
 
   def install
-    system "go", "build", "-ldflags=-s -w", "-o", bin/"agenttrace", "./cmd/agenttrace"
+    system "cargo", "install", *std_cargo_args(path: "crates/agenttrace-cli")
   end
 
   test do
-    assert_match "agenttrace v0.5.4", shell_output("#{bin}/agenttrace --version")
+    assert_match "agenttrace v0.6.0", shell_output("#{bin}/agenttrace --version")
   end
 end
