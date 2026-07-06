@@ -20,7 +20,7 @@
   <a href="https://goreportcard.com/report/github.com/luoyuctl/agenttrace"><img src="https://goreportcard.com/badge/github.com/luoyuctl/agenttrace" alt="Go Report Card"></a>
   <img src="https://img.shields.io/badge/go-1.25+-00ADD8.svg" alt="Go">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.5.2-2bbc8a.svg" alt="Homebrew">
+  <img src="https://img.shields.io/badge/Homebrew-v0.5.4-2bbc8a.svg" alt="Homebrew">
 </p>
 
 <p align="center">
@@ -126,19 +126,11 @@ Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor export
 - Parser 指南：[docs/parser-guide.md](docs/parser-guide.md)
 - 发布说明草案：[docs/launch-kit.md](docs/launch-kit.md)
 
-agenttrace 已被这些项目收录：
+agenttrace 已被这些开源项目收录：
 
-- [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli)
-- [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild)
-- [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills)
-- [awesome-x-ops](https://github.com/xlabs-club/awesome-x-ops)
-- [Awesome DevOps AI](https://github.com/hammadhaqqani/awesome-devops-ai)
-- [agentic-ai-knowledge-base](https://github.com/ankurkumarz/agentic-ai-knowledge-base)
-- [awesome-harness-engineering](https://github.com/walkinglabs/awesome-harness-engineering)
-- [awesome-ai-tools](https://github.com/QAInsights/awesome-ai-tools)
-- [awesome-claude-code-toolkit](https://github.com/rohitg00/awesome-claude-code-toolkit)
-- [awesome-ai-plugins](https://github.com/hashgraph-online/awesome-ai-plugins)
-- [awesome-agent-skills](https://github.com/kodustech/awesome-agent-skills)
+- [awesome-mac](https://github.com/jaywcjlove/awesome-mac)
+- [antigravity-awesome-skills](https://github.com/sickn33/antigravity-awesome-skills)
+- [awesome-claude-skills](https://github.com/BehiSecc/awesome-claude-skills)
 
 ## 贡献
 
