@@ -2,17 +2,17 @@
 
 Thanks for helping make AI coding-agent observability less opaque.
 
-agenttrace is intentionally small: one Go binary, local-first analysis, no database, and no background service. Changes should keep that shape unless there is a clear reason.
+agenttrace is intentionally small: one Rust binary, local-first analysis, no hosted database, and no background service. It can read local SQLite stores written by supported agents. Changes should keep that shape unless there is a clear reason.
 
 ## Development Setup
 
 ```bash
 git clone https://github.com/luoyuctl/agenttrace.git
 cd agenttrace
-go test ./...
-go build -o agenttrace ./cmd/agenttrace
-./agenttrace --demo
-./agenttrace --doctor
+cargo test
+cargo build --release -p agenttrace
+target/release/agenttrace --demo
+target/release/agenttrace --doctor
 ```
 
 ## Validation Checklist
@@ -20,17 +20,20 @@ go build -o agenttrace ./cmd/agenttrace
 Run the relevant checks before opening a PR:
 
 ```bash
-go test ./...
-go build -o /tmp/agenttrace ./cmd/agenttrace
+cargo fmt --check
+cargo clippy -- -D warnings
+cargo test
+python3 scripts/generate-testdata.py --check
+cargo build --release -p agenttrace
 ruby -c homebrew/Formula/agenttrace.rb
 ```
 
 For TUI changes, also check narrow and wide terminals when possible:
 
 ```bash
-./agenttrace --demo
-./agenttrace --demo --doctor
-./agenttrace --demo --overview -f json
+target/release/agenttrace --demo
+target/release/agenttrace --demo --doctor
+target/release/agenttrace --demo --overview -f json
 ```
 
 ## Parser Contributions
@@ -44,6 +47,17 @@ A good parser PR includes:
 - extraction for role, timestamp, model, token usage, tool calls, and tool errors when available
 - regression tests for malformed or partial records
 - no private prompts, API keys, file paths, or proprietary source snippets
+
+Prefer deterministic generated fixtures for reusable provider samples:
+
+```bash
+python3 scripts/generate-testdata.py
+python3 scripts/generate-testdata.py --check
+```
+
+Do not make a fixture look more complete than the source format. Aggregate-only
+sources should remain Aggregate or Limited instead of receiving synthetic event
+timestamps or fake tool spans.
 
 Agent-run parser, growth, release, or quality review work should also follow
 [docs/agentops-prompt-rules.md](docs/agentops-prompt-rules.md) before opening

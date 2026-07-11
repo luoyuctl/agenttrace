@@ -1,6 +1,6 @@
 # Parser Guide
 
-agenttrace supports multiple AI coding-agent session formats by normalizing them into `engine.Event` records. The rest of the system works from that normalized shape.
+agenttrace supports multiple AI coding-agent session formats by normalizing them into `Event` records in `agenttrace-core`. The rest of the system works from that normalized shape.
 
 ## What a Parser Should Extract
 
@@ -21,18 +21,26 @@ Partial extraction is fine. Incorrect extraction is worse than missing data.
 
 ## Add Format Detection
 
-Start in `internal/engine/engine.go`:
+Start in `crates/agenttrace-core/src/parser.rs`:
 
-- update `DetectFormat`
+- update `parse_raw_session`
 - add a stable `SourceTool` id
-- add a display name in `ToolDisplayNames`
-- route the format in `Parse`
+- add display-name/report handling in `crates/agenttrace-core/src/reports.rs` when needed
+- route the format before the generic JSON/JSONL fallbacks
 
 Detection should be conservative. If the file could be a generic JSON/JSONL session, avoid claiming it unless there is a clear field or shape unique to the tool.
 
 ## Add Tests
 
-Use small synthetic fixtures in `internal/engine/engine_test.go`.
+Use small synthetic fixtures under `testdata/` or focused Rust tests in `crates/agenttrace-core/tests/`. Reusable synthetic provider fixtures live under `testdata/generated/` and are produced deterministically:
+
+```bash
+python3 scripts/generate-testdata.py
+python3 scripts/generate-testdata.py --check
+```
+
+Keep source capability honest: raw event formats may produce Detailed sessions;
+aggregate SQLite rows must not gain invented timestamps, tool spans, or content.
 
 Cover:
 
@@ -49,10 +57,10 @@ Keep fixtures tiny. A few records are better than a full private session.
 After parser tests pass, run:
 
 ```bash
-go test ./...
-go build -o /tmp/agenttrace ./cmd/agenttrace
-/tmp/agenttrace --doctor
-/tmp/agenttrace --demo --overview -f json
+cargo test
+cargo build --release -p agenttrace
+target/release/agenttrace --doctor
+target/release/agenttrace --demo --overview -f json
 ```
 
 If you add a new default session directory, make sure `agenttrace --doctor` reports it clearly.

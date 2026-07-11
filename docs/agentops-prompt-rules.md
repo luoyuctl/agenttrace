@@ -47,7 +47,7 @@ Before marking any parser PR ready for review or merge:
 Parser validation should include:
 
 ```bash
-go test ./...
-go build -o /tmp/agenttrace ./cmd/agenttrace
-/tmp/agenttrace --doctor
+cargo test
+cargo build --release -p agenttrace
+target/release/agenttrace --doctor
 ```

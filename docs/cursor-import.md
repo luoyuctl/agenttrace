@@ -1,6 +1,6 @@
 # Cursor Import
 
-Cursor stores local chat and composer state in SQLite `state.vscdb` files under the VS Code-style workspace storage directory. `agenttrace` keeps the main binary pure Go and reads exported JSON instead of opening SQLite directly.
+Cursor stores local chat and composer state in SQLite `state.vscdb` files under the VS Code-style workspace storage directory. `agenttrace` keeps the main binary local-first and reads exported JSON instead of opening Cursor workspace databases directly.
 
 ## Export a Workspace
 

@@ -11,6 +11,17 @@ The goal is to catch agent workflow regressions before they become invisible cos
 
 Start with report-only artifacts, then turn on blocking thresholds once the team knows its normal health and tool failure range.
 
+Use `--range today|7d|30d|all`, `--project`, `--source`, and
+`--model-filter` to keep reports and gates on the same explicit scope. JSON
+reports include `data_health` and `by_project` so automation can distinguish a
+healthy run from missing, skipped, or fallback-priced data.
+
+Long-term history is opt-in. `--preserve-history` stores only derived metrics
+(time, project label, source, model, tokens, cost, health, and anomaly labels)
+under the user data directory. It does not copy session paths, prompts, replies,
+or tool arguments. Add `--include-history` when a report should merge those
+preserved metrics with live sessions.
+
 ## Local Check
 
 ```bash
@@ -132,7 +143,7 @@ Tune thresholds per repository. A stricter team can start with health `90` and t
 
 This repository also runs agenttrace against its own demo and docs surfaces so repetitive Agent validation becomes a stable CI contract.
 
-The project CI builds `/tmp/agenttrace` and runs:
+The project CI builds `target/release/agenttrace` and runs:
 
 ```bash
 scripts/ci/check-output-contract.sh
@@ -141,6 +152,12 @@ scripts/ci/check-report-semantics.sh
 scripts/ci/check-release-surfaces.sh
 scripts/ci/check-docs-commands.sh
 scripts/ci/check-pages-artifact.sh site
+```
+
+For the full local release gate, including Rust fmt/clippy/test/build, release-binary contract scripts, release surfaces, Homebrew formula syntax, real-data CLI smoke, and Rust TUI real-data smoke, run:
+
+```bash
+scripts/ci/check-rust-release-local.sh
 ```
 
 These checks cover:
@@ -154,5 +171,7 @@ These checks cover:
 - README, Homebrew formula, site metadata, and sample report version drift
 - non-interactive README/docs command smoke tests
 - Pages local asset references and sample report metadata
+- local real-data CLI smoke with sampled real local session files
+- local Rust TUI pty smoke with sampled real local session files
 
 CI uploads generated demo reports as artifacts so reviewers can inspect the JSON, Markdown, and HTML output without rerunning local commands.
