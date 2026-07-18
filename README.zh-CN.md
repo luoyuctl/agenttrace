@@ -16,11 +16,9 @@
   <a href="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml"><img src="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://luoyuctl.github.io/agenttrace/"><img src="https://img.shields.io/badge/site-agenttrace-54ff00.svg" alt="Site"></a>
   <a href="https://github.com/luoyuctl/agenttrace/releases/latest"><img src="https://img.shields.io/github/v/release/luoyuctl/agenttrace?color=00ADD8" alt="Release"></a>
-  <a href="https://pkg.go.dev/github.com/luoyuctl/agenttrace"><img src="https://pkg.go.dev/badge/github.com/luoyuctl/agenttrace.svg" alt="Go Reference"></a>
-  <a href="https://goreportcard.com/report/github.com/luoyuctl/agenttrace"><img src="https://goreportcard.com/badge/github.com/luoyuctl/agenttrace" alt="Go Report Card"></a>
-  <img src="https://img.shields.io/badge/go-1.25+-00ADD8.svg" alt="Go">
+  <img src="https://img.shields.io/badge/Rust-stable-f74c00.svg" alt="Rust">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.5.2-2bbc8a.svg" alt="Homebrew">
+  <a href="https://github.com/luoyuctl/homebrew-tap"><img src="https://img.shields.io/badge/Homebrew-tap-2bbc8a.svg" alt="Homebrew tap"></a>
 </p>
 
 <p align="center">
@@ -30,6 +28,8 @@
 ---
 
 **agenttrace** 是一个本地优先的终端 TUI 和报告生成工具，用来分析 AI 编程 Agent 的会话历史。它会读取 Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor exports、Hermes Agent、OpenCode、OpenClaw、Pi、Oh My Pi、Kimi CLI、Copilot-style logs 和通用 JSON/JSONL traces，主要帮你做两件事：汇总多个 Agent 历史会话的成本、Token 和耗时；定位某次任务为什么跑得慢。
+
+CLI 和 TUI 来自同一个 `agenttrace` 二进制：不带报告动作时进入 TUI，传入 `--sessions`、`--overview` 等参数时输出 CLI 报告。
 
 ## 为什么需要 agenttrace？
 
@@ -47,6 +47,8 @@ AI 编程 Agent 越来越像一套小型构建系统：会调用工具、重试�
 
 ## 真实本机运行
 
+以下截图和数字是为 v0.6.0 源码树采集的一次脱敏历史样本，不是当前遥测数据，也不是测试 fixture。
+
 ```bash
 agenttrace
 ```
@@ -61,6 +63,10 @@ agenttrace
 
 ## 安装
 
+以下命令安装当前公开渠道版本；在 v0.6.0 Release 资产和 Homebrew Formula
+发布前，它们可能落后于 v0.6.0 源码树。可用 `agenttrace --version` 检查实际版本；
+如需体验当前源码树，请使用下面的 Git Cargo 安装命令。
+
 ```bash
 curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
 ```
@@ -69,7 +75,7 @@ curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh
 
 ```bash
 brew install luoyuctl/tap/agenttrace
-go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
+cargo install --git https://github.com/luoyuctl/agenttrace agenttrace
 ```
 
 Windows：
@@ -90,6 +96,17 @@ agenttrace --doctor
 # 生成机器可读证据
 agenttrace --overview -f json
 
+# 按时间、项目、来源和模型筛选
+agenttrace --overview -f json --range 7d --project agenttrace
+agenttrace --overview -f json --source codex --model-filter gpt-5
+
+# 搜索本地会话元数据
+agenttrace --search billing
+
+# 对派生历史显式启用长期保存；不保存 prompt、回复和工具参数正文
+agenttrace --overview -f json --preserve-history
+agenttrace --overview -f json --include-history --range 30d
+
 # 生成可放到 CI artifact 或 issue 里的独立 HTML 报告
 agenttrace --overview -f html -o agenttrace-overview.html
 
@@ -98,6 +115,12 @@ agenttrace --overview -f json -o agenttrace-baseline.json
 agenttrace --overview -f json \
   --baseline agenttrace-baseline.json \
   -o agenttrace-overview.json
+
+# 在 CI 中阻止不健康的 Agent 运行
+agenttrace --overview \
+  --fail-under-health 80 \
+  --fail-on-critical \
+  --max-tool-fail-rate 15
 ```
 
 ## 支持哪些Agent
@@ -111,6 +134,9 @@ Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor export
 | 需求 | agenttrace 提供 |
 |---|---|
 | 历史消耗总览 | 跨 Agent 会话聚合，展示 token 总量、模型价格、估算成本和真实耗时 |
+| 数据可信度 | 展示解析跳过、缓存命中、未知来源/模型、价格回退和字段覆盖率 |
+| 能力降级 | 每个会话标记为 `Detailed`、`Aggregate` 或 `Limited`，不把缺失的事件证据包装成完整 Trace |
+| 脱敏步骤 | 来源提供调用 ID 和时间戳时展示 Tool Step 元数据和耗时，不在 Step 中保存 prompt、回复、结果或工具参数正文 |
 | 慢任务诊断 | 延迟统计、长间隔、挂起会话、重试循环、慢工具、大参数和上下文压力 |
 | 回归证据 | 在提供本地 baseline 时进行对比，并在报告中展示 incident timeline 和保守的 tool authority 分类 |
 | 优先级排序 | 按成本、耗时、轮次、健康分、失败、异常、模型、来源或文本搜索筛选 |
@@ -145,16 +171,24 @@ agenttrace 已被这些项目收录：
 欢迎提交 Parser PR。一个好的 parser 贡献通常包含：
 
 - 一个很小的脱敏 fixture 或合成样本
-- `DetectFormat` 中的格式识别
+- `crates/agenttrace-core/src/parser.rs` 中的格式识别
 - role、timestamp、model、token usage、tool call、tool error 提取
 - 成功解析和坏输入的测试
+
+生成式 fixture 使用确定性脚本维护：
+
+```bash
+python3 scripts/generate-testdata.py
+python3 scripts/generate-testdata.py --check
+```
 
 提交 PR 前请运行：
 
 ```bash
-go test ./...
-go build -o agenttrace ./cmd/agenttrace/
-./agenttrace --doctor
+cargo test
+python3 scripts/generate-testdata.py --check
+cargo build --release -p agenttrace
+target/release/agenttrace --doctor
 ```
 
 完整贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。

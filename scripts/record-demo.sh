@@ -21,6 +21,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-go build -o "$tmpbin/agenttrace" ./cmd/agenttrace
+cargo build --release -p agenttrace
+cp target/release/agenttrace "$tmpbin/agenttrace"
 PATH="$tmpbin:$PATH" vhs docs/demo.tape
 echo "Wrote assets/agenttrace-demo.gif"

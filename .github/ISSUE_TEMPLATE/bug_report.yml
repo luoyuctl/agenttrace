@@ -12,7 +12,7 @@ body:
     attributes:
       label: agenttrace version
       description: Run `agenttrace --version`.
-      placeholder: "agenttrace v0.3.4"
+      placeholder: "agenttrace v0.6.0"
     validations:
       required: true
   - type: dropdown
@@ -23,11 +23,15 @@ body:
         - Claude Code
         - Codex CLI
         - Gemini CLI
+        - Qwen Code
+        - Cline
         - Aider
         - Cursor export
         - Hermes Agent
         - OpenCode
         - OpenClaw
+        - Pi
+        - Oh My Pi
         - Copilot CLI
         - Kimi CLI
         - Generic JSON/JSONL

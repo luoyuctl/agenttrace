@@ -5,7 +5,7 @@ What happened, or what would you like agenttrace to support?
 ## Context
 
 - agenttrace version:
-- session source: Claude Code / Codex CLI / Gemini CLI / Aider / Cursor / other
+- session source: Claude Code / Codex CLI / Gemini CLI / Qwen Code / Cline / Aider / Cursor / Hermes Agent / OpenCode / OpenClaw / Pi / Oh My Pi / Kimi CLI / other
 - command used:
 - operating system:
 

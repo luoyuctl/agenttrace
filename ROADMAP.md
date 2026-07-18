@@ -29,6 +29,16 @@ becoming a generic observability dashboard.
   token attribution, persistent memory, and upstream log fidelity before
   committing implementation.
 
+## Current foundation
+
+- One Rust binary provides CLI reports and a ratatui/crossterm TUI.
+- Local session caches and SQLite-backed sources load without a hosted service.
+- `Detailed`, `Aggregate`, and `Limited` labels expose source capability gaps.
+- Tool steps retain timing/status metadata only and omit conversation and tool
+  payload bodies.
+- Deterministic generated fixtures protect provider parsers and degradation
+  behavior.
+
 ## Non-goals
 
 Non-goals: hosted prompt storage, billing-grade invoice reconciliation, replacing

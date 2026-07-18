@@ -1,6 +1,6 @@
 # agenttrace
 
-agenttrace is a local-first TUI for AI coding agent session history and slow-run diagnosis.
+agenttrace is a local-first Rust CLI and TUI for AI coding agent session history and slow-run diagnosis. Both interfaces ship in one binary: no report action opens the TUI, while flags select CLI reports.
 
 Repository: https://github.com/luoyuctl/agenttrace
 Website: https://luoyuctl.github.io/agenttrace/
@@ -13,7 +13,9 @@ License: MIT
 
 - Parses local sessions from Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi CLI, Copilot-style logs, and generic JSON/JSONL traces.
 - Shows historical cost, token usage, model usage, elapsed time, latency, hanging gaps, slow tool calls, and session health across multiple agents.
-- Provides a Bubble Tea terminal UI with overview, session list, detail, diagnostics, and diff views.
+- Provides a ratatui/crossterm terminal UI with overview, session list, detail, diagnostics, and diff views.
+- Labels each session as Detailed, Aggregate, or Limited so sources without event-level evidence are not presented as complete traces.
+- Keeps privacy-safe tool-step metadata when call IDs and timestamps exist; step records exclude prompt, response, tool-result, and tool-argument bodies.
 - Exports JSON, Markdown, and self-contained HTML reports.
 - Supports CI health gates for average health, critical sessions, and tool failure rate.
 - Keeps analysis local and uses an incremental cache to avoid reparsing all sessions on every startup.
@@ -30,7 +32,7 @@ brew install luoyuctl/tap/agenttrace
 ```
 
 ```bash
-go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
+cargo install --git https://github.com/luoyuctl/agenttrace agenttrace
 ```
 
 ## Useful Commands
@@ -46,7 +48,7 @@ agenttrace --overview --fail-under-health 80 --fail-on-critical --max-tool-fail-
 
 ## Positioning
 
-agenttrace is useful when developers want to understand what multiple AI coding agents spent across cost, tokens, and time, then diagnose why a specific agent task was slow. It is closer to a terminal session-history dashboard than a chat client.
+agenttrace is useful when developers want to understand what multiple AI coding agents spent across cost, tokens, and time, then diagnose why a specific agent task was slow. It is closer to a terminal session-history dashboard than a chat client or a fully instrumented APM trace backend.
 
 ## Search and discovery terms
 

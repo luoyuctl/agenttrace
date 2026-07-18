@@ -25,7 +25,7 @@ agenttrace is a local TUI for AI coding agent session history. It shows what Cla
 ## Verification Before Posting
 
 ```bash
-go test ./...
-go build -o /tmp/agenttrace ./cmd/agenttrace
-/tmp/agenttrace --demo --overview -f json
+cargo test
+cargo build --release -p agenttrace
+target/release/agenttrace --demo --overview -f json
 ```

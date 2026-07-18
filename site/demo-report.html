@@ -17,82 +17,137 @@ section{border:1px solid var(--line);background:rgba(16,20,25,.78);padding:20px;
 <body>
 <main>
 <header>
-<div><div class="brand">agenttrace</div><h1>AI agent session overview</h1><p>Static report generated from local coding-agent traces.</p><p>Static sample data: this local-first snapshot is a representative public artifact, not a full current generated report; current demo output may include incident timelines, baseline comparison fields, and tool authority summaries. No hosted tracing or uploaded logs.</p></div>
-<div class="meta">v0.5.4<br>1761 Sessions<br><code>agenttrace --overview -f html</code></div>
+<div><div class="brand">agenttrace</div><h1>AI agent session overview</h1><p>Static sample data captured from local coding-agent traces on 2026-07-18; not current telemetry.</p></div>
+<div class="meta">v0.6.0<br>2413 Sessions<br><code>agenttrace --overview -f html</code></div>
 </header>
 <div class="grid" aria-label="summary metrics">
-<div class="metric"><span>Sessions</span><strong>1761</strong><p>1411 Healthy / 334 Warning / 16 Critical</p></div>
-<div class="metric"><span>Total tokens</span><strong>9126644351</strong><p>+ live</p></div>
-<div class="metric"><span>Average health</span><strong>91.8</strong><p>Fleet quality score</p></div>
-<div class="metric"><span>Total estimated cost</span><strong>$5036.55</strong><p>Estimated session cost</p></div>
-<div class="metric "><span>Tool failures</span><strong>1374/125116</strong><p>1.1% failure rate</p></div>
+<div class="metric"><span>Sessions</span><strong>2413</strong><p>1904 Healthy / 478 Warning / 31 Critical</p></div>
+<div class="metric"><span>Total tokens</span><strong>41503324713</strong><p>+ live</p></div>
+<div class="metric"><span>Average health</span><strong>91.7</strong><p>Fleet quality score</p></div>
+<div class="metric"><span>Total estimated cost</span><strong>$34091.97</strong><p>Estimated session cost</p></div>
+<div class="metric "><span>Tool failures</span><strong>656/262226</strong><p>0.3% failure rate</p></div>
 </div>
-<section><h2>Health Trend</h2><p>Health score stable at 93</p></section>
+<section><h2>Tool authority</h2>
+<p><strong>Highest category</strong>: <code>unknown_authority</code></p>
+<table><caption>Authority category counts</caption><thead><tr><th>Authority category</th><th class="num">Count</th></tr></thead><tbody>
+<tr><td><code>external_publish</code></td><td class="num">195</td></tr>
+<tr><td><code>git_write</code></td><td class="num">3895</td></tr>
+<tr><td><code>network_access</code></td><td class="num">7039</td></tr>
+<tr><td><code>package_install</code></td><td class="num">364</td></tr>
+<tr><td><code>read_only_files</code></td><td class="num">2669</td></tr>
+<tr><td><code>shell_exec</code></td><td class="num">171772</td></tr>
+<tr><td><code>test_or_build</code></td><td class="num">7827</td></tr>
+<tr><td><code>unknown_authority</code></td><td class="num">10628</td></tr>
+<tr><td><code>write_files</code></td><td class="num">31164</td></tr>
+</tbody></table>
+<p><strong>High-authority tools</strong>: <code>Agent</code>, <code>AskUserQuestion</code>, <code>Bash</code>, <code>Edit</code>, <code>Glob</code>, <code>SendMessage</code>, <code>Skill</code>, <code>Task</code>, <code>TaskCreate</code>, <code>TaskGet</code>, <code>TaskOutput</code>, <code>TaskUpdate</code>, <code>WebFetch</code>, <code>WebSearch</code>, <code>Workflow</code>, <code>Write</code>, <code>_add_comment_to_issue</code>, <code>_create_pull_request</code>, <code>_fetch_pr_comments</code>, <code>_get_pr_info</code>, <code>_search_repositories</code>, <code>_update_pull_request</code>, <code>apply_patch</code>, <code>automation_update</code>, <code>bash</code>, <code>batch_design</code>, <code>batch_get</code>, <code>browser_click</code>, <code>browser_close</code>, <code>browser_console_messages</code>, <code>browser_evaluate</code>, <code>browser_fill_form</code>, <code>browser_navigate</code>, <code>browser_network_requests</code>, <code>browser_press_key</code>, <code>browser_resize</code>, <code>browser_run_code_unsafe</code>, <code>browser_select_option</code>, <code>browser_snapshot</code>, <code>browser_tabs</code>, <code>browser_take_screenshot</code>, <code>chrome_click</code>, <code>chrome_execute_js</code>, <code>chrome_navigate</code>, <code>chrome_page_info</code>, <code>chrome_press_key</code>, <code>chrome_screenshot</code>, <code>chrome_scroll</code>, <code>chrome_snapshot</code>, <code>chrome_type</code>, <code>chrome_wait_for_load</code>, <code>click</code>, <code>close_agent</code>, <code>codegraph_callers</code>, <code>codegraph_explore</code>, <code>codegraph_node</code>, <code>codegraph_search</code>, <code>create_goal</code>, <code>ctx_index</code>, <code>ctx_search</code>, <code>describe_image</code>, <code>detect_service_anomalies</code>, <code>drag</code>, <code>edit</code>, <code>exec_command</code>, <code>execute_shell_command</code>, <code>export_nodes</code>, <code>fetch_content</code>, <code>firecrawl_browser_create</code>, <code>firecrawl_browser_execute</code>, <code>firecrawl_extract</code>, <code>firecrawl_scrape</code>, <code>firecrawl_search</code>, <code>get_app_state</code>, <code>get_editor_state</code>, <code>get_goal</code>, <code>get_mcp_runtime_status</code>, <code>get_mcp_tool_metadata</code>, <code>get_screenshot</code>, <code>get_search_content</code>, <code>get_variables</code>, <code>js</code>, <code>js_add_node_module_dir</code>, <code>js_repl_reset</code>, <code>lens_diagnostics</code>, <code>mcp__codex_apps__github_search_repositories</code>, <code>mcp__context7__query-docs</code>, <code>mcp__context7__query_docs</code>, <code>mcp__context7__resolve-library-id</code>, <code>mcp__context7__resolve_library_id</code>, <code>mcp__firecrawl__firecrawl_map</code>, <code>mcp__firecrawl__firecrawl_scrape</code>, <code>mcp__firecrawl__firecrawl_search</code>, <code>mcp__markitdown__convert_to_markdown</code>, <code>mcp__mcp_server__cmdb_get_service_info</code>, <code>mcp__mcp_server__detect_service_anomalies</code>, <code>mcp__mcp_server__execute_shell_command</code>, <code>mcp__mcp_server__get_mcp_tool_metadata</code>, <code>mcp__mcp_server__search_service_traces</code>, <code>mcp__my-server__detect_service_anomalies</code>, <code>mcp__my-server__execute_shell_command</code>, <code>mcp__my-server__get_mcp_tool_metadata</code>, <code>mcp__my-server__get_prometheus_metric_metadata</code>, <code>mcp__my-server__query_prometheus</code>, <code>mcp__my-server__search_service_traces</code>, <code>mcp__my_server__cmdb_get_service_info</code>, <code>mcp__my_server__execute_shell_command</code>, <code>mcp__my_server__get_mcp_tool_metadata</code>, <code>mcp__my_server__query_audit_logs</code>, <code>mcp__my_server__search_service_traces</code>, <code>mcp__my_server__tencentcloud_apm_search_spans</code>, <code>mcp__my_server__tencentcloud_edgeone_get_zone</code>, <code>mcp__orchestration__Agent</code>, <code>mcp__orchestration__TaskCreate</code>, <code>mcp__orchestration__TaskGet</code>, <code>mcp__orchestration__TaskUpdate</code>, <code>mcp__orchestration__WriteDesign</code>, <code>mcp__pencil__batch_design</code>, <code>mcp__pencil__batch_get</code>, <code>mcp__pencil__get_editor_state</code>, <code>mcp__pencil__get_guidelines</code>, <code>mcp__pencil__get_screenshot</code>, <code>mcp__pencil__get_style_guide</code>, <code>mcp__pencil__get_style_guide_tags</code>, <code>mcp__pencil__get_variables</code>, <code>mcp__pencil__open_document</code>, <code>mcp__pencil__replace_all_matching_properties</code>, <code>mcp__pencil__search_all_unique_properties</code>, <code>mcp__pencil__set_variables</code>, <code>mcp__pencil__snapshot_layout</code>, <code>mcp__pencil__spawn_agents</code>, <code>mcp__playwright__browser_console_messages</code>, <code>mcp__playwright__browser_evaluate</code>, <code>mcp__playwright__browser_install</code>, <code>mcp__playwright__browser_navigate</code>, <code>mcp__playwright__browser_network_requests</code>, <code>mcp__playwright__browser_resize</code>, <code>mcp__playwright__browser_run_code</code>, <code>mcp__playwright__browser_snapshot</code>, <code>mcp__playwright__browser_tabs</code>, <code>mcp__playwright__browser_take_screenshot</code>, <code>mcp__playwright__browser_wait_for</code>, <code>mcp__qmd__query</code>, <code>mcp__qmd__status</code>, <code>mcp__tavily-remote-mcp__tavily_search</code>, <code>mcp__tavily__tavily_extract</code>, <code>mcp__tavily__tavily_search</code>, <code>mcp__tavily__tavily_skill</code>, <code>mcp_rca_mcp_cmdb_get_service_info</code>, <code>mcp_rca_mcp_detect_service_anomalies</code>, <code>mcp_rca_mcp_execute_first_successful_shell_command</code>, <code>mcp_rca_mcp_execute_shell_command</code>, <code>mcp_rca_mcp_get_gitlab_code_by_tag</code>, <code>mcp_rca_mcp_get_gitlab_code_range</code>, <code>mcp_rca_mcp_get_gitlab_code_structure</code>, <code>mcp_rca_mcp_get_gitlab_diff</code>, <code>mcp_rca_mcp_get_mcp_runtime_status</code>, <code>mcp_rca_mcp_get_mcp_tool_metadata</code>, <code>mcp_rca_mcp_get_trace_span</code>, <code>mcp_rca_mcp_inspect_ip</code>, <code>mcp_rca_mcp_query_prometheus</code>, <code>mcp_rca_mcp_search_gitlab_code_in_project</code>, <code>mcp_rca_mcp_search_gitlab_projects</code>, <code>mcp_rca_mcp_search_service_traces</code>, <code>mcp_rca_mcp_tencentcloud_apm_search_spans</code>, <code>mcp_rca_mcp_tencentcloud_cloudaudit_diagnose_resource_changes</code>, <code>mcp_rca_mcp_tencentcloud_cvm_get_instance_detail</code>, <code>mcp_rca_mcp_tencentcloud_dnspod_resolve_record</code>, <code>mcp_rca_mcp_tencentcloud_edgeone_describe_origin_groups</code>, <code>mcp_rca_mcp_tencentcloud_edgeone_get_l7_analysis</code>, <code>mcp_rca_mcp_tencentcloud_edgeone_get_top_l7_analysis</code>, <code>mcp_rca_mcp_tencentcloud_edgeone_get_zone</code>, <code>mcp_rca_mcp_tencentcloud_edgeone_get_zone_setting</code>, <code>mcp_rca_mcp_tencentcloud_l7_diagnose_ingress</code>, <code>mcp_rca_mcp_tencentcloud_monitor_get_alarm_events</code>, <code>mcp_rca_mcp_tencentcloud_monitor_get_alarm_histories</code>, <code>mcp_rca_mcp_tencentcloud_waf_get_domain_rules</code>, <code>mcp_rca_mcp_validate_shell_command</code>, <code>memory</code>, <code>memory_search</code>, <code>open_document</code>, <code>press_key</code>, <code>query_docs</code>, <code>read_thread_terminal</code>, <code>replace_all_matching_properties</code>, <code>request_user_input</code>, <code>resolve_library_id</code>, <code>scroll</code>, <code>search_all_unique_properties</code>, <code>session_search</code>, <code>set_value</code>, <code>set_variables</code>, <code>snapshot_layout</code>, <code>spawn_agent</code>, <code>subagent</code>, <code>tavily_extract</code>, <code>tavily_research</code>, <code>tavily_search</code>, <code>team</code>, <code>tencentcloud_edgeone_describe_origin_groups</code>, <code>tencentcloud_edgeone_get_origin_protection</code>, <code>tencentcloud_edgeone_get_zone</code>, <code>tencentcloud_edgeone_get_zone_setting</code>, <code>tencentcloud_l7_diagnose_domain_path</code>, <code>tencentcloud_l7_diagnose_ingress</code>, <code>todo</code>, <code>type_text</code>, <code>unknown</code>, <code>update_goal</code>, <code>update_plan</code>, <code>wait</code>, <code>wait_agent</code>, <code>web_search</code>, <code>write</code>, <code>write_stdin</code></p>
+</section>
+<section><h2>Possible cost drivers</h2><table><thead><tr><th>Session</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>rollout-2026-06-21T16-38-51-019ee955-253a-7ab3-b489-2eb287fc9389</td><td>possible driver: 53450 tokens per assistant turn across 483 turn(s)</td></tr>
+<tr><td>2026-06-21T08-13-01-937Z_019ee93d-7e70-7149-a586-ef67d9b40181</td><td>possible driver: 86525 tokens per assistant turn across 35 turn(s)</td></tr>
+<tr><td>2026-06-21T06-57-34-139Z_019ee8f8-67bb-7b54-bce5-0c0bb17d4f8a</td><td>possible driver: 184324 tokens per assistant turn across 120 turn(s)</td></tr>
+<tr><td>2026-06-21T06-28-39-840Z_019ee8dd-f120-7d2e-a71c-a5a6660b8d92</td><td>possible driver: 94135 tokens per assistant turn across 77 turn(s)</td></tr>
+<tr><td>20260621_142410_582e5f</td><td>possible driver: 72255 tokens per assistant turn across 11 turn(s)</td></tr>
+<tr><td>2026-06-20T20-37-35-778Z_019ee6c0-cda2-7d4b-8bca-305ef8e7eda1</td><td>possible driver: 70845 tokens per assistant turn across 12 turn(s)</td></tr>
+<tr><td>Empty conversation start</td><td>possible driver: 132036 tokens per assistant turn across 142 turn(s)</td></tr>
+<tr><td>2026-06-20T19-43-12-064Z_019ee68f-00c0-7621-812c-8c043f8cd36d</td><td>possible driver: 63785 tokens per assistant turn across 17 turn(s)</td></tr>
+</tbody></table></section>
+<section><h2>Health Trend</h2><p>Improving: 70→100</p></section>
+<section><h2>Incident timeline</h2>
+<table><thead><tr><th>Session</th><th>Signal</th><th>Evidence</th><th>Severity</th></tr></thead><tbody>
+<tr><td>rollout-2026-06-21T16-38-51-019ee955-253a-7ab3-b489-2eb287fc9389</td><td>Last milestone</td><td>483 assistant turn(s) completed over 2h 36m</td><td>LOW</td></tr>
+<tr><td>rollout-2026-06-21T16-38-51-019ee955-253a-7ab3-b489-2eb287fc9389</td><td>Longest idle gap</td><td>3083.3s gap between recorded events</td><td>HIGH</td></tr>
+<tr><td>rollout-2026-06-21T16-38-51-019ee955-253a-7ab3-b489-2eb287fc9389</td><td>Touched surface</td><td>7 unique tool(s), 299 total calls; top tool exec_command x259</td><td>LOW</td></tr>
+<tr><td>rollout-2026-06-21T16-38-51-019ee955-253a-7ab3-b489-2eb287fc9389</td><td>Burn divergence</td><td>53450 tokens per assistant turn across 483 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>2026-06-21T08-13-01-937Z_019ee93d-7e70-7149-a586-ef67d9b40181</td><td>Last milestone</td><td>35 assistant turn(s) completed over 11.5m</td><td>LOW</td></tr>
+<tr><td>2026-06-21T08-13-01-937Z_019ee93d-7e70-7149-a586-ef67d9b40181</td><td>Longest idle gap</td><td>79.7s gap between recorded events</td><td>MEDIUM</td></tr>
+<tr><td>2026-06-21T08-13-01-937Z_019ee93d-7e70-7149-a586-ef67d9b40181</td><td>Failure loop</td><td>3 failed tool result(s) out of 33 (9.1%)</td><td>MEDIUM</td></tr>
+<tr><td>2026-06-21T08-13-01-937Z_019ee93d-7e70-7149-a586-ef67d9b40181</td><td>Touched surface</td><td>8 unique tool(s), 33 total calls; top tool bash x13</td><td>LOW</td></tr>
+<tr><td>2026-06-21T08-13-01-937Z_019ee93d-7e70-7149-a586-ef67d9b40181</td><td>Burn divergence</td><td>86525 tokens per assistant turn across 35 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>2026-06-21T06-57-34-139Z_019ee8f8-67bb-7b54-bce5-0c0bb17d4f8a</td><td>Last milestone</td><td>120 assistant turn(s) completed over 1h 13m</td><td>LOW</td></tr>
+<tr><td>2026-06-21T06-57-34-139Z_019ee8f8-67bb-7b54-bce5-0c0bb17d4f8a</td><td>Longest idle gap</td><td>632.3s gap between recorded events</td><td>HIGH</td></tr>
+<tr><td>2026-06-21T06-57-34-139Z_019ee8f8-67bb-7b54-bce5-0c0bb17d4f8a</td><td>Failure loop</td><td>7 failed tool result(s) out of 140 (5.0%)</td><td>MEDIUM</td></tr>
+<tr><td>2026-06-21T06-57-34-139Z_019ee8f8-67bb-7b54-bce5-0c0bb17d4f8a</td><td>Touched surface</td><td>5 unique tool(s), 140 total calls; top tool bash x79</td><td>LOW</td></tr>
+<tr><td>2026-06-21T06-57-34-139Z_019ee8f8-67bb-7b54-bce5-0c0bb17d4f8a</td><td>Burn divergence</td><td>184324 tokens per assistant turn across 120 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>20260621_145528_cf085a</td><td>Last milestone</td><td>1 assistant turn(s) completed over 0s</td><td>LOW</td></tr>
+<tr><td>20260621_145528_cf085a</td><td>Burn divergence</td><td>45025 tokens per assistant turn across 1 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>rollout-2026-06-21T14-30-01-019ee8df-2e98-7390-a706-2e467cb412a5</td><td>Longest idle gap</td><td>494.5s gap between recorded events</td><td>HIGH</td></tr>
+<tr><td>2026-06-21T06-28-39-840Z_019ee8dd-f120-7d2e-a71c-a5a6660b8d92</td><td>Last milestone</td><td>77 assistant turn(s) completed over 26.7m</td><td>LOW</td></tr>
+<tr><td>2026-06-21T06-28-39-840Z_019ee8dd-f120-7d2e-a71c-a5a6660b8d92</td><td>Longest idle gap</td><td>899.2s gap between recorded events</td><td>HIGH</td></tr>
+<tr><td>2026-06-21T06-28-39-840Z_019ee8dd-f120-7d2e-a71c-a5a6660b8d92</td><td>Failure loop</td><td>4 failed tool result(s) out of 75 (5.3%)</td><td>MEDIUM</td></tr>
+<tr><td>2026-06-21T06-28-39-840Z_019ee8dd-f120-7d2e-a71c-a5a6660b8d92</td><td>Touched surface</td><td>3 unique tool(s), 75 total calls; top tool bash x52</td><td>LOW</td></tr>
+<tr><td>2026-06-21T06-28-39-840Z_019ee8dd-f120-7d2e-a71c-a5a6660b8d92</td><td>Burn divergence</td><td>94135 tokens per assistant turn across 77 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>20260621_142410_582e5f</td><td>Last milestone</td><td>11 assistant turn(s) completed over 2.1m</td><td>LOW</td></tr>
+<tr><td>20260621_142410_582e5f</td><td>Burn divergence</td><td>72255 tokens per assistant turn across 11 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>2026-06-21T06-20-13-025Z_019ee8d6-3561-7849-af3e-9cd9580bff5b</td><td>Longest idle gap</td><td>182.9s gap between recorded events</td><td>MEDIUM</td></tr>
+</tbody></table>
+</section>
 <section><h2>Recent sessions</h2><table><thead><tr><th>Session</th><th>Source</th><th>Model</th><th class="num">Total tokens</th><th class="num">Cost</th><th class="num">Health</th><th class="num">Anomalies</th></tr></thead><tbody>
-<tr><td>cron_0842e373cedb_20260510_103446</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">231046</td><td class="num">$0.0262</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>rollout-2026-05-10T10-33-05-019e0fbb-2da0-7570-b5f6-52a87f36c475</td><td>Codex CLI</td><td>gpt-5.5</td><td class="num">4287306</td><td class="num">$3.8765</td><td class="num health-good">88</td><td class="num">1</td></tr>
-<tr><td>rollout-2026-05-10T10-28-58-019e0fb7-6630-7d33-abbb-49598571d2f0</td><td>Codex CLI</td><td>default</td><td class="num">112</td><td class="num">$0.0003</td><td class="num health-good">88</td><td class="num">1</td></tr>
-<tr><td>rollout-2026-05-10T10-10-26-019e0fa6-6f54-7e52-bd20-ef397dbef095</td><td>Codex CLI</td><td>gpt-5.5</td><td class="num">24795262</td><td class="num">$18.9060</td><td class="num health-good">88</td><td class="num">1</td></tr>
-<tr><td>rollout-2026-05-10T10-00-22-019e0f9d-3aa3-7dc3-888d-d0018aa9db58</td><td>Codex CLI</td><td>gpt-5.5</td><td class="num">15596970</td><td class="num">$12.6673</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>cron_7d8438ade909_20260510_100054</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">746516</td><td class="num">$0.0548</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_092908</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">273808</td><td class="num">$0.0572</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_a0badf79a0f1_20260510_090002</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">0</td><td class="num">$0.0000</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_08a59868b230_20260510_084925</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">151445</td><td class="num">$0.0210</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_cecb519df4ac_20260510_083045</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">2443632</td><td class="num">$0.0530</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_082323</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">227107</td><td class="num">$0.0365</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_071728</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">267343</td><td class="num">$0.0252</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_061436</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">144309</td><td class="num">$0.0215</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_051108</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">142889</td><td class="num">$0.0273</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_040841</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">132873</td><td class="num">$0.0174</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_030507</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">167354</td><td class="num">$0.0143</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_020059</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">157768</td><td class="num">$0.0323</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260510_005452</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">232633</td><td class="num">$0.0182</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260509_234835</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">366561</td><td class="num">$0.0555</td><td class="num health-good">100</td><td class="num">0</td></tr>
-<tr><td>cron_0842e373cedb_20260509_224516</td><td>Hermes Agent (DB)</td><td>deepseek-v4-pro</td><td class="num">109427</td><td class="num">$0.0188</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>rollout-2026-06-21T16-38-51-019ee955-253a-7ab3-b489-2eb287fc9389</td><td>Codex CLI</td><td>gpt-5.5</td><td class="num">25816725</td><td class="num">$23.1751</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>2026-06-21T08-13-01-937Z_019ee93d-7e70-7149-a586-ef67d9b40181</td><td>Pi</td><td>gpt-5.5</td><td class="num">3028401</td><td class="num">$3.0447</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>2026-06-21T06-57-34-139Z_019ee8f8-67bb-7b54-bce5-0c0bb17d4f8a</td><td>Pi</td><td>mimo-v2.5-pro</td><td class="num">22118951</td><td class="num">$0.0000</td><td class="num health-warn">58</td><td class="num">2</td></tr>
+<tr><td>20260621_145609_80c260</td><td>Hermes Agent (DB)</td><td>gpt-5.5</td><td class="num">46794</td><td class="num">$0.0267</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>20260621_145528_cf085a</td><td>Hermes Agent (DB)</td><td>gpt-5.5</td><td class="num">45025</td><td class="num">$0.2256</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>20260621_145359_fb98fb</td><td>Hermes Agent (DB)</td><td>gpt-5.5</td><td class="num">0</td><td class="num">$0.0000</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>20260621_143458_a67a1e</td><td>Hermes Agent (DB)</td><td>gpt-5.5</td><td class="num">0</td><td class="num">$0.0000</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>rollout-2026-06-21T14-30-01-019ee8df-2e98-7390-a706-2e467cb412a5</td><td>Codex CLI</td><td>codex-auto-review</td><td class="num">209552</td><td class="num">$0.6287</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>2026-06-21T06-28-39-840Z_019ee8dd-f120-7d2e-a71c-a5a6660b8d92</td><td>Pi</td><td>mimo-v2.5-pro</td><td class="num">7248398</td><td class="num">$0.0000</td><td class="num health-bad">40</td><td class="num">2</td></tr>
+<tr><td>2026-06-21T06-27-12-400Z_019ee8dc-9b90-76af-a903-1498771a0b3e</td><td>Pi</td><td>default</td><td class="num">19</td><td class="num">$0.0001</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>20260621_142410_582e5f</td><td>Hermes Agent (DB)</td><td>mimo-v2.5-pro-ultraspeed</td><td class="num">794807</td><td class="num">$0.9224</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>2026-06-21T06-20-13-025Z_019ee8d6-3561-7849-af3e-9cd9580bff5b</td><td>Pi</td><td>mimo-v2.5-pro</td><td class="num">170</td><td class="num">$0.0000</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>rollout-2026-06-21T14-16-13-019ee8d2-8cfd-7d81-bd89-42c2677eca6e</td><td>Codex CLI</td><td>gpt-5.5</td><td class="num">6835164</td><td class="num">$5.7680</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>rollout-2026-06-21T14-12-57-019ee8cf-906b-7763-ab0d-3eb518427617</td><td>Codex CLI</td><td>gpt-5.5</td><td class="num">1068</td><td class="num">$0.0053</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>2026-06-20T20-37-35-778Z_019ee6c0-cda2-7d4b-8bca-305ef8e7eda1</td><td>Pi</td><td>mimo-v2.5-pro</td><td class="num">850146</td><td class="num">$0.0000</td><td class="num health-warn">58</td><td class="num">2</td></tr>
+<tr><td>rollout-2026-06-21T04-23-24-019ee6b3-d174-7190-9480-8826a250c86d</td><td>Codex CLI</td><td>gpt-5.5</td><td class="num">12148379</td><td class="num">$11.9185</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>look_at: 分析 TenRouter 开发者视图的 UI/UX 视觉质量: 布局节奏、卡片层级、色彩使用、留白、</td><td>OpenCode (DB)</td><td>gpt-5.4</td><td class="num">0</td><td class="num">$0.0000</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>look_at: 分析这个登录页面的UI/UX/视觉设计质量,包括布局、留白、对齐、色彩、字体层级、按钮样式、视觉重点</td><td>OpenCode (DB)</td><td>gpt-5.4</td><td class="num">0</td><td class="num">$0.0000</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>Empty conversation start</td><td>OpenCode (DB)</td><td>glm-5.2</td><td class="num">18749166</td><td class="num">$23.4525</td><td class="num health-good">100</td><td class="num">0</td></tr>
+<tr><td>New session - 2026-06-20T19:48:54.816Z</td><td>OpenCode (DB)</td><td>glm-5.2</td><td class="num">0</td><td class="num">$0.0000</td><td class="num health-good">100</td><td class="num">0</td></tr>
 </tbody></table></section>
 <section><h2>By agent</h2><table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>
-<tr><td>Codex CLI</td><td class="num">615</td><td class="num">$4520.23</td></tr>
-<tr><td>Hermes Agent (DB)</td><td class="num">603</td><td class="num">$105.81</td></tr>
-<tr><td>Claude Code</td><td class="num">343</td><td class="num">$331.13</td></tr>
-<tr><td>OpenCode (DB)</td><td class="num">188</td><td class="num">$79.38</td></tr>
-<tr><td>Generic JSON/JSONL</td><td class="num">12</td><td class="num">$0.00</td></tr>
+<tr><td>Hermes Agent (DB)</td><td class="num">1034</td><td class="num">$209.92</td></tr>
+<tr><td>Codex CLI</td><td class="num">907</td><td class="num">$33284.95</td></tr>
+<tr><td>OpenCode (DB)</td><td class="num">199</td><td class="num">$106.50</td></tr>
+<tr><td>Claude Code</td><td class="num">151</td><td class="num">$345.12</td></tr>
+<tr><td>Pi</td><td class="num">83</td><td class="num">$145.48</td></tr>
+<tr><td>Generic JSON/JSONL</td><td class="num">39</td><td class="num">$0.00</td></tr>
 </tbody></table></section>
 <section><h2>By model</h2><table><thead><tr><th>Model</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>
-<tr><td>gpt-5.5</td><td class="num">124</td><td class="num">$2969.85</td></tr>
-<tr><td>gpt-5.4</td><td class="num">384</td><td class="num">$1400.10</td></tr>
-<tr><td>gpt-5.3-codex</td><td class="num">82</td><td class="num">$147.00</td></tr>
-<tr><td>claude-sonnet-4-6</td><td class="num">57</td><td class="num">$124.42</td></tr>
-<tr><td>glm-5.1</td><td class="num">99</td><td class="num">$87.61</td></tr>
-<tr><td>deepseek-v4-pro</td><td class="num">191</td><td class="num">$60.15</td></tr>
-<tr><td>mlx-community/Qwen3.6-35B-A3B-4bit</td><td class="num">2</td><td class="num">$36.27</td></tr>
-<tr><td>qwen3.6-plus</td><td class="num">47</td><td class="num">$33.51</td></tr>
-<tr><td>glm-5</td><td class="num">41</td><td class="num">$31.59</td></tr>
-<tr><td>glm-5-turbo</td><td class="num">20</td><td class="num">$27.14</td></tr>
-<tr><td>kimi-k2.6</td><td class="num">18</td><td class="num">$23.09</td></tr>
-<tr><td>minimax-2.7</td><td class="num">132</td><td class="num">$22.31</td></tr>
+<tr><td>gpt-5.5</td><td class="num">381</td><td class="num">$31746.98</td></tr>
+<tr><td>gpt-5.4</td><td class="num">396</td><td class="num">$1368.61</td></tr>
+<tr><td>glm-5.2</td><td class="num">53</td><td class="num">$311.05</td></tr>
+<tr><td>gpt-5.3-codex</td><td class="num">84</td><td class="num">$149.46</td></tr>
+<tr><td>mimo-v2.5-pro-ultraspeed</td><td class="num">83</td><td class="num">$149.28</td></tr>
+<tr><td>qwen3.7-max</td><td class="num">66</td><td class="num">$122.10</td></tr>
+<tr><td>deepseek-v4-pro</td><td class="num">361</td><td class="num">$43.44</td></tr>
+<tr><td>qwen3.6-plus</td><td class="num">46</td><td class="num">$33.51</td></tr>
+<tr><td>glm-5</td><td class="num">18</td><td class="num">$29.34</td></tr>
+<tr><td>glm-5-turbo</td><td class="num">17</td><td class="num">$25.24</td></tr>
+<tr><td>minimax-2.7</td><td class="num">126</td><td class="num">$21.83</td></tr>
+<tr><td>minimax-2.7-highspeed</td><td class="num">206</td><td class="num">$16.72</td></tr>
 </tbody></table></section>
 <section><h2>Recent anomalies</h2>
 <table><thead><tr><th>Session</th><th>Type</th><th>Age</th></tr></thead><tbody>
-<tr><td>003bbfc3-abd2-4543-80d4-da9e743ac30d</td><td>hanging</td><td>now</td></tr>
-<tr><td>035057ee-b5d3-4973-a979-edc162ec8d8f</td><td>hanging</td><td>now</td></tr>
-<tr><td>035057ee-b5d3-4973-a979-edc162ec8d8f</td><td>shallow thinking</td><td>now</td></tr>
-<tr><td>035057ee-b5d3-4973-a979-edc162ec8d8f</td><td>tool failures</td><td>now</td></tr>
-<tr><td>067531ee-ea81-4139-9bc2-de1700bddecb</td><td>hanging</td><td>now</td></tr>
-<tr><td>09c7c008-de2c-4174-8141-fd557e60f246</td><td>hanging</td><td>now</td></tr>
-<tr><td>104f245e-2485-4107-a320-16f950000c94</td><td>shallow thinking</td><td>now</td></tr>
-<tr><td>104f245e-2485-4107-a320-16f950000c94</td><td>tool failures</td><td>now</td></tr>
-<tr><td>15292f42-b24b-4dda-a933-55c1d80c93e4</td><td>shallow thinking</td><td>now</td></tr>
-<tr><td>17623e3d-87ee-4194-bddc-44953243bfc6</td><td>hanging</td><td>now</td></tr>
-<tr><td>19fd2728-7709-43cb-9274-f356d8533f51</td><td>shallow thinking</td><td>now</td></tr>
-<tr><td>1a41c99d-3820-44fa-8dd2-1d51f3b4654c</td><td>hanging</td><td>now</td></tr>
-<tr><td>1a41c99d-3820-44fa-8dd2-1d51f3b4654c</td><td>shallow thinking</td><td>now</td></tr>
-<tr><td>1be3cd5d-2124-4363-bef9-933c32d3ca19</td><td>tool failures</td><td>now</td></tr>
-<tr><td>21045ccd-62d5-4116-b75a-9410e0f6b193</td><td>hanging</td><td>now</td></tr>
-<tr><td>2380d30a-87a7-481e-b514-9cc584639cdc</td><td>hanging</td><td>now</td></tr>
-<tr><td>23cb327a-1bb2-40d3-8df0-bf863eff4746</td><td>hanging</td><td>now</td></tr>
-<tr><td>267ce38a-8e9c-491f-a46e-747ebfaab86d</td><td>hanging</td><td>now</td></tr>
-<tr><td>2e0d8878-4525-412c-8a56-111eea7ed197</td><td>hanging</td><td>now</td></tr>
-<tr><td>33c3d19c-cb7a-49cc-b359-b065bc80f896</td><td>hanging</td><td>now</td></tr>
+<tr><td>0344fdeb-3688-4641-966b-620da7e352d2</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>0d111e3a-97d6-46b5-a5d9-3434e469cdec</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>10087e4c-6b8b-418b-b8e7-b205856733a2</td><td>hanging</td><td>now</td></tr>
+<tr><td>1b8de706-564c-4eea-8070-9c5700bb1ea0</td><td>hanging</td><td>now</td></tr>
+<tr><td>1bf1586e-a630-4261-827c-bddf9dec1f18</td><td>tool failures</td><td>now</td></tr>
+<tr><td>2026-05-10T04-42-51-493Z_019e1031-fae4-758e-ad42-b29fd44a2fc7</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>2026-06-05T10-10-44-544Z_019e9743-82c0-71ef-b6cd-dee136e51707</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>2026-06-05T10-12-24-371Z_019e9745-08b3-74ba-b5ec-109af511f516</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>2026-06-05T10-17-40-791Z_019e9749-dcb7-7072-85ad-078bb94d747e</td><td>hanging</td><td>now</td></tr>
+<tr><td>2026-06-06T22-08-03-072Z_019e9efa-9600-70a2-ab1e-2d97ddcd3dc0</td><td>hanging</td><td>now</td></tr>
+<tr><td>2026-06-06T22-13-13-953Z_019e9eff-5461-7e76-85e1-036a6d1406c6</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>2026-06-06T22-37-47-425Z_019e9f15-d021-7973-8763-6c9b5bda5929</td><td>hanging</td><td>now</td></tr>
+<tr><td>2026-06-06T22-37-47-425Z_019e9f15-d021-7973-8763-6c9b5bda5929</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>2026-06-06T22-59-43-250Z_019e9f29-e412-7214-b033-4811e6ebda55</td><td>hanging</td><td>now</td></tr>
+<tr><td>2026-06-06T22-59-43-250Z_019e9f29-e412-7214-b033-4811e6ebda55</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>2026-06-06T23-35-13-865Z_019e9f4a-66c9-7448-b00f-416f580673ad</td><td>hanging</td><td>now</td></tr>
+<tr><td>2026-06-07T07-58-40-050Z_019ea117-4fb2-7035-9406-f9beb7983039</td><td>hanging</td><td>now</td></tr>
+<tr><td>2026-06-07T19-23-58-316Z_019ea38a-b9ec-788c-8620-527beeaa0220</td><td>hanging</td><td>now</td></tr>
+<tr><td>2026-06-07T19-23-58-316Z_019ea38a-b9ec-788c-8620-527beeaa0220</td><td>shallow thinking</td><td>now</td></tr>
+<tr><td>2026-06-07T19-48-59-019Z_019ea3a1-a00a-7def-8cf8-5952480976fd</td><td>hanging</td><td>now</td></tr>
 </tbody></table>
 </section>
 </main>

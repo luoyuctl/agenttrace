@@ -16,11 +16,9 @@
   <a href="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml"><img src="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://luoyuctl.github.io/agenttrace/"><img src="https://img.shields.io/badge/site-agenttrace-54ff00.svg" alt="Site"></a>
   <a href="https://github.com/luoyuctl/agenttrace/releases/latest"><img src="https://img.shields.io/github/v/release/luoyuctl/agenttrace?color=00ADD8" alt="Release"></a>
-  <a href="https://pkg.go.dev/github.com/luoyuctl/agenttrace"><img src="https://pkg.go.dev/badge/github.com/luoyuctl/agenttrace.svg" alt="Go Reference"></a>
-  <a href="https://goreportcard.com/report/github.com/luoyuctl/agenttrace"><img src="https://goreportcard.com/badge/github.com/luoyuctl/agenttrace" alt="Go Report Card"></a>
-  <img src="https://img.shields.io/badge/go-1.25+-00ADD8.svg" alt="Go">
+  <img src="https://img.shields.io/badge/Rust-stable-f74c00.svg" alt="Rust">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/Homebrew-v0.5.4-2bbc8a.svg" alt="Homebrew">
+  <a href="https://github.com/luoyuctl/homebrew-tap"><img src="https://img.shields.io/badge/Homebrew-tap-2bbc8a.svg" alt="Homebrew tap"></a>
 </p>
 
 <p align="center">
@@ -30,6 +28,8 @@
 ---
 
 **agenttrace** is a local-first terminal TUI and report generator for AI coding-agent session history. It reads Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi CLI, Copilot-style logs, and generic JSON/JSONL traces, then helps with two daily jobs: see what multiple agents spent across cost, tokens, and time; and diagnose why a task ran slowly.
+
+One `agenttrace` binary provides both interfaces: run it without a report action to open the TUI, or pass flags such as `--sessions` and `--overview` for CLI output.
 
 ## Why agenttrace?
 
@@ -47,7 +47,7 @@ It helps you answer:
 
 ## Real local run
 
-These screenshots were captured from a local run against real session logs. They are not `--demo` output and not test fixtures.
+These screenshots and figures are a dated, redacted local sample captured for the v0.6.0 source tree. They are not `--demo` output, current telemetry, or test fixtures.
 
 ```bash
 agenttrace
@@ -64,7 +64,7 @@ agenttrace
 That local run found:
 
 ```text
-AGENTTRACE v0.5.4
+AGENTTRACE v0.6.0
 ```
 
 | Signal | What agenttrace found |
@@ -78,6 +78,11 @@ AGENTTRACE v0.5.4
 
 ## Install
 
+The commands below install the latest public channel, which can lag behind the
+`v0.6.0` source tree until its release assets and tap formula are published.
+Check the installed version with `agenttrace --version`. To test the current
+source tree, use the Git-based Cargo command below.
+
 ```bash
 curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
 ```
@@ -86,7 +91,7 @@ Other install paths:
 
 ```bash
 brew install luoyuctl/tap/agenttrace
-go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest
+cargo install --git https://github.com/luoyuctl/agenttrace agenttrace
 ```
 
 Windows:
@@ -106,6 +111,14 @@ agenttrace --doctor
 
 # Generate machine-readable evidence
 agenttrace --overview -f json
+
+# Focus the same TUI/report scope by time, project, agent, or model
+agenttrace --overview -f json --range 7d --project agenttrace
+agenttrace --overview -f json --source codex --model-filter gpt-5
+
+# Opt in to long-term derived history; prompts, replies, paths, and tool arguments are not stored
+agenttrace --overview -f json --preserve-history
+agenttrace --overview -f json --include-history --range 30d
 
 # Search local session metadata without indexing prompt text
 agenttrace --search billing
@@ -137,7 +150,10 @@ Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Her
 
 | Need | agenttrace gives you |
 |---|---|
-| Historical spend review | Sessions grouped across agents with token totals, model pricing, estimated cost, and elapsed time |
+| Historical spend review | Sessions grouped across projects, agents, and models with Today/7d/30d/All ranges |
+| Data confidence | Parse skips, cache hits, unknown sources/models, pricing fallbacks, and latest observed session |
+| Honest capability levels | `Detailed`, `Aggregate`, or `Limited` per session so missing event-level evidence is never presented as a complete trace |
+| Privacy-safe steps | Tool-step metadata and duration when the source provides call IDs and timestamps; no prompt, response, result, or tool-argument body is stored in steps |
 | Slow-task diagnosis | Latency stats, long gaps, hanging sessions, retry loops, slow tools, large params, and context pressure |
 | Regression evidence | Local baseline comparison when supplied, incident timelines, and conservative tool authority categories in reports |
 | First-session triage | Sort and filter by cost, duration, health, failures, anomalies, model, source, or text search |
@@ -172,16 +188,24 @@ Listed in:
 Parser PRs are welcome. A good parser contribution usually includes:
 
 - a tiny redacted fixture or synthetic sample
-- format detection in `DetectFormat`
+- format detection in `crates/agenttrace-core/src/parser.rs`
 - role, timestamp, model, token usage, tool call, and tool error extraction
 - tests for successful parsing and malformed input
+
+Generated parser fixtures are deterministic:
+
+```bash
+python3 scripts/generate-testdata.py
+python3 scripts/generate-testdata.py --check
+```
 
 Run before sending a PR:
 
 ```bash
-go test ./...
-go build -o agenttrace ./cmd/agenttrace/
-./agenttrace --doctor
+cargo test
+python3 scripts/generate-testdata.py --check
+cargo build --release -p agenttrace
+target/release/agenttrace --doctor
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution flow.

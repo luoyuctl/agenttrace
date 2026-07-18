@@ -21,7 +21,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-go build -o "$tmpdir/agenttrace" ./cmd/agenttrace
+cargo build --release -p agenttrace
+cp target/release/agenttrace "$tmpdir/agenttrace"
 export PATH="$tmpdir:$PATH"
 
 sessions="$(

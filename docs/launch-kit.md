@@ -91,7 +91,7 @@ Sample report: https://luoyuctl.github.io/agenttrace/demo-report.html
 ## Target Channels
 
 - Hacker News: Show HN
-- Reddit: r/commandline, r/golang, r/LocalLLaMA, r/ClaudeAI, r/ChatGPTCoding
+- Reddit: r/commandline, r/rust, r/LocalLLaMA, r/ClaudeAI, r/ChatGPTCoding
 - V2EX: 分享创造 / 程序员
 - X / Threads: AI engineering and developer tooling
 - GitHub topics: `ai-agents`, `tui`, `observability`, `developer-tools`, `cost-tracking`, `aider`, `claude-code`, `codex-cli`
@@ -304,7 +304,7 @@ Manual-only / blocked / stale follow-up:
 - hesreallyhim/awesome-claude-code: submit via the GitHub issue form, because the repo asks contributors not to create automated issues or PRs. Suggested category: Tooling / Usage Monitors.
 - e2b-dev/awesome-ai-agents: submit through the Google Form linked from the README; the repo asks for product submissions through the form instead of direct README edits.
 - awesome-claude-skills: skip automated PRs unless submitted manually by a human; its contribution guide asks that PRs are not AI-assisted and generally expects social proof.
-- awesome-go: defer until the project is older and has the required quality links; contribution checks expect repository maturity, pkg.go.dev, Go Report Card, and coverage evidence.
+- awesome-go: no longer applicable now that agenttrace is Rust-only.
 - awesome-llmops: closed without merge https://github.com/KennethanCeyer/awesome-llmops/pull/10. Keep as stale unless a clearer category fit appears.
 - brandonhimpfen/awesome-llmops: closed without merge https://github.com/brandonhimpfen/awesome-llmops/pull/4.
 - brandonhimpfen/awesome-ai-coding-agents: closed without merge https://github.com/brandonhimpfen/awesome-ai-coding-agents/pull/11.
@@ -337,12 +337,12 @@ Terminal Trove draft:
 - Description: `agenttrace parses local Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi CLI, Copilot-style logs, and JSON/JSONL traces into a fast terminal dashboard for comparing historical session cost, token usage, and elapsed time, then diagnosing slow tasks.`
 - Standout features: `Overview, session list, detail, diagnostics, and diff views; incremental local cache; slow-run evidence for long gaps, hanging sessions, slow tools, large params, and context pressure; JSON, Markdown, and self-contained HTML reports.`
 - Who it is for: `Developers using multiple AI coding agents who need to find expensive or slow sessions without uploading private logs to a hosted service.`
-- Primary language: `go`
+- Primary language: `rust`
 - License: `mit`
 - Install:
   - macOS/Linux: `curl -sL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh`
   - Homebrew: `brew install luoyuctl/tap/agenttrace`
-  - Go install: `go install github.com/luoyuctl/agenttrace/cmd/agenttrace@latest`
+  - Cargo: `cargo install --git https://github.com/luoyuctl/agenttrace agenttrace`
   - Windows PowerShell: `iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex`
 
 ## Demo Checklist
@@ -362,15 +362,16 @@ See [demo-playbook.md](demo-playbook.md) for the recording script and storyline.
 ## Verification Before Sharing
 
 ```bash
-go test ./...
-go build -o /tmp/agenttrace ./cmd/agenttrace
-/tmp/agenttrace --version
-/tmp/agenttrace --demo --overview -f json
+cargo test
+cargo build --release -p agenttrace
+target/release/agenttrace --version
+target/release/agenttrace --demo --overview -f json
 ```
 
 For public demo, report, or release-surface checks, run the reusable gates from [CI Integration](ci-integration.md):
 
 ```bash
+scripts/ci/check-rust-release-local.sh
 AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-output-contract.sh
 AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-deterministic-output.sh
 AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-report-semantics.sh
@@ -382,7 +383,8 @@ scripts/ci/check-pages-artifact.sh site
 
 Before sharing a release publicly, compare these surfaces against `gh release list --repo luoyuctl/agenttrace --limit 1`:
 
-- README release and Homebrew badges point at the latest version.
+- README release links point at the latest public release, while the Homebrew
+  badge remains version-neutral until the tap is verified separately.
 - `homebrew/Formula/agenttrace.rb` and `homebrew/README.md` match the current install story.
 - `site/index.html` JSON-LD `softwareVersion`, `site/demo-report.html`, `site/llms.txt`, `site/robots.txt`, and `site/sitemap.xml` remain present and version-consistent where they mention a release.
 - GitHub Discussions, release notes, and launch copy do not point readers at stale release links.
