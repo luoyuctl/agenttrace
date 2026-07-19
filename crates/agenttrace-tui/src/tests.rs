@@ -417,6 +417,48 @@ fn go_navigation_keys_and_pairwise_diff_stay_compatible() {
 }
 
 #[test]
+fn vim_page_and_end_navigation_clamp_selection_and_scroll_details() {
+    let mut app = App::new(
+        (0..12)
+            .map(|index| {
+                session(
+                    &format!("session-{index}"),
+                    "codex_cli",
+                    "m",
+                    90,
+                    0.01,
+                    "rg",
+                )
+            })
+            .collect(),
+        "test",
+        None,
+    );
+    app.view = View::List;
+
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL))
+        .unwrap();
+    assert_eq!(app.selected, 8);
+
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL))
+        .unwrap();
+    assert_eq!(app.selected, 0);
+
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))
+        .unwrap();
+    assert_eq!(app.selected, app.filtered.len() - 1);
+
+    app.view = View::Detail;
+    app.scroll = 0;
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL))
+        .unwrap();
+    assert_eq!(app.scroll, 8);
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL))
+        .unwrap();
+    assert_eq!(app.scroll, 0);
+}
+
+#[test]
 fn sort_cost_descending_then_toggle() {
     let mut app = App::new(
         vec![

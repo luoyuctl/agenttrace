@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 16;
-const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 2;
+const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 3;
 
 #[derive(Debug, Clone, Default)]
 pub struct SessionCache {
@@ -41,6 +41,7 @@ struct SqliteSnapshot {
     schema_version: i64,
     database: FileFingerprint,
     wal: Option<FileFingerprint>,
+    shm: Option<FileFingerprint>,
     sessions: Vec<GoSession>,
 }
 
@@ -182,6 +183,7 @@ fn load_sqlite_snapshot_from(database: &Path, snapshot_path: &Path) -> Option<Ve
     if snapshot.schema_version != SQLITE_SNAPSHOT_SCHEMA_VERSION
         || snapshot.database != file_fingerprint(database)?
         || snapshot.wal != file_fingerprint(&sqlite_wal_path(database))
+        || snapshot.shm != file_fingerprint(&sqlite_shm_path(database))
     {
         return None;
     }
@@ -214,6 +216,7 @@ fn store_sqlite_snapshot_at(
         schema_version: SQLITE_SNAPSHOT_SCHEMA_VERSION,
         database: file_fingerprint(database).ok_or_else(|| anyhow::anyhow!("database missing"))?,
         wal: file_fingerprint(&sqlite_wal_path(database)),
+        shm: file_fingerprint(&sqlite_shm_path(database)),
         sessions: sessions.iter().map(GoSession::from_session).collect(),
     };
     let tmp = path.with_extension("json.tmp");
@@ -228,6 +231,10 @@ fn sqlite_snapshot_path(name: &str) -> PathBuf {
 
 fn sqlite_wal_path(database: &Path) -> PathBuf {
     PathBuf::from(format!("{}-wal", database.to_string_lossy()))
+}
+
+fn sqlite_shm_path(database: &Path) -> PathBuf {
+    PathBuf::from(format!("{}-shm", database.to_string_lossy()))
 }
 
 fn file_fingerprint(path: &Path) -> Option<FileFingerprint> {
@@ -787,7 +794,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn sqlite_snapshot_is_invalidated_by_database_or_wal_changes() {
+    fn sqlite_snapshot_is_invalidated_by_database_wal_or_shm_changes() {
         let root = std::env::temp_dir().join(format!(
             "agenttrace-sqlite-cache-{}-{:?}",
             std::process::id(),
@@ -817,6 +824,24 @@ mod tests {
         );
 
         fs::write(sqlite_wal_path(&database), b"wal").expect("write wal");
+        assert!(load_sqlite_snapshot_from(&database, &snapshot).is_none());
+
+        store_sqlite_snapshot_at(
+            &database,
+            &snapshot,
+            &[Session {
+                name: "cached".to_string(),
+                path: database.to_string_lossy().to_string(),
+                cwd: String::new(),
+                metrics: Metrics::default(),
+                anomalies: Vec::new(),
+                health: 100,
+                tool_warnings: Vec::new(),
+                diagnostics: Diagnostics::default(),
+            }],
+        )
+        .expect("store snapshot with wal");
+        fs::write(sqlite_shm_path(&database), b"shm").expect("write shm");
         assert!(load_sqlite_snapshot_from(&database, &snapshot).is_none());
         let _ = fs::remove_dir_all(root);
     }

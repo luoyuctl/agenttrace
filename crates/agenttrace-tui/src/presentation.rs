@@ -907,8 +907,8 @@ pub(super) fn context_actions(app: &App, width: u16) -> String {
                 "enter 检查 | ! 严重 | ? 帮助 | q 退出",
             ),
             View::List => app.t(
-                "j/k move | enter detail | / search | ? help | q quit",
-                "j/k 移动 | enter 详情 | / 搜索 | ? 帮助 | q 退出",
+                "j/k move | Ctrl+d/u page | G end | enter detail | / search | ? help | q quit",
+                "j/k 移动 | Ctrl+d/u 翻页 | G 末尾 | enter 详情 | / 搜索 | ? 帮助 | q 退出",
             ),
             View::Detail | View::Diagnostics | View::Diff => app.t(
                 "pgup/pgdn scroll | Esc back | ? help | q quit",
@@ -924,8 +924,8 @@ pub(super) fn context_actions(app: &App, width: u16) -> String {
             "enter 检查 | ! 严重 | $ 成本 | f 健康 | R 范围 | tab 视图 | : 命令 | ? 帮助 | q 退出",
         ),
         View::List => app.t(
-            "j/k select | enter detail | 3 diag | / search | ! critical | $ cost | ? help | q quit",
-            "j/k 选择 | enter 详情 | 3 诊断 | / 搜索 | ! 严重 | $ 成本 | ? 帮助 | q 退出",
+            "j/k select | Ctrl+d/u page | G end | enter detail | 3 diag | / search | ? help | q quit",
+            "j/k 选择 | Ctrl+d/u 翻页 | G 末尾 | enter 详情 | 3 诊断 | / 搜索 | ? 帮助 | q 退出",
         ),
         View::Detail => app.t(
             "v raw report | 3 diagnostics | 4 diff | Esc back | ? help | q quit",
@@ -1939,7 +1939,7 @@ pub(super) fn help_text(view: View, language: Language) -> String {
             "",
             "Navigation",
             "  0 overview, 1 list, 2 detail, 3 diagnostics, 4 diff, tab next view",
-            "  j/k or arrows move selection; page up/down scroll detail panels",
+            "  j/k or arrows move selection; Ctrl+d/u moves half a page; G jumps to the end",
             "",
             "Filters and sorting",
             "  / text, Esc clear, s selected source, h health sort, c cost sort",
@@ -1967,7 +1967,7 @@ pub(super) fn help_text(view: View, language: Language) -> String {
             "",
             "导航",
             "  0 概览，1 列表，2 详情，3 诊断，4 对比，tab 下一个视图。",
-            "  j/k 或方向键移动选择；PageUp/PageDown 滚动详情面板。",
+            "  j/k 或方向键移动选择；Ctrl+d/u 半页移动；G 跳到末尾。",
             "",
             "筛选和排序",
             "  / 文本，Esc 清除，s 选中来源，h 健康度排序，c 成本排序。",

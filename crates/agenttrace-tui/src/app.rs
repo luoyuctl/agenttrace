@@ -333,6 +333,14 @@ impl App {
             self.reload(true)?;
             return Ok(false);
         }
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('d') {
+            self.move_page(8);
+            return Ok(false);
+        }
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('u') {
+            self.move_page(-8);
+            return Ok(false);
+        }
         match key.code {
             KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(true),
             KeyCode::Char(':') => {
@@ -417,6 +425,12 @@ impl App {
             }
             KeyCode::Down | KeyCode::Char('j') => self.move_next(),
             KeyCode::Up | KeyCode::Char('k') => self.move_previous(),
+            KeyCode::Char('G') => {
+                if !self.filtered.is_empty() {
+                    self.selected = self.filtered.len() - 1;
+                    self.clamp_selection();
+                }
+            }
             KeyCode::PageDown => self.scroll = self.scroll.saturating_add(8),
             KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(8),
             _ => {}
@@ -1212,6 +1226,15 @@ impl App {
             return;
         }
         self.selected = self.selected.saturating_sub(1);
+        self.clamp_selection();
+    }
+
+    fn move_page(&mut self, delta: i16) {
+        if matches!(self.view, View::Detail | View::Diagnostics | View::Diff) {
+            self.scroll = self.scroll.saturating_add_signed(delta);
+            return;
+        }
+        self.selected = self.selected.saturating_add_signed(delta.into());
         self.clamp_selection();
     }
 
