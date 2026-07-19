@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.7.0 - 2026-07-19
+
+### Added
+
+- Added local governance reports for cost audits, prioritized recommendations, observed MCP usage, cross-session context trends, and read-only Git delivery evidence.
+- Added optional local model aliases and per-million-token pricing overrides through `AGENTTRACE_PRICING_FILE`.
+- Added report scope, pricing confidence, project-root resolution, cache-aware doctor output, and governance appendices to overview exports.
+- Added Action Center, Efficiency, and Delivery workspaces to the TUI, plus bilingual UI copy, live search, paste handling, and report scrollbars.
+
+### Changed
+
+- Updated the CLI, TUI, reports, plugin, Homebrew Formula, Pages assets, and release metadata to v0.7.0.
+- Made CLI report actions mutually exclusive and hardened validation for gate thresholds and output formats.
+- Made delivery and MCP output explicit about evidence limits: commit correlation is not authorship or merge proof, and invocation logs do not imply complete MCP inventory coverage.
+
+### Validation
+
+- Added governance, TUI interaction, discovery, report, and release-surface coverage to the Rust test and CI paths.
+
 ## v0.6.0 - 2026-07-19
 
 ### Added

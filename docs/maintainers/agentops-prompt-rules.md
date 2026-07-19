@@ -12,7 +12,7 @@ Before a PASS, ready-for-merge request, or public-surface PR:
 4. State CI status.
 5. Avoid forbidden public target wording.
 
-Protected public surfaces include `docs/launch-kit.md`, release notes, community or social drafts, `SECURITY.md`, `PRIVACY.md`, `LICENSE`, install or release automation, and external announcement copy.
+Protected public surfaces include `docs/maintainers/launch-kit.md`, release notes, community or social drafts, `SECURITY.md`, `PRIVACY.md`, `LICENSE`, install or release automation, and external announcement copy.
 
 ## Quality Gatekeeper
 

@@ -161,10 +161,12 @@ a commit reached `main`.
 
 - Site: <https://luoyuctl.github.io/agenttrace/>
 - Sample HTML report: <https://luoyuctl.github.io/agenttrace/demo-report.html>
-- CI setup: [docs/ci-integration.md](docs/ci-integration.md)
-- Cursor import: [docs/cursor-import.md](docs/cursor-import.md)
-- Parser guide: [docs/parser-guide.md](docs/parser-guide.md)
-- Launch notes: [docs/launch-kit.md](docs/launch-kit.md)
+- Documentation index: [docs/README.md](docs/README.md)
+- CI setup: [docs/guides/ci-integration.md](docs/guides/ci-integration.md)
+- Governance reports: [docs/guides/governance-reports.md](docs/guides/governance-reports.md)
+- Cursor import: [docs/guides/cursor-import.md](docs/guides/cursor-import.md)
+- Parser guide: [docs/guides/parser-guide.md](docs/guides/parser-guide.md)
+- Maintainer distribution guide: [docs/maintainers/distribution.md](docs/maintainers/distribution.md)
 
 Listed in these open source projects:
 

@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if ! command -v vhs >/dev/null 2>&1; then
-  echo "vhs is required to render docs/demo.tape."
+  echo "vhs is required to render docs/demos/demo.tape."
   echo "Install: https://github.com/charmbracelet/vhs"
   exit 1
 fi
@@ -23,5 +23,5 @@ trap cleanup EXIT
 
 cargo build --release -p agenttrace
 cp target/release/agenttrace "$tmpbin/agenttrace"
-PATH="$tmpbin:$PATH" vhs docs/demo.tape
+PATH="$tmpbin:$PATH" vhs docs/demos/demo.tape
 echo "Wrote assets/agenttrace-demo.gif"

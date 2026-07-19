@@ -1,6 +1,8 @@
-# Rust Compatibility Checklist
+# Rust Compatibility Checklist — v0.6 archive
 
-This document tracks the external behavior the Rust-only implementation must keep stable after the Go implementation was removed for `v0.6.0`.
+> Historical migration contract. The Rust-only implementation is now the supported product. Current release validation lives in `scripts/ci/`, while this file preserves the v0.6 migration compatibility checklist.
+
+This document tracks the external behavior the Rust-only implementation needed to keep stable after the Go implementation was removed for `v0.6.0`.
 
 ## Command Contracts
 

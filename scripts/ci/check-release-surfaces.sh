@@ -72,16 +72,16 @@ while IFS= read -r file; do
 done < <(git ls-files 'npm/*')
 
 if grep -R -Eqi "npm (wrapper|package)|npm install -g agenttrace|AGENTTRACE_RELEASE_TAG|npm/" \
-  README.md README.zh-CN.md CONTRIBUTING.md CHANGELOG.md docs/launch-kit.md site homebrew; then
+  README.md README.zh-CN.md CONTRIBUTING.md CHANGELOG.md docs/maintainers/launch-kit.md site homebrew; then
   fail "public release surfaces must not advertise npm package support"
 fi
 
 if grep -R -Eqi "go install github.com/luoyuctl/agenttrace|go build .*cmd/agenttrace|setup-go|go-version-file" \
-  README.md README.zh-CN.md CONTRIBUTING.md docs/launch-kit.md docs/demo-playbook.md docs/parser-guide.md docs/agentops-prompt-rules.md install.sh install.ps1 .github homebrew site skills; then
+  README.md README.zh-CN.md CONTRIBUTING.md docs/maintainers/launch-kit.md docs/maintainers/demo-playbook.md docs/guides/parser-guide.md docs/maintainers/agentops-prompt-rules.md install.sh install.ps1 .github homebrew site skills; then
   fail "public release surfaces must not advertise Go build/install paths"
 fi
 
-if grep -R -Eqi "pkg.go.dev|goreportcard|img.shields.io/badge/go-" README.md README.zh-CN.md site docs/launch-kit.md; then
+if grep -R -Eqi "pkg.go.dev|goreportcard|img.shields.io/badge/go-" README.md README.zh-CN.md site docs/maintainers/launch-kit.md; then
   fail "README badges must advertise the Rust default implementation, not Go"
 fi
 

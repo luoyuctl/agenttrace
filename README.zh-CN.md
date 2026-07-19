@@ -115,10 +115,12 @@ agenttrace
 - 官网：https://luoyuctl.github.io/agenttrace/
 - AI Agent 可观测性指南：https://luoyuctl.github.io/agenttrace/ai-agent-observability.html
 - 示例 HTML 报告：https://luoyuctl.github.io/agenttrace/demo-report.html
-- CI 集成：[docs/ci-integration.md](docs/ci-integration.md)
-- Cursor 导入：[docs/cursor-import.md](docs/cursor-import.md)
-- Parser 指南：[docs/parser-guide.md](docs/parser-guide.md)
-- 发布说明草案：[docs/launch-kit.md](docs/launch-kit.md)
+- 文档导航：[docs/README.md](docs/README.md)
+- CI 集成：[docs/guides/ci-integration.md](docs/guides/ci-integration.md)
+- 治理报告：[docs/guides/governance-reports.md](docs/guides/governance-reports.md)
+- Cursor 导入：[docs/guides/cursor-import.md](docs/guides/cursor-import.md)
+- Parser 指南：[docs/guides/parser-guide.md](docs/guides/parser-guide.md)
+- 发布维护指南：[docs/maintainers/distribution.md](docs/maintainers/distribution.md)
 
 agenttrace 已被这些项目收录：
 

@@ -368,7 +368,7 @@ target/release/agenttrace --version
 target/release/agenttrace --demo --overview -f json
 ```
 
-For public demo, report, or release-surface checks, run the reusable gates from [CI Integration](ci-integration.md):
+For public demo, report, or release-surface checks, run the reusable gates from [CI Integration](../guides/ci-integration.md):
 
 ```bash
 scripts/ci/check-rust-release-local.sh

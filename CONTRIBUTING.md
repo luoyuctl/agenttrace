@@ -38,7 +38,7 @@ target/release/agenttrace --demo --overview -f json
 
 ## Parser Contributions
 
-Parser PRs are very welcome. Please read [docs/parser-guide.md](docs/parser-guide.md) first.
+Parser PRs are very welcome. Please read [docs/guides/parser-guide.md](docs/guides/parser-guide.md) first.
 
 A good parser PR includes:
 
@@ -60,7 +60,7 @@ sources should remain Aggregate or Limited instead of receiving synthetic event
 timestamps or fake tool spans.
 
 Agent-run parser, growth, release, or quality review work should also follow
-[docs/agentops-prompt-rules.md](docs/agentops-prompt-rules.md) before opening
+[docs/maintainers/agentops-prompt-rules.md](docs/maintainers/agentops-prompt-rules.md) before opening
 or approving a PR.
 
 ## Privacy

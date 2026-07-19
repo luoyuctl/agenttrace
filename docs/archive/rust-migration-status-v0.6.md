@@ -1,6 +1,8 @@
-# Rust Migration Status
+# Rust Migration Status — v0.6 archive
 
-The Rust migration is complete in the `v0.6.0` source tree. Rust is the only implementation in the repository. This document describes release readiness; it does not claim that the public `v0.6.0` tag or assets already exist.
+> Historical record. The Rust migration completed and `v0.6.0` was released on 2026-07-19. Current release and compatibility guidance lives in the repository README, [distribution guide](../maintainers/distribution.md), and current CI scripts.
+
+The Rust migration is complete in the `v0.6.0` source tree. Rust is the only implementation in the repository. This document preserves the migration-era release-readiness record.
 
 ## Final State
 
@@ -36,6 +38,6 @@ AGENTTRACE_BIN="$PWD/target/release/agenttrace" scripts/ci/check-rust-tui-real-s
 scripts/ci/check-rust-release-local.sh
 ```
 
-## Release Notes
+## Historical release note
 
-`v0.6.0` is the first Rust-only release. It should be published as a normal GitHub release with the Rust target asset matrix, then followed by the Homebrew tap update and downstream `brew test`.
+`v0.6.0` was the first Rust-only release. It was published with the Rust target asset matrix and followed by Homebrew tap synchronization.
