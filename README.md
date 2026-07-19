@@ -169,19 +169,11 @@ Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Her
 - Parser guide: [docs/parser-guide.md](docs/parser-guide.md)
 - Launch notes: [docs/launch-kit.md](docs/launch-kit.md)
 
-Listed in:
+Listed in these open source projects:
 
-- [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli)
-- [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild)
-- [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills)
-- [awesome-x-ops](https://github.com/xlabs-club/awesome-x-ops)
-- [Awesome DevOps AI](https://github.com/hammadhaqqani/awesome-devops-ai)
-- [agentic-ai-knowledge-base](https://github.com/ankurkumarz/agentic-ai-knowledge-base)
-- [awesome-harness-engineering](https://github.com/walkinglabs/awesome-harness-engineering)
-- [awesome-ai-tools](https://github.com/QAInsights/awesome-ai-tools)
-- [awesome-claude-code-toolkit](https://github.com/rohitg00/awesome-claude-code-toolkit)
-- [awesome-ai-plugins](https://github.com/hashgraph-online/awesome-ai-plugins)
-- [awesome-agent-skills](https://github.com/kodustech/awesome-agent-skills)
+- [awesome-mac](https://github.com/jaywcjlove/awesome-mac)
+- [antigravity-awesome-skills](https://github.com/sickn33/antigravity-awesome-skills)
+- [awesome-claude-skills](https://github.com/BehiSecc/awesome-claude-skills)
 
 ## Contributing
 
