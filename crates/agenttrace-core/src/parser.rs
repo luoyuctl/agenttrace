@@ -153,15 +153,11 @@ pub fn parse_raw_session(name: &str, path: &str, raw: &str) -> anyhow::Result<Se
 }
 
 fn parse_copilot_session_jsonl(raw: &str) -> Option<Vec<Event>> {
-    let entries = jsonl_objects(raw);
-    if !entries
-        .iter()
-        .any(|entry| string(entry.get("type")) == Some("session.start"))
-    {
+    if !jsonl_objects(raw).any(|entry| string(entry.get("type")) == Some("session.start")) {
         return None;
     }
     let mut events = Vec::new();
-    for entry in entries {
+    for entry in jsonl_objects(raw) {
         let typ = string(entry.get("type")).unwrap_or("");
         let timestamp = string(entry.get("timestamp")).unwrap_or("").to_string();
         let data = entry.get("data").and_then(Value::as_object);
@@ -252,8 +248,7 @@ fn parse_copilot_session_jsonl(raw: &str) -> Option<Vec<Event>> {
 }
 
 fn parse_kimi_wire_jsonl(raw: &str) -> Option<Vec<Event>> {
-    let entries = jsonl_objects(raw);
-    if !entries.iter().any(|entry| {
+    if !jsonl_objects(raw).any(|entry| {
         entry
             .get("message")
             .and_then(Value::as_object)
@@ -262,7 +257,7 @@ fn parse_kimi_wire_jsonl(raw: &str) -> Option<Vec<Event>> {
         return None;
     }
     let mut events = Vec::new();
-    for entry in entries {
+    for entry in jsonl_objects(raw) {
         let timestamp = entry
             .get("timestamp")
             .and_then(Value::as_f64)
@@ -364,8 +359,7 @@ fn parse_kimi_wire_jsonl(raw: &str) -> Option<Vec<Event>> {
 }
 
 fn parse_antigravity_jsonl(raw: &str) -> Option<Vec<Event>> {
-    let entries = jsonl_objects(raw);
-    if !entries.iter().any(|entry| {
+    if !jsonl_objects(raw).any(|entry| {
         matches!(
             string(entry.get("type")),
             Some("PLANNER_RESPONSE" | "USER_INPUT" | "CONVERSATION_HISTORY")
@@ -375,7 +369,7 @@ fn parse_antigravity_jsonl(raw: &str) -> Option<Vec<Event>> {
         return None;
     }
     let mut events = Vec::new();
-    for entry in entries {
+    for entry in jsonl_objects(raw) {
         let typ = string(entry.get("type")).unwrap_or("");
         let timestamp = string(entry.get("created_at")).unwrap_or("").to_string();
         match typ {
@@ -426,16 +420,16 @@ fn parse_antigravity_jsonl(raw: &str) -> Option<Vec<Event>> {
 }
 
 fn parse_cursor_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
-    let entries = jsonl_objects(raw);
-    if entries.is_empty()
-        || !entries.iter().all(|entry| {
+    let mut entries = jsonl_objects(raw).peekable();
+    if entries.peek().is_none()
+        || !entries.all(|entry| {
             entry.contains_key("role") && entry.get("message").and_then(Value::as_object).is_some()
         })
     {
         return None;
     }
     let mut events = Vec::new();
-    for entry in entries {
+    for entry in jsonl_objects(raw) {
         let role = string(entry.get("role")).unwrap_or("");
         let Some(message) = entry.get("message").and_then(Value::as_object) else {
             continue;
@@ -473,8 +467,7 @@ fn parse_cursor_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
 }
 
 fn parse_claude_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
-    let entries = jsonl_objects(raw);
-    if !entries.iter().any(|entry| {
+    if !jsonl_objects(raw).any(|entry| {
         matches!(string(entry.get("type")), Some("tool_use" | "tool_result"))
             && entry.contains_key("timestamp")
             && entry.contains_key("tool_name")
@@ -482,7 +475,7 @@ fn parse_claude_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
         return None;
     }
     let mut events = Vec::new();
-    for entry in entries {
+    for entry in jsonl_objects(raw) {
         let timestamp = string(entry.get("timestamp")).unwrap_or("").to_string();
         match string(entry.get("type")).unwrap_or("") {
             "user" | "assistant" => events.push(Event {
@@ -517,8 +510,7 @@ fn parse_claude_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
 }
 
 fn parse_workbuddy_jsonl(raw: &str) -> Option<Vec<Event>> {
-    let entries = jsonl_objects(raw);
-    if !entries.iter().any(|entry| {
+    if !jsonl_objects(raw).any(|entry| {
         matches!(
             string(entry.get("type")),
             Some("function_call" | "function_call_result" | "reasoning")
@@ -530,7 +522,7 @@ fn parse_workbuddy_jsonl(raw: &str) -> Option<Vec<Event>> {
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
     let mut latest_usage = None;
-    for entry in entries {
+    for entry in jsonl_objects(raw) {
         if let Some(next) = entry
             .get("providerData")
             .and_then(Value::as_object)
@@ -1125,7 +1117,7 @@ fn parse_aider_token_count(value: &str) -> i64 {
 }
 
 fn is_oh_my_pi_jsonl(raw: &str) -> bool {
-    jsonl_objects(raw).iter().any(is_oh_my_pi_session_header)
+    jsonl_objects(raw).any(|obj| is_oh_my_pi_session_header(&obj))
 }
 
 fn is_oh_my_pi_session_header(obj: &Map<String, Value>) -> bool {
@@ -1412,7 +1404,7 @@ fn oh_my_pi_timestamp(raw: Option<&Value>, fallback: &str) -> String {
 }
 
 fn is_qwen_code_jsonl(raw: &str) -> bool {
-    jsonl_objects(raw).iter().any(is_qwen_code_event)
+    jsonl_objects(raw).any(|obj| is_qwen_code_event(&obj))
 }
 
 fn is_qwen_code_value(value: &Value) -> bool {
@@ -1452,8 +1444,7 @@ fn is_qwen_code_json_output(obj: &Map<String, Value>) -> bool {
 }
 
 fn parse_qwen_code_jsonl(raw: &str) -> anyhow::Result<Vec<Event>> {
-    let objs = jsonl_objects(raw);
-    parse_qwen_code_objects(&objs)
+    parse_qwen_code_objects(jsonl_objects(raw))
 }
 
 fn parse_qwen_code_value(value: &Value) -> anyhow::Result<Vec<Event>> {
@@ -1474,7 +1465,11 @@ fn parse_qwen_code_value(value: &Value) -> anyhow::Result<Vec<Event>> {
     }
 }
 
-fn parse_qwen_code_objects(objs: &[Map<String, Value>]) -> anyhow::Result<Vec<Event>> {
+fn parse_qwen_code_objects<I>(objs: I) -> anyhow::Result<Vec<Event>>
+where
+    I: IntoIterator,
+    I::Item: std::borrow::Borrow<Map<String, Value>>,
+{
     let mut meta_events = Vec::new();
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
@@ -1482,6 +1477,7 @@ fn parse_qwen_code_objects(objs: &[Map<String, Value>]) -> anyhow::Result<Vec<Ev
     let mut has_usage = false;
 
     for obj in objs {
+        let obj = std::borrow::Borrow::borrow(&obj);
         if !is_qwen_code_event(obj) {
             continue;
         }
@@ -3745,14 +3741,13 @@ fn kimi_message_events(message: &Map<String, Value>, model: &str, events: &mut V
     let _ = model;
 }
 
-fn jsonl_objects(raw: &str) -> Vec<Map<String, Value>> {
+fn jsonl_objects(raw: &str) -> impl Iterator<Item = Map<String, Value>> + '_ {
     raw.lines()
         .filter_map(|line| parse_jsonl_value_lenient(line.trim()))
         .filter_map(|value| match value {
             Value::Object(obj) => Some(obj),
             _ => None,
         })
-        .collect()
 }
 
 fn parse_jsonl_value_lenient(line: &str) -> Option<Value> {
