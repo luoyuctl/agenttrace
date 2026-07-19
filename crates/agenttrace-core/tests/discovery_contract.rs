@@ -500,6 +500,25 @@ fn rust_reports_monotonic_load_progress_and_real_cache_hits() {
 }
 
 #[test]
+fn rust_skips_claude_workflow_definitions() {
+    let root = temp_root("agenttrace-claude-workflows");
+    let project = root.join(".claude/projects/demo/session");
+    let workflows = project.join("workflows");
+    fs::create_dir_all(&workflows).expect("create workflow directory");
+    fs::write(project.join("session.jsonl"), SAMPLE_JSONL).expect("write session");
+    fs::write(
+        workflows.join("wf_demo.json"),
+        r#"{"runId":"wf_demo","script":"x"}"#,
+    )
+    .expect("write workflow");
+
+    let files = find_session_files(Some(&root.join(".claude/projects")));
+    assert_eq!(files, vec![project.join("session.jsonl")]);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn rust_refreshes_cache_entries_from_old_schema_version() {
     let root = temp_root("agenttrace-rust-session-cache-old-schema");
     let home = root.join("home");

@@ -33,10 +33,10 @@ jobs:
         run: cargo fmt --check
 
       - name: Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy -p agenttrace-core -p agenttrace-tui -p agenttrace -- -D warnings
 
       - name: Rust tests
-        run: cargo test
+        run: cargo test -p agenttrace-core -p agenttrace-tui -p agenttrace
 
       - name: Generated testdata is current
         run: python3 scripts/generate-testdata.py --check

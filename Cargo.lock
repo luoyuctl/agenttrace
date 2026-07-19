@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "agenttrace"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "agenttrace-core",
  "agenttrace-tui",
@@ -22,7 +22,7 @@ dependencies = [
 
 [[package]]
 name = "agenttrace-core"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -35,13 +35,14 @@ dependencies = [
 
 [[package]]
 name = "agenttrace-tui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "agenttrace-core",
  "anyhow",
  "chrono",
  "crossterm 0.28.1",
  "ratatui",
+ "unicode-width",
 ]
 
 [[package]]

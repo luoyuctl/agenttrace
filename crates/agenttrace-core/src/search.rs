@@ -10,7 +10,6 @@ pub fn search_sessions(sessions: &[Session], query: &str, limit: usize) -> Vec<S
     if query.is_empty() {
         return Vec::new();
     }
-    let limit = if limit == 0 { 20 } else { limit };
     let mut results = Vec::new();
 
     for session in canonical_sessions(sessions) {

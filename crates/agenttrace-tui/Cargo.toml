@@ -13,8 +13,9 @@ categories.workspace = true
 publish = false
 
 [dependencies]
-agenttrace-core = { version = "0.6.0", path = "../agenttrace-core" }
+agenttrace-core = { version = "0.7.0", path = "../agenttrace-core" }
 anyhow.workspace = true
 chrono.workspace = true
 crossterm.workspace = true
 ratatui.workspace = true
+unicode-width = "0.2"

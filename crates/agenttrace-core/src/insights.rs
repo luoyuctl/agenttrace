@@ -1,6 +1,8 @@
-use crate::{parse_ts, pricing, Session};
+use crate::{parse_ts, pricing, total_tokens, Session};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use std::collections::BTreeMap;
+use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SessionComparison {
@@ -73,6 +75,34 @@ impl TimeRange {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectIdentity {
+    pub id: String,
+    pub display_name: String,
+    pub root: String,
+    pub resolution: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ReportScope {
+    pub generated_at: String,
+    pub range: String,
+    pub earliest_session_at: String,
+    pub latest_session_at: String,
+    pub sessions_in_scope: usize,
+    pub sources: Vec<SourceScope>,
+    pub includes_sqlite_derived_sessions: bool,
+    pub includes_preserved_history: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct SourceScope {
+    pub source: String,
+    pub sessions: usize,
+    pub tokens: i64,
+    pub estimated_cost: f64,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct DataHealth {
     pub discovered: usize,
@@ -109,27 +139,71 @@ pub fn session_capability(session: &Session) -> &'static str {
     }
 }
 
-pub fn project_name(session: &Session) -> String {
-    let raw = if session.cwd.trim().is_empty()
-        && (session.path.contains("://") || !session.path.contains(['/', '\\']))
-    {
-        "unknown"
-    } else if session.cwd.trim().is_empty() {
-        std::path::Path::new(&session.path)
+pub fn resolve_project(session: &Session) -> ProjectIdentity {
+    let raw = if !session.cwd.trim().is_empty() {
+        session.cwd.trim()
+    } else if session.path.contains("://") || !session.path.contains(['/', '\\']) {
+        ""
+    } else {
+        Path::new(&session.path)
             .parent()
-            .and_then(std::path::Path::file_name)
-            .and_then(|value| value.to_str())
-            .unwrap_or("unknown")
-    } else {
-        std::path::Path::new(&session.cwd)
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or(&session.cwd)
+            .and_then(Path::to_str)
+            .unwrap_or("")
     };
-    if raw.trim().is_empty() {
-        "unknown".to_string()
-    } else {
-        raw.to_string()
+    if raw.is_empty() || raw.starts_with("history:") {
+        return ProjectIdentity {
+            id: "unknown".to_string(),
+            display_name: "unknown".to_string(),
+            root: String::new(),
+            resolution: "unattributed".to_string(),
+        };
+    }
+    let path = lexical_normalize(Path::new(raw));
+    let (root, resolution) = git_root(&path)
+        .map(|root| (root, "git_root".to_string()))
+        .unwrap_or_else(|| (path.clone(), "cwd".to_string()));
+    let display_name = root
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("unknown")
+        .to_string();
+    let root = root.to_string_lossy().to_string();
+    ProjectIdentity {
+        id: root.clone(),
+        display_name,
+        root,
+        resolution,
+    }
+}
+
+pub fn project_name(session: &Session) -> String {
+    resolve_project(session).display_name
+}
+
+fn lexical_normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::RootDir => out.push(Path::new("/")),
+            Component::Prefix(prefix) => out.push(prefix.as_os_str()),
+            Component::Normal(value) => out.push(value),
+        }
+    }
+    out
+}
+
+fn git_root(path: &Path) -> Option<PathBuf> {
+    let mut current = if path.is_dir() { path } else { path.parent()? };
+    loop {
+        if current.join(".git").exists() {
+            return Some(current.to_path_buf());
+        }
+        current = current.parent()?;
     }
 }
 
@@ -145,7 +219,7 @@ pub fn filter_sessions(
         .iter()
         .filter(|session| {
             session_matches_time_range(session, range, now)
-                && contains(&project_name(session), project)
+                && project_matches(session, project)
                 && contains(&session.metrics.source_tool, source)
                 && contains(&session.metrics.model_used, model)
         })
@@ -156,6 +230,50 @@ pub fn session_matches_time_range(session: &Session, range: TimeRange, now: Date
     range.since(now).map_or(true, |since| {
         parse_ts(&session.metrics.session_start).is_some_and(|time| time >= since)
     })
+}
+
+pub fn report_scope(
+    sessions: &[Session],
+    range: TimeRange,
+    includes_preserved_history: bool,
+) -> ReportScope {
+    let mut sources: BTreeMap<String, SourceScope> = BTreeMap::new();
+    let mut earliest = None;
+    let mut latest = None;
+    for session in sessions {
+        if let Some(time) = parse_ts(&session.metrics.session_start) {
+            earliest = Some(earliest.map_or(time, |current: DateTime<Utc>| current.min(time)));
+            latest = Some(latest.map_or(time, |current: DateTime<Utc>| current.max(time)));
+        }
+        let entry = sources
+            .entry(session.metrics.source_tool.clone())
+            .or_insert_with(|| SourceScope {
+                source: session.metrics.source_tool.clone(),
+                ..SourceScope::default()
+            });
+        entry.sessions += 1;
+        entry.tokens += total_tokens(session);
+        entry.estimated_cost += session.metrics.cost_estimated;
+    }
+    ReportScope {
+        generated_at: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        range: range.label().to_string(),
+        earliest_session_at: earliest
+            .map(|time: DateTime<Utc>| time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+            .unwrap_or_default(),
+        latest_session_at: latest
+            .map(|time: DateTime<Utc>| time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+            .unwrap_or_default(),
+        sessions_in_scope: sessions.len(),
+        sources: sources.into_values().collect(),
+        includes_sqlite_derived_sessions: sessions.iter().any(|session| {
+            matches!(
+                session.metrics.source_tool.as_str(),
+                "hermes_db" | "opencode_db"
+            )
+        }),
+        includes_preserved_history,
+    }
 }
 
 pub fn data_health(sessions: &[Session], discovered: usize, cache_hits: usize) -> DataHealth {
@@ -216,6 +334,16 @@ pub fn data_health(sessions: &[Session], discovered: usize, cache_hits: usize) -
             .filter(|s| session_capability(s) == "detailed")
             .count(),
     }
+}
+
+fn project_matches(session: &Session, filter: &str) -> bool {
+    if filter.trim().is_empty() {
+        return true;
+    }
+    let project = resolve_project(session);
+    contains(&project.id, filter)
+        || contains(&project.display_name, filter)
+        || contains(&project.root, filter)
 }
 
 fn contains(value: &str, filter: &str) -> bool {

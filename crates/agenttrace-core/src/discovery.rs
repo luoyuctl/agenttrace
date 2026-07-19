@@ -249,7 +249,7 @@ pub fn load_sessions_with_progress_from_cache_mode(
             DateTime::parse_from_rfc3339(&session.metrics.session_start)
                 .ok()
                 .is_some_and(|time| time.with_timezone(&Utc) >= since)
-        }) && matches_filter(&crate::project_name(session), &options.project)
+        }) && matches_project_filter(session, &options.project)
             && matches_filter(&session.metrics.source_tool, &options.source)
             && matches_filter(&session.metrics.model_used, &options.model)
     });
@@ -268,6 +268,16 @@ pub fn load_sessions_with_progress_from_cache_mode(
         discovered,
         cache_hits,
     }
+}
+
+fn matches_project_filter(session: &Session, filter: &str) -> bool {
+    if filter.trim().is_empty() {
+        return true;
+    }
+    let project = crate::resolve_project(session);
+    matches_filter(&project.id, filter)
+        || matches_filter(&project.display_name, filter)
+        || matches_filter(&project.root, filter)
 }
 
 fn matches_filter(value: &str, filter: &str) -> bool {
@@ -556,6 +566,9 @@ fn is_gemini_temp_path(path: &Path) -> bool {
 
 fn is_special_session_file(path: &Path) -> bool {
     let slash = path.to_string_lossy().replace('\\', "/");
+    if slash.contains("/.claude/projects/") && slash.contains("/workflows/") {
+        return false;
+    }
     if slash.contains("/.gemini/antigravity-cli/brain/") {
         return slash.ends_with("/.system_generated/logs/transcript.jsonl");
     }

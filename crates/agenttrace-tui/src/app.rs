@@ -1,11 +1,13 @@
 use agenttrace_core::{
     average_health, canonical_sessions, clear_session_cache, compute_overview,
-    compute_overview_iter, data_health, fix_suggestions, format_cost, format_tokens, inspect_first,
-    load_cached_sessions_from_cache, load_session_cache, load_sessions_with_progress,
-    load_sessions_with_progress_from_cache_mode, predict_cost_anomaly, project_name,
+    compute_overview_iter, context_trends, cost_audit, data_health, delivery_evidence_with_git,
+    fix_suggestions, format_cost, format_tokens, inspect_first, load_cached_sessions_from_cache,
+    load_session_cache, load_sessions_with_progress, load_sessions_with_progress_from_cache_mode,
+    mcp_governance, predict_cost_anomaly, project_name, recommendations,
     render_waste_report_with_language, report_compare_with_language, report_text_with_language,
-    session_capability, session_matches_time_range, total_tokens, DataHealth, LoadOptions,
-    LoadProgress, LoadReport, Overview, ReportLanguage, Session, SessionCache, TimeRange, VERSION,
+    resolve_project, session_capability, session_matches_time_range, total_tokens, ContextTrend,
+    CostAudit, DataHealth, DeliveryEvidence, LoadOptions, LoadProgress, LoadReport, McpGovernance,
+    Overview, Recommendation, ReportLanguage, Session, SessionCache, TimeRange, VERSION,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -28,16 +30,32 @@ enum LoadMessage {
 }
 
 pub fn run(sessions_dir: &str) -> anyhow::Result<()> {
+    run_with_language(sessions_dir, None)
+}
+
+pub fn run_with_language(sessions_dir: &str, language: Option<&str>) -> anyhow::Result<()> {
     let label = if sessions_dir.trim().is_empty() {
         "auto-discovery"
     } else {
         sessions_dir
     };
-    run_with_app(App::new_loading(label, sessions_dir.to_string()))
+    let mut app = App::new_loading(label, sessions_dir.to_string());
+    if let Some(language) = parse_language(language) {
+        app.language = language;
+    }
+    run_with_app(app)
 }
 
 pub fn run_with_sessions(sessions: Vec<Session>, label: &str) -> anyhow::Result<()> {
     run_with_app(App::new(sessions, label, None))
+}
+
+fn parse_language(value: Option<&str>) -> Option<Language> {
+    match value?.trim().to_ascii_lowercase().as_str() {
+        "en" | "english" => Some(Language::En),
+        "zh" | "zh-cn" | "zh_cn" | "chinese" => Some(Language::Zh),
+        _ => None,
+    }
 }
 
 fn run_with_app(app: App) -> anyhow::Result<()> {
@@ -51,11 +69,12 @@ fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
     let mut dirty = true;
     loop {
         dirty |= app.poll_pending_load();
+        dirty |= app.poll_governance_delivery();
         if dirty {
             terminal.draw(|frame| render(frame, &mut app))?;
             dirty = false;
         }
-        let timeout = if app.pending_load.is_some() {
+        let timeout = if app.pending_load.is_some() || app.governance_delivery_pending() {
             POLL_INTERVAL
         } else {
             Duration::from_secs(60)
@@ -77,7 +96,25 @@ enum View {
     Detail,
     Diagnostics,
     Diff,
+    Governance(GovernancePanel),
     Help,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GovernancePanel {
+    ActionCenter,
+    Efficiency,
+    Delivery,
+}
+
+#[derive(Default)]
+struct GovernanceSnapshot {
+    audit: Option<CostAudit>,
+    recommendations: Option<Vec<Recommendation>>,
+    mcp: Option<McpGovernance>,
+    context: Option<ContextTrend>,
+    delivery: Option<DeliveryEvidence>,
+    delivery_pending: Option<Receiver<DeliveryEvidence>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,6 +187,7 @@ struct App {
     capability_filter: String,
     issue_filter: String,
     input: String,
+    input_original: String,
     status: String,
     sort_key: SortKey,
     sort_desc: bool,
@@ -159,6 +197,8 @@ struct App {
     language: Language,
     derived: OverviewDerived,
     raw_report_expanded: bool,
+    governance: Option<GovernanceSnapshot>,
+    governance_dirty: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -239,6 +279,7 @@ impl App {
             capability_filter: String::new(),
             issue_filter: String::new(),
             input: String::new(),
+            input_original: String::new(),
             status: String::new(),
             sort_key: SortKey::Recent,
             sort_desc: true,
@@ -248,6 +289,8 @@ impl App {
             language: Language::En,
             derived: OverviewDerived::default(),
             raw_report_expanded: false,
+            governance: None,
+            governance_dirty: true,
         };
         app.refresh_filtered();
         app
@@ -258,53 +301,78 @@ impl App {
         let mut cache = load_session_cache();
         let sessions = load_cached_sessions_from_cache(dir, &mut cache);
         let mut app = Self::new(sessions, source_label, Some(reload_dir));
+        app.language = saved_language();
         app.start_reload_with_cache(false, Some(cache));
         app
     }
 
     fn handle_event(&mut self, event: Event) -> anyhow::Result<bool> {
-        let Event::Key(key) = event else {
-            return Ok(false);
-        };
-        if key.kind != KeyEventKind::Press {
-            return Ok(false);
+        match event {
+            Event::Paste(text) => self.handle_paste(text),
+            Event::Key(key) if key.kind == KeyEventKind::Press => {
+                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
+                    return Ok(true);
+                }
+                match self.mode {
+                    InputMode::Search => Ok(self.handle_search_key(key)),
+                    InputMode::Command => self.handle_command_key(key),
+                    InputMode::Normal => self.handle_normal_key(key),
+                }
+            }
+            _ => Ok(false),
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-            return Ok(true);
-        }
+    }
+
+    fn handle_paste(&mut self, text: String) -> anyhow::Result<bool> {
         match self.mode {
-            InputMode::Search => return Ok(self.handle_search_key(key)),
-            InputMode::Command => return self.handle_command_key(key),
+            InputMode::Search => {
+                self.input.push_str(&text.replace(['\r', '\n'], " "));
+                self.apply_search_input();
+            }
+            InputMode::Command => self.input.push_str(&text.replace(['\r', '\n'], " ")),
             InputMode::Normal => {}
         }
-        self.handle_normal_key(key)
+        Ok(false)
     }
 
     fn handle_search_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Esc => {
+                self.query.clone_from(&self.input_original);
+                self.refresh_filtered();
                 self.mode = InputMode::Normal;
                 self.input.clear();
+                self.input_original.clear();
+                self.status = self.t("search cancelled", "已取消搜索").to_string();
             }
             KeyCode::Enter => {
-                self.query = self.input.trim().to_string();
+                self.apply_search_input();
                 self.mode = InputMode::Normal;
                 self.input.clear();
+                self.input_original.clear();
                 self.status = if self.query.is_empty() {
                     self.t("filter cleared", "已清除筛选").to_string()
                 } else {
                     format!("{}: {}", self.t("filter", "筛选"), self.query)
                 };
-                self.refresh_filtered();
-                self.view = View::List;
             }
             KeyCode::Backspace => {
                 self.input.pop();
+                self.apply_search_input();
             }
-            KeyCode::Char(c) => self.input.push(c),
+            KeyCode::Char(c) => {
+                self.input.push(c);
+                self.apply_search_input();
+            }
             _ => {}
         }
         false
+    }
+
+    fn apply_search_input(&mut self) {
+        self.query = self.input.trim().to_string();
+        self.refresh_filtered();
+        self.view = View::List;
     }
 
     fn handle_command_key(&mut self, key: KeyEvent) -> anyhow::Result<bool> {
@@ -349,7 +417,8 @@ impl App {
             }
             KeyCode::Char('/') => {
                 self.mode = InputMode::Search;
-                self.input.clear();
+                self.input.clone_from(&self.query);
+                self.input_original.clone_from(&self.query);
                 self.view = View::List;
             }
             KeyCode::Char('?') => {
@@ -388,6 +457,16 @@ impl App {
                 self.view = View::Diff;
                 self.scroll = 0;
             }
+            KeyCode::Char('5') => self.open_governance(GovernancePanel::ActionCenter),
+            KeyCode::Char('6') | KeyCode::Char('8') => {
+                self.open_governance(GovernancePanel::Efficiency)
+            }
+            KeyCode::Char('7') | KeyCode::Char('9') => {
+                self.open_governance(GovernancePanel::Delivery)
+            }
+            KeyCode::Char('g') | KeyCode::Char('G') if matches!(self.view, View::Governance(_)) => {
+                self.next_governance_panel();
+            }
             KeyCode::Char('v') if self.view == View::Detail => {
                 self.raw_report_expanded = !self.raw_report_expanded;
                 self.scroll = 0;
@@ -409,7 +488,10 @@ impl App {
             KeyCode::Char('a') => self.set_sort(SortKey::Anomalies),
             KeyCode::Char('l') | KeyCode::Char('L') => self.toggle_language(),
             KeyCode::Esc => {
-                if matches!(self.view, View::Detail | View::Diagnostics | View::Diff) {
+                if matches!(
+                    self.view,
+                    View::Detail | View::Diagnostics | View::Diff | View::Governance(_)
+                ) {
                     self.view = View::List;
                     self.scroll = 0;
                 } else if self.view == View::Help {
@@ -444,9 +526,13 @@ impl App {
 
     fn toggle_language(&mut self) {
         self.language = self.language.toggle();
+        if let Err(error) = save_language(self.language) {
+            self.status = format!("{}: {error}", UiText::LanguageSaveFailed.get(self.language));
+            return;
+        }
         self.status = match self.language {
-            Language::En => "language: English".to_string(),
-            Language::Zh => "语言：中文".to_string(),
+            Language::En => "language: English (saved)".to_string(),
+            Language::Zh => "语言：中文（已保存）".to_string(),
         };
     }
 
@@ -471,6 +557,15 @@ impl App {
                 }
             }
             "4" | "diff" => self.view = View::Diff,
+            "5" | "governance" | "action" | "audit" | "recommend" | "recommendations" => {
+                self.open_governance(GovernancePanel::ActionCenter)
+            }
+            "6" | "8" | "efficiency" | "mcp" | "mcp-governance" | "context" | "context-trends" => {
+                self.open_governance(GovernancePanel::Efficiency)
+            }
+            "7" | "9" | "delivery" | "delivery-evidence" => {
+                self.open_governance(GovernancePanel::Delivery)
+            }
             "help" | "?" => {
                 self.help_context = self.view;
                 self.view = View::Help;
@@ -846,6 +941,7 @@ impl App {
     }
 
     fn apply_loaded_sessions(&mut self, report: LoadReport, force: bool) {
+        let selected = self.selected_session().cloned();
         self.load_state.discovered = report.discovered;
         self.load_state.processed = report.discovered;
         self.load_state.skipped = report.skipped;
@@ -853,15 +949,37 @@ impl App {
         self.sessions = report.sessions;
         self.sessions
             .sort_by(|left, right| compare_sessions(left, right, SortKey::Recent, true));
+        let selected_index = selected.as_ref().and_then(|selected| {
+            self.sessions
+                .iter()
+                .position(|session| same_session(session, selected))
+        });
+        let selection_missing = selected.is_some() && selected_index.is_none();
         self.selected = 0;
         self.scroll = 0;
         self.refresh_filtered();
+        if let Some(position) = selected_index.and_then(|index| {
+            self.filtered
+                .iter()
+                .position(|candidate| *candidate == index)
+        }) {
+            self.selected = position;
+            self.clamp_selection();
+        } else if selection_missing {
+            self.view = View::List;
+        }
         self.load_state.phase = LoadPhase::Ready;
         self.load_state.showing_cached = false;
         self.load_state.force = force;
         self.load_state.parsed = self.sessions.len();
         self.load_state.sources = source_counts(&self.sessions);
-        self.status = if force {
+        self.status = if selection_missing {
+            self.t(
+                "reloaded; selected session is no longer available",
+                "已重新加载；原选中会话已不存在",
+            )
+            .to_string()
+        } else if force {
             format!(
                 "{} {} {} {} {}",
                 self.t("force reloaded", "已强制重载"),
@@ -894,12 +1012,14 @@ impl App {
             }
             View::Detail => View::Diagnostics,
             View::Diagnostics => View::Diff,
-            View::Diff | View::Help => View::Overview,
+            View::Diff => View::Governance(GovernancePanel::ActionCenter),
+            View::Governance(_) | View::Help => View::Overview,
         };
         self.scroll = 0;
     }
 
     fn set_sort(&mut self, key: SortKey) {
+        let selected = self.filtered.get(self.selected).copied();
         if self.sort_key == key {
             self.sort_desc = !self.sort_desc;
         } else {
@@ -907,6 +1027,14 @@ impl App {
             self.sort_desc = key != SortKey::Name;
         }
         self.refresh_filtered();
+        if let Some(position) = selected.and_then(|index| {
+            self.filtered
+                .iter()
+                .position(|candidate| *candidate == index)
+        }) {
+            self.selected = position;
+            self.clamp_selection();
+        }
         self.status = format!(
             "{} {}",
             self.t("sorted by", "排序："),
@@ -995,26 +1123,17 @@ impl App {
     }
 
     fn filter_selected_source(&mut self) {
-        let mut sources = self
-            .sessions
-            .iter()
+        let Some(source) = self
+            .selected_session()
             .map(|session| session.metrics.source_tool.clone())
             .filter(|source| !source.is_empty())
-            .collect::<Vec<_>>();
-        sources.sort();
-        sources.dedup();
-        if sources.is_empty() {
-            self.status = self
-                .t("source filter unavailable", "来源筛选不可用")
+        else {
+            self.status = UiText::CurrentSourceUnavailable
+                .get(self.language)
                 .to_string();
             return;
-        }
-        self.source_filter = sources
-            .iter()
-            .position(|source| source == &self.source_filter)
-            .and_then(|index| sources.get(index + 1))
-            .cloned()
-            .unwrap_or_else(|| sources[0].clone());
+        };
+        self.source_filter = source;
         self.refresh_filtered();
         self.view = View::List;
         self.status = format!(
@@ -1086,8 +1205,6 @@ impl App {
         let session_name = session.name.clone();
         let target_view = inspect_target_view(item.label);
 
-        self.clear_triage_filters();
-        self.refresh_filtered();
         let Some(position) = self.filtered.iter().position(|idx| *idx == item.index) else {
             self.status = self
                 .t("inspect target hidden", "检查目标已隐藏")
@@ -1134,6 +1251,7 @@ impl App {
                 .iter()
                 .filter_map(|index| self.sessions.get(*index)),
         );
+        self.governance_dirty = true;
         let visible = self.visible_sessions();
         let tool_failure_sessions = visible
             .iter()
@@ -1159,7 +1277,7 @@ impl App {
         self.derived = OverviewDerived {
             health: data_health(
                 &self.sessions,
-                self.load_state.discovered,
+                self.sessions.len() + self.load_state.skipped,
                 self.load_state.cache_hits,
             ),
             average_health: average_health(&visible),
@@ -1210,7 +1328,10 @@ impl App {
     }
 
     fn move_next(&mut self) {
-        if self.view == View::Detail || self.view == View::Diagnostics || self.view == View::Diff {
+        if matches!(
+            self.view,
+            View::Detail | View::Diagnostics | View::Diff | View::Governance(_)
+        ) {
             self.scroll = self.scroll.saturating_add(1);
             return;
         }
@@ -1221,7 +1342,10 @@ impl App {
     }
 
     fn move_previous(&mut self) {
-        if self.view == View::Detail || self.view == View::Diagnostics || self.view == View::Diff {
+        if matches!(
+            self.view,
+            View::Detail | View::Diagnostics | View::Diff | View::Governance(_)
+        ) {
             self.scroll = self.scroll.saturating_sub(1);
             return;
         }
@@ -1230,7 +1354,10 @@ impl App {
     }
 
     fn move_page(&mut self, delta: i16) {
-        if matches!(self.view, View::Detail | View::Diagnostics | View::Diff) {
+        if matches!(
+            self.view,
+            View::Detail | View::Diagnostics | View::Diff | View::Governance(_)
+        ) {
             self.scroll = self.scroll.saturating_add_signed(delta);
             return;
         }
@@ -1250,6 +1377,148 @@ impl App {
             .filter_map(|idx| self.sessions.get(*idx))
             .collect()
     }
+
+    fn open_governance(&mut self, panel: GovernancePanel) {
+        self.view = View::Governance(panel);
+        self.scroll = 0;
+    }
+
+    fn next_governance_panel(&mut self) {
+        let panel = match self.view {
+            View::Governance(GovernancePanel::ActionCenter) => GovernancePanel::Efficiency,
+            View::Governance(GovernancePanel::Efficiency) => GovernancePanel::Delivery,
+            View::Governance(GovernancePanel::Delivery) => GovernancePanel::ActionCenter,
+            _ => GovernancePanel::ActionCenter,
+        };
+        self.open_governance(panel);
+    }
+
+    fn ensure_governance(&mut self, panel: GovernancePanel) {
+        if self.governance_dirty {
+            self.governance = Some(GovernanceSnapshot::default());
+            self.governance_dirty = false;
+        }
+        let snapshot = self
+            .governance
+            .get_or_insert_with(GovernanceSnapshot::default);
+        let missing = match panel {
+            GovernancePanel::ActionCenter => {
+                snapshot.audit.is_none() || snapshot.recommendations.is_none()
+            }
+            GovernancePanel::Efficiency => snapshot.mcp.is_none() || snapshot.context.is_none(),
+            GovernancePanel::Delivery => {
+                snapshot.delivery.is_none() && snapshot.delivery_pending.is_none()
+            }
+        };
+        if !missing {
+            return;
+        }
+        let sessions = self.visible_sessions_cloned();
+        match panel {
+            GovernancePanel::ActionCenter => {
+                let snapshot = self.governance.as_mut().expect("governance initialized");
+                if snapshot.audit.is_none() {
+                    snapshot.audit = Some(cost_audit(&sessions));
+                }
+                if snapshot.recommendations.is_none() {
+                    snapshot.recommendations = Some(recommendations(&sessions));
+                }
+            }
+            GovernancePanel::Efficiency => {
+                let snapshot = self.governance.as_mut().expect("governance initialized");
+                if snapshot.mcp.is_none() {
+                    snapshot.mcp = Some(mcp_governance(&sessions));
+                }
+                if snapshot.context.is_none() {
+                    snapshot.context = Some(context_trends(&sessions));
+                }
+            }
+            GovernancePanel::Delivery => {
+                let (tx, rx) = mpsc::channel();
+                self.governance
+                    .as_mut()
+                    .expect("governance initialized")
+                    .delivery_pending = Some(rx);
+                thread::spawn(move || {
+                    let _ = tx.send(delivery_evidence_with_git(&sessions));
+                });
+            }
+        }
+    }
+
+    fn visible_sessions_cloned(&self) -> Vec<Session> {
+        self.visible_sessions().into_iter().cloned().collect()
+    }
+
+    fn governance_delivery_pending(&self) -> bool {
+        self.governance
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.delivery_pending.is_some())
+    }
+
+    fn poll_governance_delivery(&mut self) -> bool {
+        let Some(snapshot) = self.governance.as_mut() else {
+            return false;
+        };
+        let Some(receiver) = snapshot.delivery_pending.take() else {
+            return false;
+        };
+        match receiver.try_recv() {
+            Ok(delivery) => {
+                snapshot.delivery = Some(delivery);
+                true
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                snapshot.delivery_pending = Some(receiver);
+                false
+            }
+            Err(mpsc::TryRecvError::Disconnected) => true,
+        }
+    }
+}
+
+fn language_preference_path() -> Option<std::path::PathBuf> {
+    #[cfg(test)]
+    let base = std::env::temp_dir().join(format!("agenttrace-tui-test-{}", std::process::id()));
+    #[cfg(not(test))]
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::PathBuf::from(home).join(".config"))
+        })?;
+    Some(base.join("agenttrace").join("tui-language"))
+}
+
+fn saved_language() -> Language {
+    language_preference_path()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .map(|value| match value.trim() {
+            "zh" => Language::Zh,
+            _ => Language::En,
+        })
+        .unwrap_or(Language::En)
+}
+
+fn save_language(language: Language) -> std::io::Result<()> {
+    let Some(path) = language_preference_path() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(
+        path,
+        match language {
+            Language::En => "en\n",
+            Language::Zh => "zh\n",
+        },
+    )
+}
+
+fn same_session(left: &Session, right: &Session) -> bool {
+    left.path == right.path
+        && left.name == right.name
+        && left.metrics.session_start == right.metrics.session_start
 }
 
 fn text(language: Language, en: &'static str, zh: &'static str) -> &'static str {
@@ -1266,7 +1535,16 @@ fn context_view_label(view: View, language: Language) -> &'static str {
         View::Detail => text(language, "Detail", "详情"),
         View::Diagnostics => text(language, "Diagnostics", "诊断"),
         View::Diff => text(language, "Diff", "对比"),
+        View::Governance(panel) => governance_panel_label(panel, language),
         View::Help => text(language, "Help", "帮助"),
+    }
+}
+
+fn governance_panel_label(panel: GovernancePanel, language: Language) -> &'static str {
+    match panel {
+        GovernancePanel::ActionCenter => text(language, "Action Center", "行动中心"),
+        GovernancePanel::Efficiency => text(language, "Efficiency", "效率"),
+        GovernancePanel::Delivery => text(language, "Delivery", "交付"),
     }
 }
 
@@ -1350,10 +1628,13 @@ fn load_sessions_for_tui(
 
 #[path = "filters.rs"]
 mod filters;
+#[path = "i18n.rs"]
+mod i18n;
 #[path = "presentation.rs"]
 mod presentation;
 
 use filters::*;
+use i18n::UiText;
 use presentation::*;
 
 #[cfg(test)]

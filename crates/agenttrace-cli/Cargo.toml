@@ -17,8 +17,8 @@ name = "agenttrace"
 path = "src/main.rs"
 
 [dependencies]
-agenttrace-core = { version = "0.6.0", path = "../agenttrace-core" }
-agenttrace-tui = { version = "0.6.0", path = "../agenttrace-tui" }
+agenttrace-core = { version = "0.7.0", path = "../agenttrace-core" }
+agenttrace-tui = { version = "0.7.0", path = "../agenttrace-tui" }
 anyhow.workspace = true
 chrono.workspace = true
 clap.workspace = true

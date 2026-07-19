@@ -2,6 +2,7 @@ mod demo;
 mod diagnostics;
 mod discovery;
 mod doctor;
+mod governance;
 mod history;
 mod insights;
 mod parser;
@@ -32,21 +33,30 @@ pub use discovery::{
     KnownSessionDir, LoadOptions, LoadProgress, LoadReport,
 };
 pub use doctor::{build_doctor_report, render_doctor_report, DoctorDirReport, DoctorReport};
+pub use governance::{
+    context_trends, cost_audit, delivery_evidence, delivery_evidence_with_git, mcp_governance,
+    recommendations, ContextTrend, ContextTrendTotals, CostAudit, DeliveryEvidence,
+    DeliverySummary, McpGovernance, McpGovernanceItem, ModelCostAudit, PriceBreakdown,
+    PricingCoverage, ProjectContextTrend, Recommendation, SessionDeliveryEvidence, TokenBreakdown,
+};
 pub use history::{history_path, merge_preserved_history, preserve_derived_history};
 pub use insights::{
-    compare_session_outcome, data_health, filter_sessions, project_name, session_capability,
-    session_matches_time_range, DataHealth, SessionComparison, TimeRange,
+    compare_session_outcome, data_health, filter_sessions, project_name, report_scope,
+    resolve_project, session_capability, session_matches_time_range, DataHealth, ProjectIdentity,
+    ReportScope, SessionComparison, SourceScope, TimeRange,
 };
 pub use parser::{parse_file, parse_raw_session};
 pub use pricing::{
-    pricing_cache_path, pricing_source, render_model_pricing_list, render_test_match,
+    lookup_price, pricing_cache_path, pricing_source, render_model_pricing_list, render_test_match,
     update_pricing,
 };
 pub use reports::{
     add_baseline_comparison, report_compare, report_compare_json, report_compare_with_language,
-    report_json, report_json_with_language, report_overview_html, report_overview_json,
-    report_overview_json_with_health, report_overview_markdown, report_overview_text, report_text,
-    report_text_with_language, BaselineThresholds, ReportLanguage,
+    report_json, report_json_with_language, report_overview_html,
+    report_overview_html_with_context, report_overview_json, report_overview_json_with_context,
+    report_overview_json_with_health, report_overview_markdown,
+    report_overview_markdown_with_context, report_overview_text, report_overview_text_with_context,
+    report_text, report_text_with_language, BaselineThresholds, ReportLanguage,
 };
 pub use search::{report_search_json, report_search_text, search_sessions};
 pub use session_cache::{

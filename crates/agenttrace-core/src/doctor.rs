@@ -1,6 +1,6 @@
 use crate::{
-    find_session_files, known_session_dirs, load_sqlite_backed_sessions,
-    skip_sqlite_backed_file_dir, Session, VERSION,
+    cached_session, find_session_files, known_session_dirs, load_session_cache,
+    load_sqlite_backed_sessions, parse_file, skip_sqlite_backed_file_dir, Session, VERSION,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -27,6 +27,11 @@ pub struct DoctorDirReport {
     pub path: String,
     pub exists: bool,
     pub files: usize,
+    pub parsed: usize,
+    pub failed: usize,
+    pub cache_hits: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub failure_samples: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -110,14 +115,10 @@ fn doctor_directories(
     files: &[PathBuf],
     sqlite_sessions: &[Session],
 ) -> Vec<DoctorDirReport> {
+    let mut cache = load_session_cache();
     if let Some(dir) = dir {
         let abs = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-        return vec![DoctorDirReport {
-            name: "custom".to_string(),
-            path: abs.to_string_lossy().to_string(),
-            exists: abs.is_dir(),
-            files: files.len(),
-        }];
+        return vec![doctor_dir_report("custom", &abs, files, &mut cache)];
     }
 
     let mut count_by_root = BTreeMap::new();
@@ -134,15 +135,51 @@ fn doctor_directories(
 
     let mut dirs = Vec::new();
     for candidate in known_session_dirs() {
-        dirs.push(DoctorDirReport {
-            name: candidate.name,
-            path: candidate.path.to_string_lossy().to_string(),
-            exists: candidate.path.is_dir(),
-            files: count_by_root.get(&candidate.path).copied().unwrap_or(0),
-        });
+        let matching = files
+            .iter()
+            .filter(|file| is_under(file, &candidate.path))
+            .cloned()
+            .collect::<Vec<_>>();
+        dirs.push(doctor_dir_report(
+            &candidate.name,
+            &candidate.path,
+            &matching,
+            &mut cache,
+        ));
     }
     dirs.extend(doctor_sqlite_directories(sqlite_sessions));
     dirs
+}
+
+fn doctor_dir_report(
+    name: &str,
+    path: &Path,
+    files: &[PathBuf],
+    cache: &mut crate::SessionCache,
+) -> DoctorDirReport {
+    let mut parsed = 0;
+    let mut cache_hits = 0;
+    let mut failure_samples = Vec::new();
+    for file in files {
+        if cached_session(file, cache).is_some() {
+            cache_hits += 1;
+            parsed += 1;
+        } else if parse_file(file).is_ok() {
+            parsed += 1;
+        } else if failure_samples.len() < 3 {
+            failure_samples.push(file.to_string_lossy().to_string());
+        }
+    }
+    DoctorDirReport {
+        name: name.to_string(),
+        path: path.to_string_lossy().to_string(),
+        exists: path.is_dir(),
+        files: files.len(),
+        parsed,
+        failed: files.len().saturating_sub(parsed),
+        cache_hits,
+        failure_samples,
+    }
 }
 
 fn doctor_sqlite_directories(sessions: &[Session]) -> Vec<DoctorDirReport> {
@@ -182,6 +219,10 @@ fn doctor_sqlite_directories(sessions: &[Session]) -> Vec<DoctorDirReport> {
             path: path.to_string_lossy().to_string(),
             exists,
             files,
+            parsed: files,
+            failed: 0,
+            cache_hits: 0,
+            failure_samples: Vec::new(),
         });
     }
     dirs
@@ -224,13 +265,16 @@ fn doctor_report_text(report: &DoctorReport) -> String {
         "  {} parsed session cache entries, {} reusable for this scan, {} cached directory listings\n",
         report.cache_entries, report.cached_valid, report.cache_dirs
     ));
-    out.push_str("\nDirectories:\n");
+    out.push_str("\nProviders:\n");
     for dir in &report.directories {
         let status = if dir.exists { "found" } else { "missing" };
         out.push_str(&format!(
-            "  {:20} {:7} {:5}  {}\n",
-            dir.name, status, dir.files, dir.path
+            "  {:20} {:7} found={:<5} parsed={:<5} failed={:<5} cache={:<5} {}\n",
+            dir.name, status, dir.files, dir.parsed, dir.failed, dir.cache_hits, dir.path
         ));
+        for sample in &dir.failure_samples {
+            out.push_str(&format!("    failed: {sample}\n"));
+        }
     }
     out.push_str("\nRecommendations:\n");
     for rec in &report.recommendations {

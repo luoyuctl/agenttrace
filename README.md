@@ -47,7 +47,7 @@ It helps you answer:
 
 ## Real local run
 
-These screenshots and figures are a redacted sample of the latest 500 real local sessions captured for the v0.6.0 source tree. They are not `--demo` output, current telemetry, or test fixtures.
+These screenshots and figures are a redacted sample of the latest 500 real local sessions captured for the v0.7.0 source tree. They are not `--demo` output, current telemetry, or test fixtures.
 
 ```bash
 agenttrace
@@ -64,11 +64,11 @@ agenttrace
 That local run found:
 
 ```text
-AGENTTRACE v0.6.0
+AGENTTRACE v0.7.0
 ```
 
 | Signal | What agenttrace found |
-|---|---:|
+| --- | ---: |
 | Analyzed sessions | 500 |
 | Total tokens | 4.0B |
 | Estimated cost | $2.6K |
@@ -79,7 +79,7 @@ AGENTTRACE v0.6.0
 ## Install
 
 The commands below install the latest public channel, which can lag behind the
-`v0.6.0` source tree until its release assets and tap formula are published.
+`v0.7.0` source tree until its release assets and tap formula are published.
 Check the installed version with `agenttrace --version`. To test the current
 source tree, use the Git-based Cargo command below.
 
@@ -106,12 +106,49 @@ iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.p
 agenttrace
 ```
 
+### Governance reports
+
+```bash
+# Audit raw token components, normalized pricing, and fallback confidence.
+agenttrace --audit --range 30d -f json
+
+# Optional local model aliases and per-million-token price overrides.
+AGENTTRACE_PRICING_FILE=pricing-overrides.json agenttrace --audit -f json
+
+# Rank evidence-backed actions by severity and estimated impact.
+agenttrace --recommend --range 30d -f json
+
+# Inspect observed MCP invocations. Loaded-server coverage is intentionally
+# reported as unavailable unless the source log actually records it.
+agenttrace --mcp-governance --range 30d -f json
+
+# Review cross-session context, cache, repeat-read, and read/write trends.
+agenttrace --context-trends --range 30d -f json
+
+# Correlate local Git commit timestamps with sessions (heuristic, read-only).
+agenttrace --delivery-evidence --range 30d -f json
+```
+
+`pricing-overrides.json` accepts `aliases` plus per-million-token `prices`:
+
+```json
+{"aliases":{"provider/raw-model":"my-model"},"prices":{"my-model":{"input":1,"output":2,"cw":0,"cr":0}}}
+```
+
+`--overview` now includes scope, parse and pricing confidence, cost audit,
+prioritized recommendations, MCP governance, context trends, and delivery
+signals in JSON, Markdown, and HTML output. All cost and delivery fields are
+explicitly estimates or heuristics; they are not provider billing or proof that
+a commit reached `main`.
+
 ## What you get
 
 | Need | agenttrace gives you |
-|---|---|
+| --- | --- |
 | Historical spend review | Sessions grouped across projects, agents, and models with Today/7d/30d/All ranges |
-| Data confidence | Parse skips, cache hits, unknown sources/models, pricing fallbacks, and latest observed session |
+| Data confidence | Report scope, per-source coverage, parse skips, cache hits, unknown sources/models, pricing fallbacks, and latest observed session |
+| Cost audit and action plan | Token component rates, pricing source/status, estimated cost confidence, and prioritized, evidence-backed remediation suggestions |
+| Governance trends | Canonical project grouping, observed MCP invocation governance, cross-session context/cache/read-write trends, and read-only Git delivery correlation |
 | Honest capability levels | `Detailed`, `Aggregate`, or `Limited` per session so missing event-level evidence is never presented as a complete trace |
 | Privacy-safe steps | Tool-step metadata and duration when the source provides call IDs and timestamps; no prompt, response, result, or tool-argument body is stored in steps |
 | Slow-task diagnosis | Latency stats, long gaps, hanging sessions, retry loops, slow tools, large params, and context pressure |
@@ -122,8 +159,8 @@ agenttrace
 
 ## Docs
 
-- Site: https://luoyuctl.github.io/agenttrace/
-- Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
+- Site: <https://luoyuctl.github.io/agenttrace/>
+- Sample HTML report: <https://luoyuctl.github.io/agenttrace/demo-report.html>
 - CI setup: [docs/ci-integration.md](docs/ci-integration.md)
 - Cursor import: [docs/cursor-import.md](docs/cursor-import.md)
 - Parser guide: [docs/parser-guide.md](docs/parser-guide.md)

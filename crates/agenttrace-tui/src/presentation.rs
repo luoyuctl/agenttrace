@@ -1,7 +1,19 @@
 use super::*;
+use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
 
 pub(super) fn render(frame: &mut Frame<'_>, app: &mut App) {
     let area = frame.area();
+    if area.width < 48 || area.height < 14 {
+        frame.render_widget(
+            Paragraph::new(app.t(
+                "Terminal too small; resize to at least 48x14",
+                "终端过小，请调整至至少 48x14",
+            ))
+            .block(Block::default().borders(Borders::ALL)),
+            area,
+        );
+        return;
+    }
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -29,6 +41,7 @@ pub(super) fn render(frame: &mut Frame<'_>, app: &mut App) {
                 diagnostics_text(app),
             ),
             View::Diff => render_report(frame, app, chunks[2], diff_title(app), diff_text(app)),
+            View::Governance(panel) => render_workspace(frame, app, chunks[2], panel),
             View::Help => render_report(
                 frame,
                 app,
@@ -145,15 +158,17 @@ pub(super) fn render_tabs(frame: &mut Frame<'_>, app: &App, area: Rect) {
         View::Detail => 2,
         View::Diagnostics => 3,
         View::Diff => 4,
-        View::Help => 5,
+        View::Governance(_) => 5,
+        View::Help => 6,
     };
     let tabs = Tabs::new([
-        format!("0 {}", app.t("Overview", "概览")),
-        format!("1 {}", app.t("List", "列表")),
-        format!("2 {}", app.t("Detail", "详情")),
-        format!("3 {}", app.t("Diagnostics", "诊断")),
-        format!("4 {}", app.t("Diff", "对比")),
-        format!("? {}", app.t("Help", "帮助")),
+        format!("0 {}", UiText::Overview.get(app.language)),
+        format!("1 {}", UiText::List.get(app.language)),
+        format!("2 {}", UiText::Detail.get(app.language)),
+        format!("3 {}", UiText::Diagnostics.get(app.language)),
+        format!("4 {}", UiText::Diff.get(app.language)),
+        format!("5 {}", UiText::Workspace.get(app.language)),
+        format!("? {}", UiText::Help.get(app.language)),
     ])
     .select(selected)
     .style(Style::default().fg(Color::Gray))
@@ -180,7 +195,7 @@ pub(super) fn render_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let left_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(7),
+            Constraint::Length(9),
             Constraint::Length(7),
             Constraint::Length(7),
             Constraint::Min(4),
@@ -203,7 +218,7 @@ pub(super) fn render_overview_compact(frame: &mut Frame<'_>, app: &App, area: Re
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(6),
+            Constraint::Length(9),
             Constraint::Length(7),
             Constraint::Length(10),
             Constraint::Min(4),
@@ -261,6 +276,8 @@ pub(super) fn render_scoreboard(frame: &mut Frame<'_>, app: &App, area: Rect) {
             app.t("detail coverage", "详细覆盖"),
             coverage_pct(health.with_diagnostics, health.parsed)
         )),
+        Line::from(scope_confidence_line(app)),
+        Line::from(project_resolution_line(app)),
     ];
     frame.render_widget(
         Paragraph::new(lines)
@@ -356,12 +373,11 @@ pub(super) fn render_recent_sessions(frame: &mut Frame<'_>, app: &App, area: Rec
                 Style::default().fg(health_color(session.health)),
             ),
             Span::raw(format!(
-                "{:<name_width$} {:<8} {:<14} {}",
-                short(&session.name, name_width),
-                format_compact_cost(session.metrics.cost_estimated),
-                short(&display_session_source(session), 14),
+                "{} {} {} {}",
+                pad_display_width(&session.name, name_width),
+                pad_display_width(&format_compact_cost(session.metrics.cost_estimated), 8),
+                pad_display_width(&display_session_source(session), 14),
                 short(&triage_reason(session, app.language), 24),
-                name_width = name_width
             )),
         ]));
     }
@@ -396,7 +412,7 @@ pub(super) fn render_list(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
         );
         return;
     }
-    let active_filters = active_filter_summary(app);
+    let active_filters = active_filter_summary(app, app.language);
     if app.filtered.is_empty() && !active_filters.is_empty() {
         let text = vec![
             Line::from(app.t(
@@ -602,9 +618,9 @@ pub(super) fn render_session_table(
         )
         .highlight_symbol("> ")
     };
-    let mut table_state = TableState::default();
-    table_state.select(Some(app.selected.saturating_sub(start)));
-    frame.render_stateful_widget(table, area, &mut table_state);
+    app.table_state
+        .select(Some(app.selected.saturating_sub(start)));
+    frame.render_stateful_widget(table, area, &mut app.table_state);
 }
 
 pub(super) fn render_selected_detail(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -807,6 +823,810 @@ pub(super) fn render_selected_summary(frame: &mut Frame<'_>, app: &App, area: Re
     );
 }
 
+pub(super) fn render_workspace(
+    frame: &mut Frame<'_>,
+    app: &mut App,
+    area: Rect,
+    panel: GovernancePanel,
+) {
+    app.ensure_governance(panel);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(6), Constraint::Min(4)])
+        .split(area);
+    let card_areas = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(34),
+            Constraint::Percentage(33),
+            Constraint::Percentage(33),
+        ])
+        .split(chunks[0]);
+    let cards = workspace_cards(app, panel);
+    for (area, (title, body, color)) in card_areas.iter().zip(cards) {
+        frame.render_widget(
+            Paragraph::new(body)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(title)
+                        .border_style(Style::default().fg(color)),
+                )
+                .wrap(Wrap { trim: true }),
+            *area,
+        );
+    }
+    render_report(
+        frame,
+        app,
+        chunks[1],
+        governance_title(panel, app.language),
+        governance_text(app, panel),
+    );
+}
+
+fn workspace_cards(app: &App, panel: GovernancePanel) -> Vec<(String, String, Color)> {
+    let empty = GovernanceSnapshot::default();
+    let governance = app.governance.as_ref().unwrap_or(&empty);
+    let label = |value: &'static str| value.to_string();
+    match panel {
+        GovernancePanel::ActionCenter => {
+            let recommendations = governance.recommendations.as_deref().unwrap_or_default();
+            let urgent = recommendations
+                .iter()
+                .filter(|item| matches!(item.priority.as_str(), "P0" | "P1"))
+                .count();
+            let savings = recommendations
+                .iter()
+                .map(|item| item.estimated_savings_usd)
+                .sum::<f64>();
+            let pricing = governance
+                .audit
+                .as_ref()
+                .map(|audit| localized_level(&audit.pricing_coverage.confidence, app.language))
+                .unwrap_or_else(|| app.t("loading", "加载中").to_string());
+            vec![
+                (
+                    label(app.t("Prioritized actions", "优先动作")),
+                    format!(
+                        "{} {}\n{} {}",
+                        recommendations.len(),
+                        app.t("findings", "项问题"),
+                        urgent,
+                        app.t("P0/P1", "项 P0/P1")
+                    ),
+                    Color::LightRed,
+                ),
+                (
+                    label(app.t("Estimated savings", "预估节省")),
+                    format!(
+                        "{}\n{}",
+                        format_compact_cost(savings),
+                        app.t("evidence-backed estimate", "基于证据的估算")
+                    ),
+                    Color::LightGreen,
+                ),
+                (
+                    label(app.t("Pricing confidence", "价格可信度")),
+                    format!(
+                        "{}\n{}",
+                        pricing,
+                        app.t(
+                            "5 action · 6 efficiency · 7 delivery",
+                            "5 行动 · 6 效率 · 7 交付"
+                        )
+                    ),
+                    Color::Cyan,
+                ),
+            ]
+        }
+        GovernancePanel::Efficiency => {
+            let totals = governance.context.as_ref().map(|report| &report.totals);
+            let mcp = governance.mcp.as_ref();
+            let failures = mcp
+                .map(|report| {
+                    report
+                        .items
+                        .iter()
+                        .map(|item| item.failed_calls)
+                        .sum::<usize>()
+                })
+                .unwrap_or(0);
+            let calls = mcp
+                .map(|report| {
+                    report
+                        .items
+                        .iter()
+                        .map(|item| item.tool_calls)
+                        .sum::<usize>()
+                })
+                .unwrap_or(0);
+            vec![
+                (
+                    label(app.t("Context pressure", "上下文压力")),
+                    format!(
+                        "{} {}  {} {}",
+                        totals.map_or(0, |value| value.context_critical_sessions),
+                        app.t("critical", "严重"),
+                        totals.map_or(0, |value| value.context_warning_sessions),
+                        app.t("warning", "警告")
+                    ),
+                    Color::Yellow,
+                ),
+                (
+                    label(app.t("Repeated work", "重复工作")),
+                    format!(
+                        "{} {}\n{}={:.1}%",
+                        totals.map_or(0, |value| value.repeated_file_reads),
+                        app.t("repeat reads", "次重复读取"),
+                        app.t("cache", "缓存"),
+                        totals.map_or(0.0, |value| value.cache_effectiveness_pct)
+                    ),
+                    Color::LightMagenta,
+                ),
+                (
+                    label(app.t("MCP & tools", "MCP 与工具")),
+                    format!(
+                        "{} {}  {} {}",
+                        calls,
+                        app.t("calls", "调用"),
+                        failures,
+                        app.t("failed", "失败")
+                    ),
+                    Color::Cyan,
+                ),
+            ]
+        }
+        GovernancePanel::Delivery => {
+            let summary = governance.delivery.as_ref().map(|report| &report.summary);
+            let status = if governance.delivery_pending.is_some() {
+                app.t("Scanning Git roots…", "正在扫描 Git root…")
+            } else if summary.is_some() {
+                app.t("Evidence ready", "证据已就绪")
+            } else {
+                app.t("Preparing…", "准备中…")
+            };
+            vec![
+                (
+                    label(app.t("Delivery status", "交付状态")),
+                    status.to_string(),
+                    if summary.is_some() {
+                        Color::LightGreen
+                    } else {
+                        Color::Yellow
+                    },
+                ),
+                (
+                    label(app.t("Strong / medium", "强 / 中")),
+                    format!(
+                        "{} / {}",
+                        summary.map_or(0, |value| value.strong),
+                        summary.map_or(0, |value| value.medium)
+                    ),
+                    Color::Green,
+                ),
+                (
+                    label(app.t("Weak / no evidence", "弱 / 无证据")),
+                    format!(
+                        "{} / {}",
+                        summary.map_or(0, |value| value.weak),
+                        summary.map_or(0, |value| value.none)
+                    ),
+                    Color::Yellow,
+                ),
+            ]
+        }
+    }
+}
+
+pub(super) fn governance_title(panel: GovernancePanel, language: Language) -> String {
+    let item = |candidate, key, en, zh| {
+        let label = format!("{key} {}", text(language, en, zh));
+        if candidate == panel {
+            format!("[{label}]")
+        } else {
+            label
+        }
+    };
+    format!(
+        "{} | {}  {}  {}",
+        text(language, "Workspace", "工作台"),
+        item(
+            GovernancePanel::ActionCenter,
+            "5",
+            "Action Center",
+            "行动中心"
+        ),
+        item(GovernancePanel::Efficiency, "6", "Efficiency", "效率"),
+        item(GovernancePanel::Delivery, "7", "Delivery", "交付")
+    )
+}
+
+pub(super) fn governance_text(app: &App, panel: GovernancePanel) -> String {
+    let Some(governance) = app.governance.as_ref() else {
+        return app
+            .t("Workspace data is loading.", "工作台数据正在加载。")
+            .to_string();
+    };
+    let body = match panel {
+        GovernancePanel::ActionCenter => action_center_text(governance, app.language),
+        GovernancePanel::Efficiency => efficiency_text(governance, app.language),
+        GovernancePanel::Delivery => governance_loading_or(
+            governance
+                .delivery
+                .as_ref()
+                .map(|report| delivery_evidence_text(report, app.language)),
+            app.language,
+            "Correlating local Git commits in the background…",
+            "正在后台关联本地 Git 提交…",
+        ),
+    };
+    format!(
+        "{}\n{}\n{}\n\n{body}",
+        scope_confidence_line(app),
+        project_resolution_line(app),
+        active_filter_context(app)
+    )
+}
+
+fn action_center_text(governance: &GovernanceSnapshot, language: Language) -> String {
+    let recommendations = governance.recommendations.as_deref().unwrap_or_default();
+    let audit = governance.audit.as_ref();
+    let mut lines = vec![
+        UiText::ActionCenter.get(language).to_string(),
+        "=============".to_string(),
+        text(
+            language,
+            "Ranked actions first; cost evidence is shown beneath them.",
+            "先展示按优先级排序的动作，随后给出成本证据。",
+        )
+        .to_string(),
+        String::new(),
+    ];
+    if recommendations.is_empty() {
+        lines.push(UiText::NoPriorityFindings.get(language).to_string());
+    }
+    for item in recommendations.iter().take(8) {
+        lines.push(format!(
+            "[{} {}] {}",
+            item.priority,
+            localized_level(&item.severity, language),
+            recommendation_title(item, language)
+        ));
+        lines.push(format!(
+            "  {} | {}={}",
+            recommendation_action(item, language),
+            UiText::EstimatedSavings.get(language),
+            format_compact_cost(item.estimated_savings_usd)
+        ));
+    }
+    if let Some(audit) = audit {
+        lines.push(String::new());
+        lines.push(format!(
+            "{}: {} | {}={} | {}={:.1}%",
+            text(language, "Cost evidence", "成本证据"),
+            format_compact_cost(audit.total_estimated_cost),
+            UiText::PricingConfidence.get(language),
+            localized_level(&audit.pricing_coverage.confidence, language),
+            UiText::ExactPriceMatch.get(language),
+            audit.pricing_coverage.exact_pricing_pct
+        ));
+        for item in audit.by_provider_model.iter().take(3) {
+            lines.push(format!(
+                "  {} / {}  {}  {}",
+                item.provider,
+                item.model,
+                format_compact_cost(item.estimated_cost_usd),
+                pricing_status_label(&item.pricing_status, language)
+            ));
+        }
+    }
+    lines.push(String::new());
+    lines.push(
+        text(
+            language,
+            "Next: 6 Efficiency for bottlenecks, 7 Delivery for outcome evidence.",
+            "下一步：按 6 查看效率瓶颈，按 7 查看交付证据。",
+        )
+        .to_string(),
+    );
+    lines.join("\n")
+}
+
+fn efficiency_text(governance: &GovernanceSnapshot, language: Language) -> String {
+    let context = governance.context.as_ref();
+    let mcp = governance.mcp.as_ref();
+    let mut lines = vec![
+        UiText::Efficiency.get(language).to_string(),
+        "==========".to_string(),
+        text(
+            language,
+            "Context pressure, repeated work, cache behavior, and MCP/tool signals.",
+            "聚合上下文压力、重复工作、缓存行为和 MCP/工具信号。",
+        )
+        .to_string(),
+        String::new(),
+    ];
+    if let Some(context) = context {
+        let totals = &context.totals;
+        lines.push(format!(
+            "{}: {}={} {}={} {}={} {}={:.1}% {}={:.2}",
+            text(language, "Context", "上下文"),
+            text(language, "warning", "警告"),
+            totals.context_warning_sessions,
+            text(language, "critical", "严重"),
+            totals.context_critical_sessions,
+            text(language, "repeat reads", "重复读取"),
+            totals.repeated_file_reads,
+            text(language, "cache", "缓存"),
+            totals.cache_effectiveness_pct,
+            text(language, "read/write", "读写比"),
+            totals.read_to_write_ratio
+        ));
+        for item in context.projects.iter().take(5) {
+            lines.push(format!(
+                "  {}  sessions={} context={:.1}% cache={:.1}% repeats={}",
+                item.project,
+                item.sessions,
+                item.avg_context_utilization_pct,
+                item.cache_effectiveness_pct,
+                item.repeated_file_reads
+            ));
+        }
+    }
+    lines.push(String::new());
+    lines.push(text(language, "MCP & tools", "MCP 与工具").to_string());
+    if let Some(mcp) = mcp {
+        if mcp.items.is_empty() {
+            lines.push(format!("  {}", UiText::NoObservedMcpCalls.get(language)));
+        }
+        for item in mcp.items.iter().take(8) {
+            lines.push(format!(
+                "  {}  calls={} failed={} sessions={} — {}",
+                item.server,
+                item.tool_calls,
+                item.failed_calls,
+                item.invoked_sessions,
+                mcp_recommendation(item, language)
+            ));
+        }
+    }
+    lines.push(String::new());
+    lines.push(
+        text(
+            language,
+            "Next: 5 Action Center for prioritized remediation.",
+            "下一步：按 5 回到行动中心查看优先修复项。",
+        )
+        .to_string(),
+    );
+    lines.join("\n")
+}
+
+pub(super) fn recommendation_title(item: &Recommendation, language: Language) -> String {
+    if language == Language::En {
+        return item.title.clone();
+    }
+    match item.id.as_str() {
+        "retry-loop" => "停止重复重试".to_string(),
+        "tool-failures" => "减少失败的工具调用".to_string(),
+        "context-pressure" => "换一个更聚焦的新会话".to_string(),
+        "slow-tool" => "给慢工具设定时间上限".to_string(),
+        _ => item.title.clone(),
+    }
+}
+
+pub(super) fn recommendation_action(item: &Recommendation, language: Language) -> String {
+    if language == Language::En {
+        return item.action.clone();
+    }
+    match item.id.as_str() {
+        "retry-loop" => "同一错误连续两次后先停下来检查，再决定是否重试。".to_string(),
+        "tool-failures" => "先看失败原因，换一种做法，不要原样重试。".to_string(),
+        "context-pressure" => "只带着当前目标、相关文件和报错，重新开一个短会话。".to_string(),
+        "slow-tool" => "设置超时，并把能并行的任务一起执行。".to_string(),
+        _ => item.action.clone(),
+    }
+}
+
+fn mcp_recommendation(item: &agenttrace_core::McpGovernanceItem, language: Language) -> String {
+    if language == Language::En {
+        return item.recommendation.clone();
+    }
+    if item.failed_calls > 0 {
+        "先检查失败调用，再考虑调整服务设置。".to_string()
+    } else {
+        "已观察到较多调用；日志无法判断服务是否一直处于加载状态。".to_string()
+    }
+}
+
+fn delivery_methodology(language: Language) -> &'static str {
+    text(
+        language,
+        "Matches local Git commit times with the session window. This suggests correlation, not proof of authorship or merge-to-main.",
+        "按本地 Git 提交时间与会话时间段做匹配；它只能说明可能相关，不能证明是谁提交或已合入主分支。",
+    )
+}
+
+fn delivery_evidence_label(value: &str, language: Language) -> String {
+    if language == Language::En {
+        return value.to_string();
+    }
+    if let Some(count) = value.strip_suffix(" local Git commit(s) overlap the session time window")
+    {
+        return format!("会话时间段内发现 {count} 个本地 Git 提交");
+    }
+    match value {
+        "observed external publish command category" => "观察到发布相关操作。".to_string(),
+        "observed git write command category" => "观察到 Git 写入操作。".to_string(),
+        "observed file write/edit command category" => "观察到文件编辑或写入操作。".to_string(),
+        "tool activity observed without code-delivery evidence" => {
+            "观察到工具活动，但没有代码交付证据。".to_string()
+        }
+        "no write, Git, publish, or tool evidence observed" => {
+            "没有观察到编辑、Git、发布或工具操作。".to_string()
+        }
+        "no overlapping local commit found; this does not rule out uncommitted, remote, non-code, or later-delivered work" => {
+            "没有匹配的本地提交；可能是未提交、远端交付、非代码工作，或之后才交付。".to_string()
+        }
+        _ => value.to_string(),
+    }
+}
+
+fn delivery_confidence(value: &str, language: Language) -> String {
+    if language == Language::En {
+        return value.to_string();
+    }
+    if value.starts_with("medium:") {
+        "中等：时间匹配只能作为线索，不能证明作者、合入主分支或业务价值。".to_string()
+    } else {
+        "较低：时间匹配只能作为线索，不能证明作者、合入主分支或业务价值。".to_string()
+    }
+}
+
+fn governance_loading_or(
+    value: Option<String>,
+    language: Language,
+    en: &'static str,
+    zh: &'static str,
+) -> String {
+    value.unwrap_or_else(|| {
+        format!(
+            "{}\n\n{}",
+            text(language, en, zh),
+            text(
+                language,
+                "Press Esc to return; this does not block the TUI.",
+                "按 Esc 返回；不会阻塞 TUI。"
+            )
+        )
+    })
+}
+
+pub(super) fn scope_confidence_line(app: &App) -> String {
+    let health = &app.derived.health;
+    format!(
+        "{}: {}={} {}={}/{} {}={} {}={} {}={}",
+        app.t("Scope", "范围"),
+        app.t("sessions", "会话"),
+        app.overview.total_sessions,
+        app.t("parse", "解析"),
+        health.parsed,
+        health.discovered,
+        app.t("skipped", "跳过"),
+        health.skipped,
+        app.t("cache hits", "缓存命中"),
+        health.cache_hits,
+        app.t("confidence", "可信度"),
+        localized_level(&health.confidence, app.language)
+    )
+}
+
+pub(super) fn project_resolution_line(app: &App) -> String {
+    let mut resolutions: BTreeMap<String, usize> = BTreeMap::new();
+    let mut roots = std::collections::BTreeSet::new();
+    for session in app.visible_sessions() {
+        let project = resolve_project(session);
+        *resolutions.entry(project.resolution).or_default() += 1;
+        if !project.root.is_empty() {
+            roots.insert(project.root);
+        }
+    }
+    let resolution_summary = if resolutions.is_empty() {
+        app.t("none", "无").to_string()
+    } else {
+        resolutions
+            .into_iter()
+            .map(|(resolution, count)| format!("{resolution}={count}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let selected = app.selected_session().map(resolve_project);
+    let selected = selected.map_or_else(
+        || app.t("none", "无").to_string(),
+        |project| {
+            let root = if project.root.is_empty() {
+                app.t("unattributed", "未归属").to_string()
+            } else {
+                short_path(&project.root, 56)
+            };
+            format!("{} [{}] {root}", project.display_name, project.resolution)
+        },
+    );
+    format!(
+        "{}: {} {} | {}: {}",
+        app.t("Projects", "项目"),
+        roots.len(),
+        resolution_summary,
+        app.t("selected resolver", "当前解析"),
+        selected
+    )
+}
+
+fn active_filter_context(app: &App) -> String {
+    let filters = active_filter_summary(app, app.language);
+    format!(
+        "{}: {}",
+        app.t("Active filters", "当前筛选"),
+        if filters.is_empty() {
+            app.t("none", "无").to_string()
+        } else {
+            filters
+        }
+    )
+}
+
+#[allow(dead_code)]
+fn audit_text(audit: &CostAudit, language: Language) -> String {
+    let coverage = &audit.pricing_coverage;
+    let mut lines = vec![
+        text(language, "Cost audit", "成本审计").to_string(),
+        "----------".to_string(),
+        format!(
+            "{}: {}  {}: {}",
+            text(language, "Estimated cost", "估算成本"),
+            format_compact_cost(audit.total_estimated_cost),
+            text(language, "Pricing source", "价格来源"),
+            audit.pricing_source
+        ),
+        format!(
+            "{}: {}  {}: {:.1}%  {}={} {}={} {}={}",
+            text(language, "Pricing confidence", "价格可信度"),
+            localized_level(&coverage.confidence, language),
+            text(language, "exact", "精确"),
+            coverage.exact_pricing_pct,
+            text(language, "catalog", "目录"),
+            coverage.priced_sessions,
+            text(language, "fallback", "回退"),
+            coverage.fallback_priced_sessions,
+            text(language, "unknown", "未知"),
+            coverage.unpriced_or_unknown_sessions
+        ),
+        String::new(),
+        format!(
+            "{}",
+            text(language, "Provider/model rows", "提供商/模型明细")
+        ),
+    ];
+    if audit.by_provider_model.is_empty() {
+        lines.push(format!("- {}", text(language, "none", "无")));
+    }
+    for item in audit.by_provider_model.iter().take(20) {
+        lines.push(format!(
+            "- {} / {}  sessions={}  cost={}  tokens={}  {}",
+            item.provider,
+            item.model,
+            item.sessions,
+            format_compact_cost(item.estimated_cost_usd),
+            format_tokens(item.tokens.total),
+            item.pricing_status
+        ));
+        lines.push(format!(
+            "  in={} out={} cache-w={} cache-r={} | rates/M in=${:.2} out=${:.2} | {}",
+            format_tokens(item.tokens.input),
+            format_tokens(item.tokens.output),
+            format_tokens(item.tokens.cache_write),
+            format_tokens(item.tokens.cache_read),
+            item.rates_per_million_usd.input,
+            item.rates_per_million_usd.output,
+            item.pricing_note
+        ));
+    }
+    lines.join("\n")
+}
+
+#[allow(dead_code)]
+fn recommendations_text(items: &[Recommendation], language: Language) -> String {
+    let mut lines = vec![
+        text(language, "Prioritized recommendations", "优先建议").to_string(),
+        "--------------------------".to_string(),
+    ];
+    if items.is_empty() {
+        lines.push(format!(
+            "- {}",
+            text(language, "no prioritized findings", "没有优先问题")
+        ));
+    }
+    for item in items.iter().take(20) {
+        lines.push(format!(
+            "[{} {}] {} — {}",
+            item.priority,
+            localized_level(&item.severity, language),
+            item.title,
+            item.rationale
+        ));
+        lines.push(format!(
+            "  {}={}  {}={}  {}={}",
+            text(language, "estimated savings", "预估节省"),
+            format_compact_cost(item.estimated_savings_usd),
+            text(language, "tokens", "Token"),
+            format_tokens(item.estimated_savings_tokens),
+            text(language, "confidence", "可信度"),
+            localized_level(&item.confidence, language)
+        ));
+        lines.push(format!(
+            "  {}: {}",
+            text(language, "action", "动作"),
+            item.action
+        ));
+        lines.push(format!(
+            "  {}: {}",
+            text(language, "verify", "验证"),
+            item.validation_command
+        ));
+        for evidence in &item.evidence {
+            lines.push(format!(
+                "  {}: {evidence}",
+                text(language, "evidence", "证据")
+            ));
+        }
+    }
+    lines.join("\n")
+}
+
+#[allow(dead_code)]
+fn mcp_text(report: &McpGovernance, language: Language) -> String {
+    let mut lines = vec![
+        text(language, "MCP governance", "MCP 治理").to_string(),
+        "--------------".to_string(),
+        format!(
+            "{}: {}",
+            text(language, "Method", "方法"),
+            report.methodology
+        ),
+        String::new(),
+    ];
+    if report.items.is_empty() {
+        lines.push(format!(
+            "- {}",
+            text(language, "no observed MCP invocations", "未观察到 MCP 调用")
+        ));
+    }
+    for item in &report.items {
+        lines.push(format!(
+            "- {}  {}={} {}={} {}={} {}={}",
+            item.server,
+            text(language, "sessions", "会话"),
+            item.invoked_sessions,
+            text(language, "calls", "调用"),
+            item.tool_calls,
+            text(language, "failed", "失败"),
+            item.failed_calls,
+            text(language, "loaded", "已加载"),
+            item.loaded_sessions
+                .map_or_else(|| "unavailable".to_string(), |value| value.to_string())
+        ));
+        lines.push(format!(
+            "  {}: {}",
+            text(language, "recommendation", "建议"),
+            item.recommendation
+        ));
+        lines.push(format!(
+            "  {}: {}",
+            text(language, "confidence", "可信度"),
+            item.confidence
+        ));
+    }
+    lines.join("\n")
+}
+
+#[allow(dead_code)]
+fn context_trends_text(report: &ContextTrend, language: Language) -> String {
+    let totals = &report.totals;
+    let mut lines = vec![
+        text(language, "Cross-session context trends", "跨会话上下文趋势").to_string(),
+        "----------------------------".to_string(),
+        format!(
+            "{}: {}",
+            text(language, "Method", "方法"),
+            report.methodology
+        ),
+        format!(
+            "{}={} {}={} {}={} {}={} {}={:.1}% {}={:.2} {}={}",
+            text(language, "sessions", "会话"),
+            totals.sessions,
+            text(language, "warnings", "警告"),
+            totals.context_warning_sessions,
+            text(language, "critical", "严重"),
+            totals.context_critical_sessions,
+            text(language, "repeat reads", "重复读取"),
+            totals.repeated_file_reads,
+            text(language, "cache effectiveness", "缓存效率"),
+            totals.cache_effectiveness_pct,
+            text(language, "read/write", "读写比"),
+            totals.read_to_write_ratio,
+            text(language, "output $/M", "输出 $/M"),
+            format_compact_cost(totals.output_cost_per_million_tokens)
+        ),
+        String::new(),
+        text(language, "By project", "按项目").to_string(),
+    ];
+    if report.projects.is_empty() {
+        lines.push(format!("- {}", text(language, "none", "无")));
+    }
+    for item in report.projects.iter().take(20) {
+        lines.push(format!(
+            "- {}  sessions={} context={:.1}% cache={:.1}% repeat-reads={} read/write={:.2} output-cost={}",
+            item.project,
+            item.sessions,
+            item.avg_context_utilization_pct,
+            item.cache_effectiveness_pct,
+            item.repeated_file_reads,
+            item.read_to_write_ratio,
+            format_compact_cost(item.cost_per_output_token)
+        ));
+    }
+    lines.join("\n")
+}
+
+fn delivery_evidence_text(report: &DeliveryEvidence, language: Language) -> String {
+    let summary = &report.summary;
+    let mut lines = vec![
+        text(language, "Delivery evidence", "交付证据").to_string(),
+        "-----------------".to_string(),
+        format!(
+            "{}: {}",
+            text(language, "How to read this", "怎么看"),
+            delivery_methodology(language)
+        ),
+        format!(
+            "{}={} {}={} {}={} {}={} {}={}",
+            text(language, "strong", "强"),
+            summary.strong,
+            text(language, "medium", "中"),
+            summary.medium,
+            text(language, "weak", "弱"),
+            summary.weak,
+            text(language, "non-code", "非代码"),
+            summary.non_code,
+            text(language, "none", "无"),
+            summary.none
+        ),
+        String::new(),
+    ];
+    if report.sessions.is_empty() {
+        lines.push(format!("- {}", text(language, "none", "无")));
+    }
+    for item in report.sessions.iter().take(30) {
+        lines.push(format!(
+            "- [{}] {}  {}={}",
+            localized_level(&item.level, language),
+            item.session,
+            text(language, "project", "项目"),
+            item.project
+        ));
+        for evidence in &item.evidence {
+            lines.push(format!("  {}", delivery_evidence_label(evidence, language)));
+        }
+        lines.push(format!(
+            "  {}: {}",
+            text(language, "How sure", "可信度"),
+            delivery_confidence(&item.confidence, language)
+        ));
+    }
+    lines.join("\n")
+}
+
 pub(super) fn render_report(
     frame: &mut Frame<'_>,
     app: &App,
@@ -814,14 +1634,37 @@ pub(super) fn render_report(
     title: impl Into<String>,
     text: String,
 ) {
+    render_scrollable_text(frame, area, title, text, app.scroll);
+}
+
+fn render_scrollable_text(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    title: impl Into<String>,
+    text: String,
+    scroll: u16,
+) {
     let text = terminal_safe_report(&text);
+    let content_length = text.lines().count().max(1);
+    let viewport_length = area.height.saturating_sub(2).max(1) as usize;
+    let title = title.into();
     frame.render_widget(
         Paragraph::new(text)
-            .block(Block::default().borders(Borders::ALL).title(title.into()))
-            .scroll((app.scroll, 0))
+            .block(Block::default().borders(Borders::ALL).title(title))
+            .scroll((scroll, 0))
             .wrap(Wrap { trim: false }),
         area,
     );
+    if content_length > viewport_length {
+        let mut state = ScrollbarState::new(content_length)
+            .position(scroll as usize)
+            .viewport_content_length(viewport_length);
+        frame.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight),
+            area,
+            &mut state,
+        );
+    }
 }
 
 pub(super) fn render_detail(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -850,39 +1693,30 @@ pub(super) fn render_detail(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(52), Constraint::Percentage(48)])
         .split(area);
-    frame.render_widget(
-        Paragraph::new(terminal_safe_report(&detail_summary_text(
-            session,
-            app.language,
-        )))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(app.t("Session Overview", "会话概况")),
-        )
-        .scroll((app.scroll, 0))
-        .wrap(Wrap { trim: false }),
+    render_scrollable_text(
+        frame,
         columns[0],
+        app.t("Session Overview", "会话概况"),
+        detail_summary_text(session, app.language),
+        app.scroll,
     );
-    frame.render_widget(
-        Paragraph::new(terminal_safe_report(&detail_diagnosis_text(
-            session,
-            app.language,
-        )))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(app.t("Diagnosis", "诊断结论")),
-        )
-        .scroll((app.scroll, 0))
-        .wrap(Wrap { trim: false }),
+    render_scrollable_text(
+        frame,
         columns[1],
+        app.t("Diagnosis", "诊断结论"),
+        detail_diagnosis_text(session, app.language),
+        app.scroll,
     );
 }
 
 pub(super) fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let prompt = match app.mode {
-        InputMode::Search => format!("/ {}", app.input),
+        InputMode::Search => format!(
+            "/ {}  ({}/{})",
+            app.input,
+            format_count(app.filtered.len() as i64),
+            format_count(app.sessions.len() as i64)
+        ),
         InputMode::Command => format!(": {}", app.input),
         InputMode::Normal => {
             let base = context_actions(app, area.width);
@@ -907,10 +1741,10 @@ pub(super) fn context_actions(app: &App, width: u16) -> String {
                 "enter 检查 | ! 严重 | ? 帮助 | q 退出",
             ),
             View::List => app.t(
-                "j/k move | Ctrl+d/u page | G end | enter detail | / search | ? help | q quit",
-                "j/k 移动 | Ctrl+d/u 翻页 | G 末尾 | enter 详情 | / 搜索 | ? 帮助 | q 退出",
+                "j/k move | Ctrl+d/u page | G end | enter detail | / live search | ? help | q quit",
+                "j/k 移动 | Ctrl+d/u 翻页 | G 末尾 | enter 详情 | / 实时搜索 | ? 帮助 | q 退出",
             ),
-            View::Detail | View::Diagnostics | View::Diff => app.t(
+            View::Detail | View::Diagnostics | View::Diff | View::Governance(_) => app.t(
                 "pgup/pgdn scroll | Esc back | ? help | q quit",
                 "pgup/pgdn 滚动 | Esc 返回 | ? 帮助 | q 退出",
             ),
@@ -924,8 +1758,8 @@ pub(super) fn context_actions(app: &App, width: u16) -> String {
             "enter 检查 | ! 严重 | $ 成本 | f 健康 | R 范围 | tab 视图 | : 命令 | ? 帮助 | q 退出",
         ),
         View::List => app.t(
-            "j/k select | Ctrl+d/u page | G end | enter detail | 3 diag | / search | ? help | q quit",
-            "j/k 选择 | Ctrl+d/u 翻页 | G 末尾 | enter 详情 | 3 诊断 | / 搜索 | ? 帮助 | q 退出",
+            "j/k select | Ctrl+d/u page | G end | enter detail | 3 diag | / live search | ? help | q quit",
+            "j/k 选择 | Ctrl+d/u 翻页 | G 末尾 | enter 详情 | 3 诊断 | / 实时搜索 | ? 帮助 | q 退出",
         ),
         View::Detail => app.t(
             "v raw report | 3 diagnostics | 4 diff | Esc back | ? help | q quit",
@@ -936,8 +1770,12 @@ pub(super) fn context_actions(app: &App, width: u16) -> String {
             "pgup/pgdn 滚动 | 2 详情 | 4 对比 | Esc 返回 | ? 帮助 | q 退出",
         ),
         View::Diff => app.t(
-            "j/k pair | 2 detail | 3 diagnostics | Esc back | ? help | q quit",
-            "j/k 对比项 | 2 详情 | 3 诊断 | Esc 返回 | ? 帮助 | q 退出",
+            "j/k pair | 2 detail | 3 diagnostics | 5 Action Center | Esc back | ? help | q quit",
+            "j/k 对比项 | 2 详情 | 3 诊断 | 5 行动中心 | Esc 返回 | ? 帮助 | q 退出",
+        ),
+        View::Governance(_) => app.t(
+            "g next workspace | 5 action | 6 efficiency | 7 delivery | Esc back | ? help | q quit",
+            "g 下个工作台 | 5 行动 | 6 效率 | 7 交付 | Esc 返回 | ? 帮助 | q 退出",
         ),
         View::Help => app.t("? or Esc back | q quit", "? 或 Esc 返回 | q 退出"),
     }
@@ -958,7 +1796,7 @@ pub(super) fn report_title(app: &App, base: &str) -> String {
 }
 
 pub(super) fn diff_title(app: &App) -> String {
-    let active_filters = active_filter_summary(app);
+    let active_filters = active_filter_summary(app, app.language);
     if active_filters.is_empty() {
         format!(
             "{} - {} {} - {} {} {}",
@@ -1400,7 +2238,7 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
         lines.push(format!(
             "{}: {}",
             text(language, "Context suggestion", "上下文建议"),
-            diagnostics.context_utilization.suggestion
+            localized_context_suggestion(&diagnostics.context_utilization.suggestion, language)
         ));
     }
     for item in diagnostics.large_params.iter().take(3) {
@@ -1413,7 +2251,11 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
             text(language, "risk", "风险"),
             localized_level(&item.risk, language)
         ));
-        lines.push(format!("  {} {}", item.timestamp, item.detail));
+        lines.push(format!(
+            "  {} {}",
+            item.timestamp,
+            localized_large_param_detail(&item.detail, language)
+        ));
     }
     for item in diagnostics.unused_tools.iter().take(3) {
         lines.push(format!(
@@ -1424,7 +2266,11 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
             item.call_count,
             text(language, "time(s)", "次")
         ));
-        lines.push(format!("  [{}] {}", item.level, item.detail));
+        lines.push(format!(
+            "  [{}] {}",
+            localized_level(&item.level, language),
+            localized_rare_tool_detail(&item.detail, language)
+        ));
     }
     for item in diagnostics.stuck_patterns.iter().take(3) {
         lines.push(format!(
@@ -1441,7 +2287,10 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
             fix.category,
             localized_fix_action(&fix.action, language)
         ));
-        lines.push(format!("  {}", fix.description));
+        lines.push(format!(
+            "  {}",
+            localized_fix_description(&fix.description, language)
+        ));
     }
     lines.join("\n")
 }
@@ -1462,9 +2311,9 @@ pub(super) fn step_lines(session: &Session, language: Language, limit: usize) ->
     lines.extend(session.diagnostics.steps.iter().take(limit).map(|step| {
         format!(
             "- {} {}  {}  {}",
-            step.kind,
+            localized_step_kind(&step.kind, language),
             short(&step.name, 28),
-            step.status,
+            localized_step_status(&step.status, language),
             if step.duration_sec > 0.0 {
                 format_duration(step.duration_sec)
             } else {
@@ -1611,6 +2460,99 @@ pub(super) fn localized_stuck_pattern(value: &str, language: Language) -> String
         .replace("Repeated assistant response ", "助手重复响应 ")
         .replace(" times", " 次")
         .replace(" tool calls have no result", " 个工具调用没有结果")
+}
+
+fn pricing_status_label(value: &str, language: Language) -> String {
+    if language == Language::En {
+        return value.to_string();
+    }
+    match value {
+        "catalog_estimate" => "目录匹配估算",
+        "fallback_estimate" => "回退费率估算",
+        "unpriced_or_unknown" => "模型价格未知",
+        _ => value,
+    }
+    .to_string()
+}
+
+fn localized_large_param_detail(value: &str, language: Language) -> String {
+    if language == Language::En {
+        return value.to_string();
+    }
+    if let Some((tool, size)) = value
+        .strip_prefix("Tool '")
+        .and_then(|value| value.split_once("' received "))
+        .and_then(|(tool, size)| {
+            size.strip_suffix(" bytes of arguments")
+                .map(|size| (tool, size))
+        })
+    {
+        return format!("工具 {tool} 收到 {size} 字节的参数。");
+    }
+    value.to_string()
+}
+
+fn localized_rare_tool_detail(value: &str, language: Language) -> String {
+    if language == Language::En {
+        return value.to_string();
+    }
+    value
+        .strip_prefix("Tool was used ")
+        .and_then(|value| value.strip_suffix(" time(s)."))
+        .map(|count| format!("该工具只调用了 {count} 次。"))
+        .unwrap_or_else(|| value.to_string())
+}
+
+fn localized_step_kind(value: &str, language: Language) -> String {
+    match value {
+        "tool" => text(language, "tool", "工具"),
+        "meta" => text(language, "note", "提示"),
+        _ => value,
+    }
+    .to_string()
+}
+
+fn localized_step_status(value: &str, language: Language) -> String {
+    match value {
+        "ok" => text(language, "ok", "完成"),
+        "error" => text(language, "error", "失败"),
+        "missing" => text(language, "missing result", "没有结果"),
+        "truncated" => text(language, "truncated", "已截断"),
+        _ => value,
+    }
+    .to_string()
+}
+
+fn localized_context_suggestion(value: &str, language: Language) -> String {
+    if language == Language::En {
+        return value.to_string();
+    }
+    match value {
+        "Reduce conversation or tool context before continuing." => {
+            "先缩短对话或工具上下文，再继续当前任务。"
+        }
+        _ => value,
+    }
+    .to_string()
+}
+
+fn localized_fix_description(value: &str, language: Language) -> String {
+    if language == Language::En {
+        return value.to_string();
+    }
+    match value {
+        "Long gaps indicate an unbounded operation." => "长时间无响应，可能没有设置执行上限。",
+        "Repeated failures increase latency and cost." => "反复失败会让任务更慢，也更花钱。",
+        "The session executed risky steps with little planning evidence." => {
+            "会话在缺少明确计划的情况下执行了高风险步骤。"
+        }
+        "Redacted reasoning limits failure attribution." => {
+            "推理内容被脱敏，较难判断问题从哪里开始。"
+        }
+        "The session did not inspect concrete artifacts." => "会话没有检查实际文件或其他具体产物。",
+        _ => value,
+    }
+    .to_string()
 }
 
 pub(super) fn localized_fix_action(value: &str, language: Language) -> String {
@@ -1788,7 +2730,7 @@ pub(super) fn diff_text(app: &App) -> String {
     let sessions = app.visible_sessions();
     let context = diff_context_line(app, sessions.len());
     if sessions.len() < 2 {
-        let filters = active_filter_summary(app);
+        let filters = active_filter_summary(app, app.language);
         let filter_hint = if filters.is_empty() {
             format!(
                 "{}: {}",
@@ -1831,7 +2773,7 @@ pub(super) fn diff_pair(len: usize, selected: usize) -> (usize, usize) {
 }
 
 pub(super) fn diff_context_line(app: &App, visible_count: usize) -> String {
-    let filters = active_filter_summary(app);
+    let filters = active_filter_summary(app, app.language);
     let filter_text = if filters.is_empty() {
         app.t("none", "无").to_string()
     } else {
@@ -1924,6 +2866,18 @@ pub(super) fn help_text(view: View, language: Language) -> String {
             "  Esc 返回列表",
             "",
         ],
+        (View::Governance(_), Language::En) => [
+            "Current view: Workspace",
+            "  5 Action Center, 6 Efficiency, 7 Delivery",
+            "  g cycles workspaces; page up/down scrolls; Esc returns to List",
+            "",
+        ],
+        (View::Governance(_), Language::Zh) => [
+            "当前视图：工作台",
+            "  5 行动中心，6 效率，7 交付",
+            "  g 循环工作台；PageUp/PageDown 滚动；Esc 返回列表",
+            "",
+        ],
         (View::Help, Language::En) => ["Current view: Help", "  ? or Esc returns", "", ""],
         (View::Help, Language::Zh) => ["当前视图：帮助", "  ? 或 Esc 返回", "", ""],
     };
@@ -1938,11 +2892,11 @@ pub(super) fn help_text(view: View, language: Language) -> String {
             "  enter outside Overview opens detail, 3 opens diagnostics for the selected session",
             "",
             "Navigation",
-            "  0 overview, 1 list, 2 detail, 3 diagnostics, 4 diff, tab next view",
+            "  0-4 core views, 5 action, 6 efficiency, 7 delivery, tab next view",
             "  j/k or arrows move selection; Ctrl+d/u moves half a page; G jumps to the end",
             "",
             "Filters and sorting",
-            "  / text, Esc clear, s selected source, h health sort, c cost sort",
+            "  / live text search (Esc cancels), s selected source, h health sort, c cost sort",
             "  t turns, e failures, n name, a anomalies",
             "",
             "Command mode",
@@ -1966,11 +2920,11 @@ pub(super) fn help_text(view: View, language: Language) -> String {
             "  在其它视图按 enter 打开详情，按 3 打开选中会话的诊断。",
             "",
             "导航",
-            "  0 概览，1 列表，2 详情，3 诊断，4 对比，tab 下一个视图。",
+            "  0-4 核心视图，5 行动，6 效率，7 交付，tab 下一个视图。",
             "  j/k 或方向键移动选择；Ctrl+d/u 半页移动；G 跳到末尾。",
             "",
             "筛选和排序",
-            "  / 文本，Esc 清除，s 选中来源，h 健康度排序，c 成本排序。",
+            "  / 实时文本搜索（Esc 取消），s 选中来源，h 健康度排序，c 成本排序。",
             "  t 轮次，e 失败，n 名称，a 异常。",
             "",
             "命令模式",
@@ -2348,13 +3302,9 @@ pub(super) fn inspect_first_lines(app: &App, width: u16) -> Vec<Line<'static>> {
                         Modifier::empty()
                     }),
             ),
-            Span::raw(format!(
-                "{:<name_width$} ",
-                short(&session.name, name_width),
-                name_width = name_width
-            )),
+            Span::raw(format!("{} ", pad_display_width(&session.name, name_width))),
             Span::styled(
-                format!("{:<12}", inspect_open_label(item.label, app.language)),
+                pad_display_width(inspect_open_label(item.label, app.language), 12),
                 Style::default().fg(inspect_label_color(item.label)),
             ),
             Span::raw(short(&triage_reason(session, app.language), 28)),
@@ -2395,19 +3345,7 @@ pub(super) fn inspect_first_items<T: Borrow<Session>>(sessions: &[T]) -> Vec<Ins
 }
 
 pub(super) fn inspect_first_items_for_app(app: &App) -> Vec<InspectFirstItem> {
-    let now = chrono::Utc::now();
-    let indices = app
-        .sessions
-        .iter()
-        .enumerate()
-        .filter(|(_, session)| {
-            matches_source_filter(session, &app.source_filter)
-                && matches_text_filter(&session.metrics.model_used, &app.model_filter)
-                && matches_text_filter(&project_name(session), &app.project_filter)
-                && session_matches_time_range(session, app.range_filter, now)
-        })
-        .map(|(index, _)| index)
-        .collect::<Vec<_>>();
+    let indices = app.filtered.clone();
     let sessions = indices
         .iter()
         .map(|index| &app.sessions[*index])

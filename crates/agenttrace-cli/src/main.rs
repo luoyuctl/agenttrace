@@ -1,19 +1,22 @@
 use agenttrace_core::{
-    add_baseline_comparison, average_health, compute_overview, data_health, demo_sessions,
-    evaluate_overview_gate, filter_sessions, find_session_files, fix_suggestions, inspect_first,
-    load_sessions_with_options, parse_file, predict_cost_anomaly, pricing_cache_path,
-    render_doctor_report, render_model_pricing_list, render_test_match,
-    render_waste_report_with_language, report_compare_json, report_json_with_language,
-    report_overview_html, report_overview_json_with_health, report_overview_markdown,
-    report_overview_text, report_search_json, report_search_text, report_text_with_language,
-    search_sessions, session_capability, tool_fail_rate, total_tokens, update_pricing,
-    BaselineThresholds, LoadOptions, LoadReport, ReportLanguage, Session, TimeRange, VERSION,
+    add_baseline_comparison, average_health, compute_overview, context_trends, cost_audit,
+    data_health, delivery_evidence_with_git, demo_sessions, evaluate_overview_gate,
+    filter_sessions, fix_suggestions, inspect_first, load_sessions_with_options, mcp_governance,
+    parse_file, predict_cost_anomaly, pricing_cache_path, recommendations, render_doctor_report,
+    render_model_pricing_list, render_test_match, render_waste_report_with_language,
+    report_compare_json, report_json_with_language, report_overview_html_with_context,
+    report_overview_json_with_context, report_overview_markdown_with_context,
+    report_overview_text_with_context, report_search_json, report_search_text,
+    report_text_with_language, search_sessions, session_capability, tool_fail_rate, total_tokens,
+    update_pricing, BaselineThresholds, LoadOptions, LoadReport, ReportLanguage, Session,
+    TimeRange, VERSION,
 };
 use anyhow::{bail, Context};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use clap::Parser;
 use std::ffi::OsString;
 use std::fs;
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -22,12 +25,27 @@ use std::time::SystemTime;
 #[command(about = "TUI observability for AI coding agent sessions")]
 struct Args {
     path: Option<String>,
-    #[arg(short = 'f', long = "format", default_value = "text")]
+    #[arg(
+        short = 'f',
+        long = "format",
+        default_value = "text",
+        value_parser = ["text", "json", "markdown", "md", "html"]
+    )]
     format: String,
     #[arg(short = 'd')]
     dir: Option<String>,
     #[arg(long)]
     compare: bool,
+    #[arg(long)]
+    audit: bool,
+    #[arg(long = "recommend")]
+    recommend: bool,
+    #[arg(long = "mcp-governance")]
+    mcp_governance: bool,
+    #[arg(long = "context-trends")]
+    context_trends: bool,
+    #[arg(long = "delivery-evidence")]
+    delivery_evidence: bool,
     #[arg(long)]
     overview: bool,
     #[arg(long)]
@@ -115,33 +133,48 @@ fn main() {
 
 fn run() -> anyhow::Result<()> {
     let args = Args::parse_from(go_flag_compatible_args(std::env::args_os()));
+    validate_primary_action(&args)?;
+    validate_gate_thresholds(&args)?;
+    if matches!(args.format.as_str(), "markdown" | "md" | "html")
+        && !(args.overview
+            || args.audit
+            || args.recommend
+            || args.mcp_governance
+            || args.context_trends
+            || args.delivery_evidence)
+    {
+        bail!("markdown and html formats require --overview or a governance report action");
+    }
     let language = report_language(&args.lang);
 
     if args.version {
-        println!("agenttrace v{}", VERSION);
+        write_stdout(&format!("agenttrace v{}\n", VERSION))?;
         return Ok(());
     }
 
     if args.clear_cache {
         agenttrace_core::clear_session_cache()?;
-        println!("Session cache cleared.");
+        write_stdout("Session cache cleared.\n")?;
         if !has_session_action(&args) {
             return Ok(());
         }
     }
 
     if args.update_pricing {
-        println!("Downloading pricing from LiteLLM...");
+        write_stdout("Downloading pricing from LiteLLM...\n")?;
         let count = update_pricing()?;
-        println!("Loaded {} model prices", count);
-        println!("Cache saved: {}", pricing_cache_path().display());
+        write_stdout(&format!("Loaded {count} model prices\n"))?;
+        write_stdout(&format!(
+            "Cache saved: {}\n",
+            pricing_cache_path().display()
+        ))?;
         if !has_post_pricing_action(&args) {
             return Ok(());
         }
     }
 
     if args.test_match {
-        print!("{}", render_test_match());
+        write_stdout(&render_test_match())?;
         return Ok(());
     }
 
@@ -149,12 +182,12 @@ fn run() -> anyhow::Result<()> {
         let doctor_dir = args.dir.as_deref().map(PathBuf::from);
         let out = render_doctor_report(doctor_dir.as_deref(), args.demo, &args.format)?;
         write_output(&args.output, &out)?;
-        print!("{out}");
+        write_stdout(&out)?;
         return Ok(());
     }
 
     if args.list_models {
-        print!("{}", render_model_pricing_list());
+        write_stdout(&render_model_pricing_list())?;
         return Ok(());
     }
 
@@ -163,19 +196,50 @@ fn run() -> anyhow::Result<()> {
             let sessions = demo_sessions()?;
             return agenttrace_tui::run_with_sessions(sessions, "demo");
         }
-        return agenttrace_tui::run(args.dir.as_deref().unwrap_or(""));
+        return agenttrace_tui::run_with_language(
+            args.dir.as_deref().unwrap_or(""),
+            Some(&args.lang),
+        );
     }
     if args.baseline.is_some() && !args.overview {
         bail!("--baseline requires --overview -f json");
     }
 
-    if args.compare {
-        let sessions = load_sessions_for_compare(&args)?;
+    if args.audit
+        || args.recommend
+        || args.mcp_governance
+        || args.context_trends
+        || args.delivery_evidence
+    {
+        let sessions = prepare_cli_view(load_sessions(&args)?, &args)?
+            .into_iter()
+            .take(args.limit)
+            .collect::<Vec<_>>();
         if sessions.is_empty() {
-            bail!(
-                "No session files found in {}",
-                args.dir.as_deref().unwrap_or("")
-            );
+            bail!("No sessions match the requested filters");
+        }
+        let value = if args.audit {
+            serde_json::to_value(cost_audit(&sessions))?
+        } else if args.recommend {
+            serde_json::to_value(recommendations(&sessions))?
+        } else if args.mcp_governance {
+            serde_json::to_value(mcp_governance(&sessions))?
+        } else if args.context_trends {
+            serde_json::to_value(context_trends(&sessions))?
+        } else {
+            serde_json::to_value(delivery_evidence_with_git(&sessions))?
+        };
+        let out = render_governance_report(&value, &args.format)?;
+        write_output(&args.output, &(out.clone() + "\n"))?;
+        write_stdout(&out)?;
+        return Ok(());
+    }
+
+    if args.compare {
+        let sessions = prepare_cli_view(load_sessions(&args)?, &args)?;
+        let sessions = sessions.into_iter().take(args.limit).collect::<Vec<_>>();
+        if sessions.is_empty() {
+            bail!("No sessions match the requested filters");
         }
         let out = if args.format == "json" {
             report_compare_json(&sessions)
@@ -183,15 +247,17 @@ fn run() -> anyhow::Result<()> {
             agenttrace_core::report_compare_with_language(&sessions, &args.model, language)
         };
         write_output(&args.output, &(out.clone() + "\n"))?;
-        print!("{out}");
+        write_stdout(&out)?;
         return Ok(());
     }
 
     if args.waste {
-        let session = load_latest_session(&args)?;
-        let out = render_waste_report_with_language(&session, language);
+        let sessions = prepare_cli_view(load_sessions(&args)?, &args)?;
+        let session =
+            latest_session(&sessions).context("No sessions match the requested filters")?;
+        let out = render_waste_report_with_language(session, language);
         write_output(&args.output, &(out.clone() + "\n"))?;
-        print!("{out}");
+        write_stdout(&out)?;
         return Ok(());
     }
 
@@ -200,27 +266,29 @@ fn run() -> anyhow::Result<()> {
         && !args.diagnostics
         && args.inspect.is_none()
     {
-        let session = load_latest_session(&args)?;
+        let sessions = prepare_cli_view(load_sessions(&args)?, &args)?;
+        let session =
+            latest_session(&sessions).context("No sessions match the requested filters")?;
         let out = match args.format.as_str() {
-            "json" => report_json_with_language(&session, language),
-            _ => report_text_with_language(&session, language),
+            "json" => report_json_with_language(session, language),
+            _ => report_text_with_language(session, language),
         };
         write_output(&args.output, &(out.clone() + "\n"))?;
-        print!("{out}");
+        write_stdout(&out)?;
         return Ok(());
     }
 
     let (sessions, load_report) = load_sessions_report(&args)?;
+    let sessions = prepare_cli_view(sessions, &args)?;
+    if sessions.is_empty() {
+        bail!("No sessions match the requested filters");
+    }
 
     if args.sessions || args.diagnostics || args.inspect.is_some() {
-        let sessions = prepare_cli_view(sessions, &args)?;
-        if sessions.is_empty() {
-            bail!("No sessions match the requested filters");
-        }
         if args.sessions {
             let out = render_session_list(&sessions, &args.format, args.limit);
             write_output(&args.output, &(out.clone() + "\n"))?;
-            print!("{out}");
+            write_stdout(&out)?;
             return Ok(());
         }
         let session = if let Some(rank) = args.inspect {
@@ -239,7 +307,7 @@ fn run() -> anyhow::Result<()> {
         };
         let out = render_diagnostics(session, &sessions, &args.format, language)?;
         write_output(&args.output, &(out.clone() + "\n"))?;
-        print!("{out}");
+        write_stdout(&out)?;
         return Ok(());
     }
 
@@ -251,27 +319,50 @@ fn run() -> anyhow::Result<()> {
             report_search_text(&results, query)
         };
         write_output(&args.output, &(out.clone() + "\n"))?;
-        print!("{out}");
+        write_stdout(&out)?;
         return Ok(());
     }
 
     if args.overview {
         let overview = compute_overview(&sessions);
+        let health = data_health(
+            &sessions,
+            sessions.len() + load_report.as_ref().map(|item| item.skipped).unwrap_or(0),
+            load_report
+                .as_ref()
+                .map(|item| item.cache_hits)
+                .unwrap_or(0),
+        );
+        let range = parse_range(&args)?;
         let mut out = match args.format.as_str() {
-            "json" => {
-                let health = data_health(
-                    &sessions,
-                    sessions.len() + load_report.as_ref().map(|item| item.skipped).unwrap_or(0),
-                    load_report
-                        .as_ref()
-                        .map(|item| item.cache_hits)
-                        .unwrap_or(0),
-                );
-                report_overview_json_with_health(&overview, &sessions, Some(&health))
-            }
-            "markdown" | "md" => report_overview_markdown(&overview, &sessions),
-            "html" => report_overview_html(&overview, &sessions),
-            _ => report_overview_text(&overview, &sessions),
+            "json" => report_overview_json_with_context(
+                &overview,
+                &sessions,
+                Some(&health),
+                range,
+                args.include_history,
+            ),
+            "markdown" | "md" => report_overview_markdown_with_context(
+                &overview,
+                &sessions,
+                &health,
+                range,
+                args.include_history,
+            ),
+            "html" => report_overview_html_with_context(
+                &overview,
+                &sessions,
+                &health,
+                range,
+                args.include_history,
+            ),
+            _ => report_overview_text_with_context(
+                &overview,
+                &sessions,
+                &health,
+                range,
+                args.include_history,
+            ),
         };
         if let Some(baseline) = args.baseline.as_deref() {
             if args.format != "json" {
@@ -288,7 +379,7 @@ fn run() -> anyhow::Result<()> {
             )?;
         }
         write_output(&args.output, &(out.clone() + "\n"))?;
-        print!("{out}");
+        write_stdout(&out)?;
         let failures = evaluate_overview_gate(
             &overview,
             &sessions,
@@ -326,6 +417,58 @@ fn run() -> anyhow::Result<()> {
     }
 
     bail!("no report action selected")
+}
+
+fn write_stdout(value: &str) -> anyhow::Result<()> {
+    match io::stdout().write_all(value.as_bytes()) {
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        result => result.map_err(Into::into),
+    }
+}
+
+fn render_governance_report(value: &serde_json::Value, format: &str) -> anyhow::Result<String> {
+    let json = serde_json::to_string_pretty(value)?;
+    Ok(match format {
+        "json" => json,
+        "markdown" | "md" => format!("```json\n{json}\n```"),
+        "html" => format!("<pre>{}</pre>", escape_html(&json)),
+        _ => render_plain_value(value, 0),
+    })
+}
+
+fn render_plain_value(value: &serde_json::Value, depth: usize) -> String {
+    let indent = "  ".repeat(depth);
+    match value {
+        serde_json::Value::Object(items) => items
+            .iter()
+            .map(|(key, value)| match value {
+                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                    format!("{indent}{key}:\n{}", render_plain_value(value, depth + 1))
+                }
+                _ => format!("{indent}{key}: {}", render_plain_value(value, 0)),
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(|value| {
+                format!(
+                    "{indent}- {}",
+                    render_plain_value(value, depth + 1).trim_start()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        serde_json::Value::String(value) => value.clone(),
+        _ => value.to_string(),
+    }
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn go_flag_compatible_args<I>(args: I) -> Vec<OsString>
@@ -466,33 +609,29 @@ fn load_sessions_report(args: &Args) -> anyhow::Result<(Vec<Session>, Option<Loa
         bail!("session path does not exist: {}", path.display());
     }
     let dir = args.dir.as_deref().map(PathBuf::from);
-    let (sessions, report) = if dir.is_none() {
-        let range = parse_range(args)?;
-        let report = load_sessions_with_options(
-            None,
-            &LoadOptions {
-                since: range.since(Utc::now()),
-                project: args.project.clone(),
-                source: args.source.clone(),
-                model: args.model_filter.clone(),
-                include_history: args.include_history,
-                preserve_history: args.preserve_history,
-            },
-        );
-        (report.sessions.clone(), Some(report))
-    } else {
-        (
-            prepare_explicit_sessions(load_parseable_sessions_from_files(dir.as_deref())?, args)?,
-            None,
-        )
-    };
+    let range = parse_range(args)?;
+    let report = load_sessions_with_options(
+        dir.as_deref(),
+        &LoadOptions {
+            since: range.since(Utc::now()),
+            project: args.project.clone(),
+            source: args.source.clone(),
+            model: args.model_filter.clone(),
+            include_history: args.include_history,
+            preserve_history: args.preserve_history,
+        },
+    );
+    let sessions = report.sessions.clone();
     if sessions.is_empty() {
-        bail!(
-            "No session files found in {}",
-            args.dir.as_deref().unwrap_or("")
-        );
+        if report.discovered == 0 {
+            bail!(
+                "No session files found in {}",
+                args.dir.as_deref().unwrap_or("")
+            );
+        }
+        bail!("No sessions match the requested filters");
     }
-    Ok((sessions, report))
+    Ok((sessions, Some(report)))
 }
 
 fn parse_range(args: &Args) -> anyhow::Result<TimeRange> {
@@ -521,115 +660,6 @@ fn prepare_explicit_sessions(
         agenttrace_core::merge_preserved_history(&mut sessions);
     }
     filter_cli_sessions(sessions, args)
-}
-
-fn load_latest_session(args: &Args) -> anyhow::Result<Session> {
-    if args.demo {
-        let sessions = demo_sessions()?;
-        return latest_session(&sessions)
-            .cloned()
-            .context("no demo sessions");
-    }
-    if let Some(path) = args.path.as_deref() {
-        let path = PathBuf::from(path);
-        if path.is_file() || is_cline_task_dir(&path) {
-            return parse_file(&path);
-        }
-        if path.is_dir() {
-            bail!(
-                "Error loading {}: positional path must be a session file",
-                path.display()
-            );
-        }
-        bail!("session path does not exist: {}", path.display());
-    }
-    let dir = args.dir.as_deref().map(PathBuf::from);
-    let files = find_session_files(dir.as_deref());
-    if files.is_empty() {
-        bail!(
-            "No session files found in {}",
-            args.dir.as_deref().unwrap_or("")
-        );
-    }
-    let target = latest_session_file(&files).context("No session files found.")?;
-    parse_file(target)
-}
-
-fn load_parseable_sessions_from_files(
-    dir: Option<&std::path::Path>,
-) -> anyhow::Result<Vec<Session>> {
-    let files = find_session_files(dir);
-    if files.is_empty() {
-        return Ok(Vec::new());
-    }
-    Ok(files
-        .iter()
-        .filter_map(|path| parse_file(path).ok())
-        .collect())
-}
-
-fn latest_session_file(files: &[PathBuf]) -> Option<&std::path::Path> {
-    files
-        .iter()
-        .filter_map(|path| latest_session_candidate(path).map(|candidate| (path, candidate)))
-        .max_by(|(_, a), (_, b)| newer_session_candidate_order(a, b))
-        .map(|(path, _)| path.as_path())
-}
-
-struct LatestCandidate {
-    session_time: Option<DateTime<Utc>>,
-    mod_time: SystemTime,
-    path: String,
-}
-
-fn latest_session_candidate(path: &std::path::Path) -> Option<LatestCandidate> {
-    let mod_time = fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .ok()?;
-    let session_time = parse_file(path)
-        .ok()
-        .and_then(|session| parse_session_time(&session.metrics.session_start));
-    Some(LatestCandidate {
-        session_time,
-        mod_time,
-        path: path.to_string_lossy().to_string(),
-    })
-}
-
-fn parse_session_time(value: &str) -> Option<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(value)
-        .ok()
-        .map(|time| time.with_timezone(&Utc))
-}
-
-fn newer_session_candidate_order(a: &LatestCandidate, b: &LatestCandidate) -> std::cmp::Ordering {
-    a.session_time
-        .is_some()
-        .cmp(&b.session_time.is_some())
-        .then_with(|| match (a.session_time, b.session_time) {
-            (Some(a_time), Some(b_time)) => a_time.cmp(&b_time),
-            _ => a.mod_time.cmp(&b.mod_time),
-        })
-        .then_with(|| a.path.cmp(&b.path))
-}
-
-fn load_sessions_for_compare(args: &Args) -> anyhow::Result<Vec<Session>> {
-    if args.demo {
-        return load_sessions(args);
-    }
-    let dir = args.dir.as_deref().map(PathBuf::from);
-    let mut files = find_session_files(dir.as_deref());
-    if files.len() > 15 {
-        eprintln!(
-            "Found {} session files, showing the most recent 15. Use -d <dir> or remove old sessions to compare all.",
-            files.len()
-        );
-        files.truncate(15);
-    }
-    Ok(files
-        .iter()
-        .filter_map(|path| parse_file(path).ok())
-        .collect())
 }
 
 fn is_cline_task_dir(path: &std::path::Path) -> bool {
@@ -861,6 +891,11 @@ fn has_post_pricing_action(args: &Args) -> bool {
         || args.doctor
         || args.latest
         || args.compare
+        || args.audit
+        || args.recommend
+        || args.mcp_governance
+        || args.context_trends
+        || args.delivery_evidence
         || args.overview
         || args.sessions
         || args.diagnostics
@@ -877,6 +912,11 @@ fn has_session_action(args: &Args) -> bool {
     args.path.is_some()
         || args.latest
         || args.compare
+        || args.audit
+        || args.recommend
+        || args.mcp_governance
+        || args.context_trends
+        || args.delivery_evidence
         || args.overview
         || args.sessions
         || args.diagnostics
@@ -888,6 +928,55 @@ fn has_session_action(args: &Args) -> bool {
             .as_deref()
             .map(|query| !query.trim().is_empty())
             .unwrap_or(false)
+}
+
+fn validate_primary_action(args: &Args) -> anyhow::Result<()> {
+    let actions = [
+        args.compare,
+        args.audit,
+        args.recommend,
+        args.mcp_governance,
+        args.context_trends,
+        args.delivery_evidence,
+        args.overview,
+        args.sessions,
+        args.diagnostics || args.inspect.is_some(),
+        args.waste,
+        args.doctor,
+        args.list_models,
+        args.test_match,
+        args.version,
+        args.search
+            .as_deref()
+            .is_some_and(|query| !query.trim().is_empty()),
+    ];
+    if actions.into_iter().filter(|active| *active).count() > 1 {
+        bail!("choose exactly one report action");
+    }
+    if args.latest
+        && actions.into_iter().any(|active| active)
+        && !args.diagnostics
+        && args.inspect.is_none()
+    {
+        bail!("--latest can only be combined with --diagnostics or --inspect");
+    }
+    Ok(())
+}
+
+fn validate_gate_thresholds(args: &Args) -> anyhow::Result<()> {
+    if !(0..=100).contains(&args.fail_under_health) {
+        bail!("--fail-under-health must be between 0 and 100");
+    }
+    if args
+        .max_tool_fail_rate
+        .is_some_and(|value| !value.is_finite() || !(0.0..=100.0).contains(&value))
+    {
+        bail!("--max-tool-fail-rate must be a finite number between 0 and 100");
+    }
+    if args.search.is_some() && args.search_limit == 0 {
+        bail!("--search-limit must be at least 1");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1007,7 +1096,20 @@ mod tests {
     }
 
     #[test]
-    fn compare_loader_uses_go_file_cap() {
+    fn conflicting_report_actions_are_rejected() {
+        let mut args = compare_args(None);
+        args.sessions = true;
+        assert!(validate_primary_action(&args).is_err());
+
+        args.compare = false;
+        args.sessions = false;
+        args.latest = true;
+        args.diagnostics = true;
+        assert!(validate_primary_action(&args).is_ok());
+    }
+
+    #[test]
+    fn compare_uses_shared_filters_and_limit() {
         let root =
             std::env::temp_dir().join(format!("agenttrace-compare-cap-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
@@ -1016,9 +1118,13 @@ mod tests {
             write_compare_session(&root.join(format!("{idx:02}.jsonl")), idx);
         }
 
-        let args = compare_args(Some(root.to_string_lossy().to_string()));
-        let sessions = load_sessions_for_compare(&args).expect("load compare sessions");
-        assert_eq!(sessions.len(), 15);
+        let mut args = compare_args(Some(root.to_string_lossy().to_string()));
+        args.limit = 1;
+        let sessions = prepare_cli_view(load_sessions(&args).unwrap(), &args).unwrap();
+        assert_eq!(sessions.into_iter().take(args.limit).count(), 1);
+
+        args.source = "missing-source".to_string();
+        assert!(load_sessions(&args).is_err());
 
         let _ = fs::remove_dir_all(root);
     }
@@ -1037,37 +1143,7 @@ mod tests {
         args.compare = false;
         args.overview = true;
         let err = load_sessions(&args).expect_err("empty parseable sessions should fail");
-        assert!(err.to_string().contains("No session files found in"));
-
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn latest_session_file_can_select_unparseable_newest_file_like_go() {
-        let root =
-            std::env::temp_dir().join(format!("agenttrace-latest-bad-file-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).expect("create latest bad file dir");
-        let older = root.join("older.jsonl");
-        let newer = root.join("newer.json");
-        fs::write(
-            &older,
-            r#"{"role":"user","content":"older no timestamp","SourceTool":"generic"}
-{"role":"assistant","content":"older answer","SourceTool":"generic"}
-"#,
-        )
-        .expect("write older session");
-        std::thread::sleep(std::time::Duration::from_millis(5));
-        fs::write(&newer, r#"{"not":"#).expect("write bad latest");
-
-        let files = find_session_files(Some(&root));
-        let latest = latest_session_file(&files).expect("latest file");
-        assert_eq!(latest, newer.as_path());
-
-        let mut args = compare_args(Some(root.to_string_lossy().to_string()));
-        args.compare = false;
-        args.latest = true;
-        load_latest_session(&args).expect_err("bad latest should fail");
+        assert!(err.to_string().contains("No sessions match"));
 
         let _ = fs::remove_dir_all(root);
     }
@@ -1105,6 +1181,11 @@ mod tests {
             format: "json".to_string(),
             dir,
             compare: true,
+            audit: false,
+            recommend: false,
+            mcp_governance: false,
+            context_trends: false,
+            delivery_evidence: false,
             overview: false,
             sessions: false,
             diagnostics: false,
@@ -1144,6 +1225,31 @@ mod tests {
             preserve_history: false,
             include_history: false,
         }
+    }
+
+    #[test]
+    fn governance_formats_and_gate_thresholds_keep_cli_contracts() {
+        let value = serde_json::json!({"status": "ok"});
+        assert!(render_governance_report(&value, "json")
+            .expect("json")
+            .starts_with('{'));
+        assert!(render_governance_report(&value, "markdown")
+            .expect("markdown")
+            .starts_with("```json"));
+        assert!(render_governance_report(&value, "html")
+            .expect("html")
+            .starts_with("<pre>"));
+        assert!(render_governance_report(&value, "text")
+            .expect("text")
+            .starts_with("status:"));
+
+        let mut args = compare_args(None);
+        args.max_tool_fail_rate = Some(f64::NAN);
+        assert!(validate_gate_thresholds(&args).is_err());
+        args.max_tool_fail_rate = Some(101.0);
+        assert!(validate_gate_thresholds(&args).is_err());
+        args.max_tool_fail_rate = Some(100.0);
+        assert!(validate_gate_thresholds(&args).is_ok());
     }
 
     fn write_compare_session(path: &std::path::Path, idx: usize) {

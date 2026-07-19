@@ -26,8 +26,8 @@ rm -rf "$out_dir"
 mkdir -p "$out_dir"
 
 run cargo fmt --check
-run cargo clippy -- -D warnings
-run cargo test
+run cargo clippy -p agenttrace-core -p agenttrace-tui -p agenttrace -- -D warnings
+run cargo test -p agenttrace-core -p agenttrace-tui -p agenttrace
 run python3 scripts/generate-testdata.py --check
 run cargo build --release -p agenttrace
 run scripts/ci/check-cargo-manifests.sh

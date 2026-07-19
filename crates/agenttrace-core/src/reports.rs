@@ -1,8 +1,9 @@
 use crate::{
-    average_health, canonical_sessions, classify_tool_authority, fmt_duration, format_cost,
-    format_count, format_tokens, highest_authority_for_metrics, is_high_authority_category, round4,
-    sorted_keys, sorted_set, total_tokens, Anomaly, GroupOverview, Overview, Session, ToolCall,
-    VERSION,
+    average_health, canonical_sessions, classify_tool_authority, context_trends, cost_audit,
+    delivery_evidence, fmt_duration, format_cost, format_count, format_tokens,
+    highest_authority_for_metrics, is_high_authority_category, mcp_governance, recommendations,
+    report_scope, round4, sorted_keys, sorted_set, total_tokens, Anomaly, GroupOverview, Overview,
+    Session, ToolCall, VERSION,
 };
 use chrono::{DateTime, Utc};
 use serde_json::{json, Map, Value};
@@ -480,6 +481,147 @@ pub fn report_overview_json_with_health(
         obj.insert("summary".to_string(), strip_nulls(summary));
     }
     serde_json::to_string_pretty(&payload).expect("overview report serializes")
+}
+
+pub fn report_overview_json_with_context(
+    overview: &Overview,
+    sessions: &[Session],
+    data_health: Option<&crate::DataHealth>,
+    range: crate::TimeRange,
+    includes_preserved_history: bool,
+) -> String {
+    let base = report_overview_json_with_health(overview, sessions, data_health);
+    let mut payload: Value = serde_json::from_str(&base).expect("overview JSON is valid");
+    let context = json!({
+        "scope": report_scope(sessions, range, includes_preserved_history),
+        "cost_audit": cost_audit(sessions),
+        "recommendations": recommendations(sessions),
+        "mcp_governance": mcp_governance(sessions),
+        "context_trends": context_trends(sessions),
+        "delivery_evidence": delivery_evidence(sessions),
+    });
+    if let (Value::Object(payload), Value::Object(context)) = (&mut payload, context) {
+        payload.extend(context);
+    }
+    serde_json::to_string_pretty(&payload).expect("overview context serializes")
+}
+
+pub fn report_overview_text_with_context(
+    overview: &Overview,
+    sessions: &[Session],
+    data_health: &crate::DataHealth,
+    range: crate::TimeRange,
+    includes_preserved_history: bool,
+) -> String {
+    let scope = report_scope(sessions, range, includes_preserved_history);
+    let audit = cost_audit(sessions);
+    let mut out = report_overview_text(overview, sessions);
+    out.push_str("\n── Scope and confidence ──\n");
+    out.push_str(&format!(
+        "  Range: {} | sessions: {} | {} to {}\n",
+        scope.range, scope.sessions_in_scope, scope.earliest_session_at, scope.latest_session_at
+    ));
+    out.push_str(&format!(
+        "  Parse: {}/{} parsed, {} skipped, {} cache hits | confidence: {}\n",
+        data_health.parsed,
+        data_health.discovered,
+        data_health.skipped,
+        data_health.cache_hits,
+        data_health.confidence
+    ));
+    out.push_str(&format!(
+        "  Pricing: {} | exact={} fallback={} unknown={}\n",
+        audit.pricing_source,
+        audit.pricing_coverage.priced_sessions,
+        audit.pricing_coverage.fallback_priced_sessions,
+        audit.pricing_coverage.unpriced_or_unknown_sessions
+    ));
+    render_recommendations_text(&mut out, &recommendations(sessions));
+    out
+}
+
+pub fn report_overview_markdown_with_context(
+    overview: &Overview,
+    sessions: &[Session],
+    data_health: &crate::DataHealth,
+    range: crate::TimeRange,
+    includes_preserved_history: bool,
+) -> String {
+    let scope = report_scope(sessions, range, includes_preserved_history);
+    let audit = cost_audit(sessions);
+    let mut out = report_overview_markdown(overview, sessions);
+    out.push_str("\n## Scope and confidence\n\n| Field | Value |\n|---|---|\n");
+    out.push_str(&format!("| Range | {} |\n| Session window | {} → {} |\n| Parse coverage | {}/{} parsed; {} skipped; {} cache hits |\n| Confidence | {} |\n| Pricing | {} |\n| Pricing coverage | exact: {}; fallback: {}; unknown: {} |\n", scope.range, scope.earliest_session_at, scope.latest_session_at, data_health.parsed, data_health.discovered, data_health.skipped, data_health.cache_hits, data_health.confidence, markdown_cell(&audit.pricing_source), audit.pricing_coverage.priced_sessions, audit.pricing_coverage.fallback_priced_sessions, audit.pricing_coverage.unpriced_or_unknown_sessions));
+    render_recommendations_markdown(&mut out, &recommendations(sessions));
+    out
+}
+
+pub fn report_overview_html_with_context(
+    overview: &Overview,
+    sessions: &[Session],
+    data_health: &crate::DataHealth,
+    range: crate::TimeRange,
+    includes_preserved_history: bool,
+) -> String {
+    let scope = report_scope(sessions, range, includes_preserved_history);
+    let audit = cost_audit(sessions);
+    let recommendations = recommendations(sessions);
+    let mut appendix = String::from("<section><h2>Scope and confidence</h2><table><tbody>");
+    appendix.push_str(&format!("<tr><th>Range</th><td>{}</td></tr><tr><th>Session window</th><td>{} → {}</td></tr><tr><th>Parse coverage</th><td>{}/{} parsed; {} skipped; {} cache hits</td></tr><tr><th>Confidence</th><td>{}</td></tr><tr><th>Pricing</th><td>{}</td></tr>", html_escape(&scope.range), html_escape(&scope.earliest_session_at), html_escape(&scope.latest_session_at), data_health.parsed, data_health.discovered, data_health.skipped, data_health.cache_hits, html_escape(&data_health.confidence), html_escape(&audit.pricing_source)));
+    appendix.push_str("</tbody></table></section>");
+    appendix.push_str("<section><h2>Prioritized recommendations</h2><table><thead><tr><th>Priority</th><th>Finding</th><th>Impact</th><th>Action</th></tr></thead><tbody>");
+    for item in recommendations.iter().take(12) {
+        appendix.push_str(&format!(
+            "<tr><td>{}</td><td>{}: {}</td><td>${:.4}; {} tokens; {}</td><td>{}</td></tr>",
+            html_escape(&item.priority),
+            html_escape(&item.category),
+            html_escape(&item.rationale),
+            item.estimated_savings_usd,
+            item.estimated_savings_tokens,
+            html_escape(&item.confidence),
+            html_escape(&item.action)
+        ));
+    }
+    appendix.push_str("</tbody></table></section>");
+    report_overview_html(overview, sessions).replacen("</main>", &(appendix + "</main>"), 1)
+}
+
+fn render_recommendations_text(out: &mut String, items: &[crate::Recommendation]) {
+    if items.is_empty() {
+        return;
+    }
+    out.push_str("\n── Prioritized recommendations ──\n");
+    for item in items.iter().take(12) {
+        out.push_str(&format!(
+            "  [{}] {} — {} | ${:.4}, {} tokens | {}\n    Action: {}\n    Verify: {}\n",
+            item.priority,
+            item.title,
+            item.rationale,
+            item.estimated_savings_usd,
+            item.estimated_savings_tokens,
+            item.confidence,
+            item.action,
+            item.validation_command
+        ));
+    }
+}
+
+fn render_recommendations_markdown(out: &mut String, items: &[crate::Recommendation]) {
+    if items.is_empty() {
+        return;
+    }
+    out.push_str("\n## Prioritized recommendations\n\n| Priority | Finding | Estimated impact | Confidence | Action |\n|---|---|---:|---|---|\n");
+    for item in items.iter().take(12) {
+        out.push_str(&format!(
+            "| {} | {} | ${:.4}; {} tokens | {} | {} |\n",
+            item.priority,
+            markdown_cell(&item.title),
+            item.estimated_savings_usd,
+            item.estimated_savings_tokens,
+            markdown_cell(&item.confidence),
+            markdown_cell(&item.action)
+        ));
+    }
 }
 
 pub fn add_baseline_comparison(

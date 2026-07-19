@@ -6,6 +6,112 @@ use ratatui::Terminal;
 use std::fs;
 
 #[test]
+fn chinese_workspace_copy_is_plain_language_and_width_aware() {
+    let mut item = agenttrace_core::Recommendation {
+        id: "tool-failures".to_string(),
+        priority: "P1".to_string(),
+        severity: "high".to_string(),
+        category: "tool_failure".to_string(),
+        title: "Reduce failing tool calls".to_string(),
+        rationale: String::new(),
+        evidence: Vec::new(),
+        estimated_savings_usd: 0.0,
+        estimated_savings_tokens: 0,
+        confidence: "high".to_string(),
+        action: "Inspect arguments and results".to_string(),
+        validation_command: String::new(),
+    };
+    assert_eq!(
+        recommendation_title(&item, Language::Zh),
+        "减少失败的工具调用"
+    );
+    assert!(recommendation_action(&item, Language::Zh).contains("不要原样重试"));
+    assert_eq!(short("中文宽度", 4), "...");
+    assert_eq!(short("中文宽度", 5), "中...");
+    item.id = "slow-tool".to_string();
+    assert_eq!(
+        recommendation_title(&item, Language::Zh),
+        "给慢工具设定时间上限"
+    );
+    let mut app = App::new(Vec::new(), "test", None);
+    app.model_filter = "gpt-5".to_string();
+    app.issue_filter = "failures".to_string();
+    assert_eq!(
+        active_filter_summary(&app, Language::Zh),
+        "模型: gpt-5 · 问题: 工具失败"
+    );
+}
+
+#[test]
+fn workspaces_render_filtered_reports_and_project_resolution() {
+    let mut governed = session(
+        "governed",
+        "claude_code",
+        "claude-sonnet-4",
+        45,
+        1.2,
+        "mcp__demo__lookup",
+    );
+    governed.cwd = env!("CARGO_MANIFEST_DIR").to_string();
+    governed.metrics.tokens_cache_r = 250;
+    governed.metrics.tokens_output = 100;
+    governed.metrics.tool_calls_fail = 1;
+    governed.metrics.tool_calls_total = 2;
+    governed
+        .metrics
+        .tool_authority
+        .insert("write_files".to_string(), 1);
+    governed.diagnostics.context_utilization.risk_level = "critical".to_string();
+    governed.diagnostics.context_utilization.utilization_pct = 95.0;
+    let mut app = App::new(vec![governed], "test", None);
+    let backend = TestBackend::new(140, 44);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+
+    for (command, expected) in [("action", "Action Center"), ("efficiency", "Efficiency")] {
+        app.run_command(command).expect("open governance view");
+        assert!(matches!(app.view, View::Governance(_)));
+        terminal
+            .draw(|frame| render(frame, &mut app))
+            .expect("render governance view");
+        let rendered = format!("{:?}", terminal.backend().buffer());
+        assert!(rendered.contains("Workspace"));
+        assert!(rendered.contains(expected));
+        assert!(rendered.contains("Projects"));
+        assert!(rendered.contains("git_root"));
+    }
+
+    app.run_command("delivery")
+        .expect("open delivery workspace");
+    terminal
+        .draw(|frame| render(frame, &mut app))
+        .expect("start delivery workspace");
+    let pending = format!("{:?}", terminal.backend().buffer());
+    assert!(pending.contains("Correlating local Git commits"));
+    for _ in 0..50 {
+        app.poll_governance_delivery();
+        if !app.governance_delivery_pending() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    terminal
+        .draw(|frame| render(frame, &mut app))
+        .expect("render delivery workspace");
+    let delivery = format!("{:?}", terminal.backend().buffer());
+    assert!(delivery.contains("Delivery evidence"));
+
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))
+        .expect("cycle governance");
+    assert!(matches!(
+        app.view,
+        View::Governance(GovernancePanel::ActionCenter)
+    ));
+    app.handle_normal_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+        .expect("leave governance");
+    assert_eq!(app.view, View::List);
+}
+
+#[test]
 fn filters_sessions_by_metadata_and_tool_usage() {
     let mut app = App::new(
         vec![
@@ -64,7 +170,38 @@ fn commands_switch_views_and_apply_search() {
 }
 
 #[test]
-fn inspect_command_selects_ranked_session_and_clears_filters() {
+fn live_search_paste_and_escape_restore_the_previous_filter() {
+    let mut app = App::new(
+        vec![
+            session("billing", "claude_code", "claude-sonnet-4", 70, 0.02, "rg"),
+            session("docs", "codex_cli", "gpt-5", 95, 0.01, "read_file"),
+        ],
+        "test",
+        None,
+    );
+    app.query = "docs".to_string();
+    app.refresh_filtered();
+
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE))
+        .expect("start search");
+    assert_eq!(app.input, "docs");
+    app.handle_event(Event::Paste("billing\n".to_string()))
+        .expect("paste search");
+    assert_eq!(app.query, "docsbilling");
+    assert!(app.filtered.is_empty());
+
+    app.handle_event(Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+        .expect("cancel search");
+    assert_eq!(app.query, "docs");
+    assert_eq!(app.filtered.len(), 1);
+    assert_eq!(
+        app.selected_session().map(|session| session.name.as_str()),
+        Some("docs")
+    );
+}
+
+#[test]
+fn inspect_command_respects_active_filters() {
     let mut anomalous = session("anomalous", "pi", "m", 70, 0.05, "rg");
     anomalous.cwd = "/tmp/in-scope".to_string();
     anomalous.anomalies.push(Anomaly {
@@ -93,16 +230,16 @@ fn inspect_command_selects_ranked_session_and_clears_filters() {
         Some("critical")
     );
 
-    assert!(!app.run_command("inspect 2").unwrap());
-    assert!(app.query.is_empty());
+    assert!(!app.run_command("inspect 1").unwrap());
+    assert_eq!(app.query, "critical");
     assert_eq!(app.project_filter, "in-scope");
     assert_eq!(app.range_filter, TimeRange::Days30);
     assert_eq!(app.view, View::Diagnostics);
     assert_eq!(
         app.selected_session().map(|session| session.name.as_str()),
-        Some("anomalous")
+        Some("critical")
     );
-    assert!(app.status.contains("inspect anomaly #2"));
+    assert!(app.status.contains("inspect"));
 }
 
 #[test]
@@ -141,7 +278,7 @@ fn language_defaults_to_english_and_l_toggles_chinese() {
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE))
         .expect("toggle language");
     assert_eq!(app.language, Language::Zh);
-    assert_eq!(app.status, "语言：中文");
+    assert_eq!(app.status, "语言：中文（已保存）");
     assert!(help_text(View::Overview, app.language).contains("分诊流程"));
 
     let backend = TestBackend::new(100, 24);
@@ -174,7 +311,7 @@ fn language_defaults_to_english_and_l_toggles_chinese() {
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE))
         .expect("toggle language back");
     assert_eq!(app.language, Language::En);
-    assert_eq!(app.status, "language: English");
+    assert_eq!(app.status, "language: English (saved)");
 }
 
 #[test]
@@ -273,7 +410,8 @@ fn filters_by_data_capability_and_actionable_issue() {
     assert!(!app.run_command("issues failures").unwrap());
     assert_eq!(app.filtered.len(), 1);
     assert_eq!(app.selected_session().unwrap().name, "detailed");
-    assert!(active_filter_summary(&app).contains("issues=failures"));
+    assert!(active_filter_summary(&app, Language::En).contains("issue: tool failures"));
+    assert!(active_filter_summary(&app, Language::Zh).contains("问题: 工具失败"));
 }
 
 #[test]
@@ -346,6 +484,11 @@ fn quick_filter_keys_match_go_keymap_semantics() {
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE))
         .expect("source filter key");
     assert_eq!(app.source_filter, selected_source);
+    assert_eq!(
+        app.selected_session()
+            .map(|session| session.metrics.source_tool.as_str()),
+        Some(selected_source.as_str())
+    );
 
     app.handle_normal_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
         .expect("clear filters");
@@ -361,6 +504,31 @@ fn quick_filter_keys_match_go_keymap_semantics() {
         app.selected_session().map(|s| s.name.as_str()),
         Some("critical")
     );
+}
+
+#[test]
+fn reload_missing_selection_returns_to_list() {
+    let selected = session("selected", "codex_cli", "m", 95, 0.1, "rg");
+    let remaining = session("remaining", "pi", "m", 80, 0.1, "rg");
+    let mut app = App::new(vec![selected, remaining.clone()], "test", None);
+    app.selected = app
+        .filtered
+        .iter()
+        .position(|index| app.sessions[*index].name == "selected")
+        .unwrap();
+    app.view = View::Detail;
+    app.apply_loaded_sessions(
+        LoadReport {
+            sessions: vec![remaining],
+            discovered: 1,
+            parsed: 1,
+            ..LoadReport::default()
+        },
+        false,
+    );
+    assert_eq!(app.view, View::List);
+    assert!(app.status.contains("no longer available"));
+    assert_eq!(app.derived.health.discovered, app.derived.health.parsed);
 }
 
 #[test]
@@ -469,16 +637,30 @@ fn sort_cost_descending_then_toggle() {
         None,
     );
 
+    app.move_next();
+    let selected = app.selected_session().unwrap().name.clone();
     app.set_sort(SortKey::Cost);
     assert_eq!(
         app.selected_session().map(|s| s.name.as_str()),
-        Some("expensive")
+        Some(selected.as_str())
     );
     app.set_sort(SortKey::Cost);
     assert_eq!(
         app.selected_session().map(|s| s.name.as_str()),
-        Some("cheap")
+        Some(selected.as_str())
     );
+}
+
+#[test]
+fn inspect_first_uses_all_active_filters() {
+    let mut app = App::new(
+        vec![session("critical", "codex_cli", "m", 35, 0.20, "bash")],
+        "test",
+        None,
+    );
+    app.query = "no-match".to_string();
+    app.refresh_filtered();
+    assert!(app.derived.inspect_first.is_empty());
 }
 
 #[test]
@@ -747,9 +929,9 @@ fn diff_empty_state_explains_active_filters() {
     let diff = format!("{:?}", terminal.backend().buffer());
     assert!(diff.contains("Context:"));
     assert!(diff.contains("visible=0"));
-    assert!(diff.contains("filter=model=definitely-no-match"));
+    assert!(diff.contains("filter=model: definitely-no-match"));
     assert!(diff.contains("Need at least two visible sessions for diff."));
-    assert!(diff.contains("Active filters: model=definitely-no-match"));
+    assert!(diff.contains("Active filters: model: definitely-no-match"));
     assert!(diff.contains("Press Esc or run :clear/:reset"));
 }
 
@@ -778,7 +960,7 @@ fn renders_no_visible_sessions_state_for_empty_filter_result() {
         .expect("render empty filter list");
     let list = format!("{:?}", terminal.backend().buffer());
     assert!(list.contains("No visible sessions match the active filters."));
-    assert!(list.contains("Active filters: model=definitely-no-match"));
+    assert!(list.contains("Active filters: model: definitely-no-match"));
     assert!(list.contains("Press Esc or run :clear"));
 }
 

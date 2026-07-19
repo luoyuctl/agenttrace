@@ -159,43 +159,93 @@ pub(super) fn parse_sort_key(value: &str) -> Option<SortKey> {
     }
 }
 
-pub(super) fn active_filter_summary(app: &App) -> String {
+pub(super) fn active_filter_summary(app: &App, language: Language) -> String {
     let mut filters = Vec::new();
+    let label = |en, zh| text(language, en, zh);
     if !app.query.is_empty() {
-        filters.push(format!("text={}", app.query));
+        filters.push(format!("{}: {}", label("text", "关键词"), app.query));
     }
     if !app.health_filter.is_empty() {
-        filters.push(format!("health={}", app.health_filter));
+        filters.push(format!(
+            "{}: {}",
+            label("health", "健康度"),
+            health_filter_label(&app.health_filter, language)
+        ));
     }
     if !app.source_filter.is_empty() {
-        filters.push(format!("source={}", app.source_filter));
+        filters.push(format!(
+            "{}: {}",
+            label("source", "来源"),
+            app.source_filter
+        ));
     }
     if !app.model_filter.is_empty() {
-        filters.push(format!("model={}", app.model_filter));
+        filters.push(format!("{}: {}", label("model", "模型"), app.model_filter));
     }
     if !app.project_filter.is_empty() {
-        filters.push(format!("project={}", app.project_filter));
+        filters.push(format!(
+            "{}: {}",
+            label("project", "项目"),
+            app.project_filter
+        ));
     }
     if app.range_filter != TimeRange::All {
-        filters.push(format!("range={}", app.range_filter.label()));
+        filters.push(format!(
+            "{}: {}",
+            label("range", "时间范围"),
+            range_label(app.range_filter, language)
+        ));
     }
     if let Some((op, value)) = app.cost_filter {
-        filters.push(format!("cost{}{}", cost_op_label(op), value));
+        filters.push(format!(
+            "{}: {}{}",
+            label("cost", "成本"),
+            cost_op_label(op),
+            value
+        ));
     }
     if let Some(value) = &app.anomaly_filter {
-        if value.is_empty() {
-            filters.push("anomaly=any".to_string());
+        let value = if value.is_empty() {
+            label("any", "全部")
         } else {
-            filters.push(format!("anomaly={value}"));
-        }
+            value
+        };
+        filters.push(format!("{}: {value}", label("anomaly", "异常")));
     }
     if !app.capability_filter.is_empty() {
-        filters.push(format!("capability={}", app.capability_filter));
+        filters.push(format!(
+            "{}: {}",
+            label("data", "数据完整度"),
+            capability_filter_label(&app.capability_filter, language)
+        ));
     }
     if !app.issue_filter.is_empty() {
-        filters.push(format!("issues={}", app.issue_filter));
+        filters.push(format!(
+            "{}: {}",
+            label("issue", "问题"),
+            issue_filter_label(&app.issue_filter, language)
+        ));
     }
-    filters.join(",")
+    filters.join(" · ")
+}
+
+fn capability_filter_label(value: &str, language: Language) -> &'static str {
+    match value {
+        "detailed" => text(language, "detailed", "详细"),
+        "aggregate" => text(language, "aggregate", "聚合"),
+        _ => text(language, "limited", "有限"),
+    }
+}
+
+fn issue_filter_label(value: &str, language: Language) -> String {
+    match value {
+        "failures" => text(language, "tool failures", "工具失败"),
+        "stuck" => text(language, "stuck", "卡住"),
+        "context" => text(language, "context pressure", "上下文压力"),
+        "loops" => text(language, "repeat loops", "重复循环"),
+        _ => value,
+    }
+    .to_string()
 }
 
 pub(super) fn capability_label(session: &Session, language: Language) -> &'static str {
@@ -298,14 +348,42 @@ pub(super) fn status_width(width: u16) -> usize {
 }
 
 pub(super) fn short(value: &str, max: usize) -> String {
-    if value.chars().count() <= max {
+    use unicode_width::UnicodeWidthChar;
+
+    if unicode_width::UnicodeWidthStr::width(value) <= max {
         return value.to_string();
     }
     if max <= 3 {
-        return value.chars().take(max).collect();
+        let mut out = String::new();
+        let mut width = 0;
+        for ch in value.chars() {
+            let ch_width = ch.width().unwrap_or(0);
+            if width + ch_width > max {
+                break;
+            }
+            out.push(ch);
+            width += ch_width;
+        }
+        return out;
     }
-    let mut out = value.chars().take(max - 3).collect::<String>();
+    let mut out = String::new();
+    let mut width = 0;
+    for ch in value.chars() {
+        let ch_width = ch.width().unwrap_or(0);
+        if width + ch_width > max - 3 {
+            break;
+        }
+        out.push(ch);
+        width += ch_width;
+    }
     out.push_str("...");
+    out
+}
+
+pub(super) fn pad_display_width(value: &str, width: usize) -> String {
+    let mut out = short(value, width);
+    let padding = width.saturating_sub(unicode_width::UnicodeWidthStr::width(out.as_str()));
+    out.push_str(&" ".repeat(padding));
     out
 }
 
