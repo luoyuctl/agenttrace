@@ -47,7 +47,7 @@ AI 编程 Agent 越来越像一套小型构建系统：会调用工具、重试�
 
 ## 真实本机运行
 
-以下截图和数字是为 v0.6.0 源码树采集的一次脱敏历史样本，不是当前遥测数据，也不是测试 fixture。
+以下截图和数字来自为 v0.6.0 源码树采集的最新 500 条真实本机会话脱敏样本，不是当前遥测数据，也不是测试 fixture。
 
 ```bash
 agenttrace
@@ -84,50 +84,11 @@ Windows：
 iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
 ```
 
-## 常用工作流
+## Quickstart
 
 ```bash
-# 打开本地 TUI
 agenttrace
-
-# 检查会话目录探测和缓存状态
-agenttrace --doctor
-
-# 生成机器可读证据
-agenttrace --overview -f json
-
-# 按时间、项目、来源和模型筛选
-agenttrace --overview -f json --range 7d --project agenttrace
-agenttrace --overview -f json --source codex --model-filter gpt-5
-
-# 搜索本地会话元数据
-agenttrace --search billing
-
-# 对派生历史显式启用长期保存；不保存 prompt、回复和工具参数正文
-agenttrace --overview -f json --preserve-history
-agenttrace --overview -f json --include-history --range 30d
-
-# 生成可放到 CI artifact 或 issue 里的独立 HTML 报告
-agenttrace --overview -f html -o agenttrace-overview.html
-
-# 保存本地 baseline，再对比后续运行
-agenttrace --overview -f json -o agenttrace-baseline.json
-agenttrace --overview -f json \
-  --baseline agenttrace-baseline.json \
-  -o agenttrace-overview.json
-
-# 在 CI 中阻止不健康的 Agent 运行
-agenttrace --overview \
-  --fail-under-health 80 \
-  --fail-on-critical \
-  --max-tool-fail-rate 15
 ```
-
-## 支持哪些Agent
-
-agenttrace 支持这些本地会话来源：
-
-Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor exports、Hermes Agent、OpenCode、OpenClaw、Pi、Oh My Pi、Kimi CLI、Copilot-style logs，以及通用 JSON/JSONL traces。
 
 ## 你会得到什么
 
@@ -154,17 +115,9 @@ Claude Code、Codex CLI、Gemini CLI、Qwen Code、Cline、Aider、Cursor export
 
 agenttrace 已被这些项目收录：
 
-- [Awesome Gemini CLI](https://github.com/Piebald-AI/awesome-gemini-cli)
-- [Charm in the Wild](https://github.com/charm-and-friends/charm-in-the-wild)
-- [Awesome Claude Code and Skills](https://github.com/GetBindu/awesome-claude-code-and-skills)
-- [awesome-x-ops](https://github.com/xlabs-club/awesome-x-ops)
-- [Awesome DevOps AI](https://github.com/hammadhaqqani/awesome-devops-ai)
-- [agentic-ai-knowledge-base](https://github.com/ankurkumarz/agentic-ai-knowledge-base)
-- [awesome-harness-engineering](https://github.com/walkinglabs/awesome-harness-engineering)
-- [awesome-ai-tools](https://github.com/QAInsights/awesome-ai-tools)
-- [awesome-claude-code-toolkit](https://github.com/rohitg00/awesome-claude-code-toolkit)
-- [awesome-ai-plugins](https://github.com/hashgraph-online/awesome-ai-plugins)
-- [awesome-agent-skills](https://github.com/kodustech/awesome-agent-skills)
+- [awesome-mac](https://github.com/jaywcjlove/awesome-mac)
+- [antigravity-awesome-skills](https://github.com/sickn33/antigravity-awesome-skills)
+- [awesome-claude-skills](https://github.com/BehiSecc/awesome-claude-skills)
 
 ## 贡献
 

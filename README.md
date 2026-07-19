@@ -47,7 +47,7 @@ It helps you answer:
 
 ## Real local run
 
-These screenshots and figures are a dated, redacted local sample captured for the v0.6.0 source tree. They are not `--demo` output, current telemetry, or test fixtures.
+These screenshots and figures are a redacted sample of the latest 500 real local sessions captured for the v0.6.0 source tree. They are not `--demo` output, current telemetry, or test fixtures.
 
 ```bash
 agenttrace
@@ -69,12 +69,12 @@ AGENTTRACE v0.6.0
 
 | Signal | What agenttrace found |
 |---|---:|
-| Analyzed sessions | 1,761 |
-| Total tokens | 9.13B |
-| Estimated cost | $5,037.26 |
-| Tool failure rate | 1.1% |
-| Critical sessions | 16 |
-| Average health | 91% |
+| Analyzed sessions | 500 |
+| Total tokens | 4.0B |
+| Estimated cost | $2.6K |
+| Tool failure rate | 2.9% |
+| Critical sessions | 2 |
+| Average health | 77.7% |
 
 ## Install
 
@@ -100,51 +100,11 @@ Windows:
 iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
 ```
 
-## Common workflows
+## Quickstart
 
 ```bash
-# Open the local TUI
 agenttrace
-
-# Check detected agent directories and cache state
-agenttrace --doctor
-
-# Generate machine-readable evidence
-agenttrace --overview -f json
-
-# Focus the same TUI/report scope by time, project, agent, or model
-agenttrace --overview -f json --range 7d --project agenttrace
-agenttrace --overview -f json --source codex --model-filter gpt-5
-
-# Opt in to long-term derived history; prompts, replies, paths, and tool arguments are not stored
-agenttrace --overview -f json --preserve-history
-agenttrace --overview -f json --include-history --range 30d
-
-# Search local session metadata without indexing prompt text
-agenttrace --search billing
-agenttrace --search internal/ws -f json
-
-# Create a self-contained report for CI artifacts or issue links
-agenttrace --overview -f html -o agenttrace-overview.html
-
-# Save a local baseline, then compare a later run
-agenttrace --overview -f json -o agenttrace-baseline.json
-agenttrace --overview -f json \
-  --baseline agenttrace-baseline.json \
-  -o agenttrace-overview.json
-
-# Fail CI on unhealthy agent runs
-agenttrace --overview \
-  --fail-under-health 80 \
-  --fail-on-critical \
-  --max-tool-fail-rate 15
 ```
-
-## Supported logs
-
-agenttrace supports local sessions from:
-
-Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor exports, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi CLI, Copilot-style logs, and generic JSON/JSONL traces.
 
 ## What you get
 
