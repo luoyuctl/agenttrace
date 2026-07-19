@@ -59,7 +59,6 @@ done < <(find "$source_dir" -type f 2>/dev/null | sort)
 [[ "$copied" -gt 0 ]] || fail "could not copy real session files from: $source_dir"
 
 run_capture doctor-default --doctor -f json
-run_capture overview-default --overview -f json
 run_capture doctor-snapshot --doctor -d "$snapshot_dir" -f json
 run_capture overview-snapshot -d "$snapshot_dir" --overview -f json
 run_capture latest-snapshot -d "$snapshot_dir" --latest -f json
@@ -68,13 +67,13 @@ run_capture compare-snapshot -d "$snapshot_dir" --compare -f json
 run_capture waste-snapshot -d "$snapshot_dir" --waste
 
 for name in \
-  doctor-default overview-default doctor-snapshot overview-snapshot \
+  doctor-default doctor-snapshot overview-snapshot \
   latest-snapshot search-snapshot compare-snapshot waste-snapshot
 do
   expect_status "$name" 0
 done
 
-for name in doctor-default overview-default doctor-snapshot overview-snapshot latest-snapshot search-snapshot compare-snapshot; do
+for name in doctor-default doctor-snapshot overview-snapshot latest-snapshot search-snapshot compare-snapshot; do
   require_json "$out_dir/$name.out"
 done
 

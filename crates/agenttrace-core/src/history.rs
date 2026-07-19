@@ -62,8 +62,16 @@ pub fn merge_preserved_history(live: &mut Vec<Session>) {
 fn load_records() -> BTreeMap<String, DerivedSession> {
     std::fs::read(history_path())
         .ok()
-        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .map(|raw| decode_records(&raw))
         .unwrap_or_default()
+}
+
+fn decode_records(raw: &[u8]) -> BTreeMap<String, DerivedSession> {
+    serde_json::from_slice::<BTreeMap<String, DerivedSession>>(raw)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(_, record)| record.id.chars().count() >= 8)
+        .collect()
 }
 
 fn session_id(session: &Session) -> String {
@@ -98,8 +106,9 @@ impl DerivedSession {
     }
 
     fn into_session(self) -> Session {
+        let short_id = self.id.chars().take(8).collect::<String>();
         Session {
-            name: format!("history-{}", &self.id[..8]),
+            name: format!("history-{short_id}"),
             path: format!("history:{}", self.id),
             cwd: self.project,
             metrics: Metrics {
@@ -159,5 +168,17 @@ mod tests {
         assert!(!json.contains("/tmp/private/session.jsonl"));
         assert!(json.contains("project"));
         assert!(json.contains("gpt-5"));
+
+        let mut valid = DerivedSession::from_session(&session);
+        let mut short = valid.clone();
+        short.id = "x".to_string();
+        valid.id = "12345678".to_string();
+        let raw = serde_json::to_vec(&BTreeMap::from([
+            ("valid".to_string(), valid),
+            ("short".to_string(), short.clone()),
+        ]))
+        .unwrap();
+        assert_eq!(decode_records(&raw).len(), 1);
+        assert_eq!(short.into_session().name, "history-x");
     }
 }
