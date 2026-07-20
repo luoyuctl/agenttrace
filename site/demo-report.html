@@ -18,136 +18,140 @@ section{border:1px solid var(--line);background:rgba(16,20,25,.78);padding:20px;
 <main>
 <header>
 <div><div class="brand">agenttrace</div><h1>AI agent session overview</h1><p>Static report generated from local coding-agent traces.</p></div>
-<div class="meta">v0.7.0<br>500 Sessions<br><code>agenttrace --overview -f html</code></div>
+<div class="meta">v0.7.1<br>500 Sessions<br><code>agenttrace --overview -f html</code></div>
 </header>
 <div class="grid" aria-label="summary metrics">
-<div class="metric"><span>Sessions</span><strong>500</strong><p>182 Healthy / 316 Warning / 2 Critical</p></div>
-<div class="metric"><span>Total tokens</span><strong>4.0B</strong><p>+ live</p></div>
-<div class="metric"><span>Average health</span><strong>77.7</strong><p>Fleet quality score</p></div>
-<div class="metric"><span>Total estimated cost</span><strong>$2.6K</strong><p>Estimated session cost</p></div>
-<div class="metric "><span>Tool failures</span><strong>469/16066</strong><p>2.9% failure rate</p></div>
+<div class="metric"><span>Sessions</span><strong>500</strong><p>190 Healthy / 307 Warning / 3 Critical</p></div>
+<div class="metric"><span>Total tokens</span><strong>4.7B</strong><p>+ live</p></div>
+<div class="metric"><span>Average health</span><strong>77.9</strong><p>Fleet quality score</p></div>
+<div class="metric"><span>Total estimated cost</span><strong>$2.7K</strong><p>Estimated session cost</p></div>
+<div class="metric "><span>Tool failures</span><strong>544/16112</strong><p>3.4% failure rate</p></div>
 </div>
 <section><h2>Tool authority</h2>
 <p><strong>Highest category</strong>: <code>shell_exec</code></p>
 <table><caption>Authority category counts</caption><thead><tr><th>Authority category</th><th class="num">Count</th></tr></thead><tbody>
-<tr><td><code>read_only_files</code></td><td class="num">15597</td></tr>
-<tr><td><code>shell_exec</code></td><td class="num">469</td></tr>
+<tr><td><code>read_only_files</code></td><td class="num">15568</td></tr>
+<tr><td><code>shell_exec</code></td><td class="num">544</td></tr>
 </tbody></table>
 <p><strong>High-authority tools</strong>: <code>Shell</code></p>
 </section>
 <section><h2>Possible cost drivers</h2><table><thead><tr><th>Session</th><th>Evidence</th></tr></thead><tbody>
-<tr><td>Local session 1</td><td>possible driver: 801.4K tokens per assistant turn across 1 turn(s)</td></tr>
-<tr><td>Local session 2</td><td>possible driver: 11.1M tokens per assistant turn across 11 turn(s)</td></tr>
-<tr><td>Local session 3</td><td>possible driver: 2.5M tokens per assistant turn across 5 turn(s)</td></tr>
-<tr><td>Local session 4</td><td>possible driver: 1.5M tokens per assistant turn across 4 turn(s)</td></tr>
-<tr><td>Local session 5</td><td>possible driver: 4.7M tokens per assistant turn across 1 turn(s)</td></tr>
-<tr><td>Local session 6</td><td>possible driver: 1.2M tokens per assistant turn across 6 turn(s)</td></tr>
-<tr><td>Local session 8</td><td>possible driver: 3.0M tokens per assistant turn across 10 turn(s)</td></tr>
-<tr><td>Local session 9</td><td>possible driver: 32.1M tokens per assistant turn across 1 turn(s)</td></tr>
+<tr><td>Local session 2</td><td>possible driver: 100.0K tokens per assistant turn across 100 turn(s)</td></tr>
+<tr><td>Local session 4</td><td>possible driver: 339.9K tokens per assistant turn across 100 turn(s)</td></tr>
+<tr><td>Local session 6</td><td>possible driver: 57.2K tokens per assistant turn across 34 turn(s)</td></tr>
+<tr><td>Local session 8</td><td>possible driver: 33/100 failed tool result(s) (33.0%)</td></tr>
+<tr><td>Local session 9</td><td>possible driver: 697.8K tokens per assistant turn across 1 turn(s)</td></tr>
+<tr><td>Local session 12</td><td>possible driver: 234.9K tokens per assistant turn across 100 turn(s)</td></tr>
+<tr><td>Local session 14</td><td>possible driver: 62.4K tokens per assistant turn across 18 turn(s)</td></tr>
+<tr><td>Local session 15</td><td>possible driver: 23.8M tokens per assistant turn across 7 turn(s)</td></tr>
 </tbody></table></section>
-<section><h2>Health Trend</h2><p>Health score stable at 72</p></section>
+<section><h2>Health Trend</h2><p>Declining: 88→88</p></section>
 <section><h2>Incident timeline</h2>
 <table><thead><tr><th>Session</th><th>Signal</th><th>Evidence</th><th>Severity</th></tr></thead><tbody>
-<tr><td>Local session 1</td><td>Last milestone</td><td>1 assistant turn(s) completed over 6.7m</td><td>LOW</td></tr>
-<tr><td>Local session 1</td><td>Longest idle gap</td><td>404.0s gap between recorded events</td><td>HIGH</td></tr>
-<tr><td>Local session 1</td><td>Touched surface</td><td>1 unique tool(s), 1 total calls; top tool Read x1</td><td>LOW</td></tr>
-<tr><td>Local session 1</td><td>Burn divergence</td><td>801.4K tokens per assistant turn across 1 turn(s)</td><td>MEDIUM</td></tr>
-<tr><td>Local session 2</td><td>Last milestone</td><td>11 assistant turn(s) completed over 4h 41m</td><td>LOW</td></tr>
-<tr><td>Local session 2</td><td>Longest idle gap</td><td>16916.0s gap between recorded events</td><td>HIGH</td></tr>
-<tr><td>Local session 2</td><td>Touched surface</td><td>1 unique tool(s), 11 total calls; top tool Read x11</td><td>LOW</td></tr>
-<tr><td>Local session 2</td><td>Burn divergence</td><td>11.1M tokens per assistant turn across 11 turn(s)</td><td>MEDIUM</td></tr>
-<tr><td>Local session 3</td><td>Last milestone</td><td>5 assistant turn(s) completed over 38.8m</td><td>LOW</td></tr>
-<tr><td>Local session 3</td><td>Longest idle gap</td><td>2327.0s gap between recorded events</td><td>HIGH</td></tr>
-<tr><td>Local session 3</td><td>Touched surface</td><td>1 unique tool(s), 5 total calls; top tool Read x5</td><td>LOW</td></tr>
-<tr><td>Local session 3</td><td>Burn divergence</td><td>2.5M tokens per assistant turn across 5 turn(s)</td><td>MEDIUM</td></tr>
-<tr><td>Local session 4</td><td>Last milestone</td><td>4 assistant turn(s) completed over 51.2m</td><td>LOW</td></tr>
-<tr><td>Local session 4</td><td>Longest idle gap</td><td>3073.0s gap between recorded events</td><td>HIGH</td></tr>
-<tr><td>Local session 4</td><td>Touched surface</td><td>1 unique tool(s), 4 total calls; top tool Read x4</td><td>LOW</td></tr>
-<tr><td>Local session 4</td><td>Burn divergence</td><td>1.5M tokens per assistant turn across 4 turn(s)</td><td>MEDIUM</td></tr>
-<tr><td>Local session 5</td><td>Last milestone</td><td>1 assistant turn(s) completed over 5h 15m</td><td>LOW</td></tr>
-<tr><td>Local session 5</td><td>Longest idle gap</td><td>18935.0s gap between recorded events</td><td>HIGH</td></tr>
-<tr><td>Local session 5</td><td>Burn divergence</td><td>4.7M tokens per assistant turn across 1 turn(s)</td><td>MEDIUM</td></tr>
-<tr><td>Local session 6</td><td>Last milestone</td><td>6 assistant turn(s) completed over 30.7m</td><td>LOW</td></tr>
-<tr><td>Local session 6</td><td>Longest idle gap</td><td>1840.0s gap between recorded events</td><td>HIGH</td></tr>
-<tr><td>Local session 6</td><td>Touched surface</td><td>1 unique tool(s), 6 total calls; top tool Read x6</td><td>LOW</td></tr>
-<tr><td>Local session 6</td><td>Burn divergence</td><td>1.2M tokens per assistant turn across 6 turn(s)</td><td>MEDIUM</td></tr>
-<tr><td>Local session 7</td><td>Last milestone</td><td>1 assistant turn(s) completed over 2.3m</td><td>LOW</td></tr>
-<tr><td>Local session 7</td><td>Longest idle gap</td><td>140.0s gap between recorded events</td><td>MEDIUM</td></tr>
-<tr><td>Local session 8</td><td>Last milestone</td><td>10 assistant turn(s) completed over 1h 49m</td><td>LOW</td></tr>
-<tr><td>Local session 8</td><td>Longest idle gap</td><td>6545.0s gap between recorded events</td><td>HIGH</td></tr>
-<tr><td>Local session 8</td><td>Touched surface</td><td>1 unique tool(s), 10 total calls; top tool Read x10</td><td>LOW</td></tr>
-<tr><td>Local session 8</td><td>Burn divergence</td><td>3.0M tokens per assistant turn across 10 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>Local session 1</td><td>Last milestone</td><td>9 assistant turn(s) completed over 2.0m</td><td>LOW</td></tr>
+<tr><td>Local session 1</td><td>Longest idle gap</td><td>118.0s gap between recorded events</td><td>MEDIUM</td></tr>
+<tr><td>Local session 1</td><td>Touched surface</td><td>1 unique tool(s), 9 total calls; top tool Read x9</td><td>LOW</td></tr>
+<tr><td>Local session 2</td><td>Last milestone</td><td>100 assistant turn(s) completed over 48.4m</td><td>LOW</td></tr>
+<tr><td>Local session 2</td><td>Longest idle gap</td><td>2902.0s gap between recorded events</td><td>HIGH</td></tr>
+<tr><td>Local session 2</td><td>Failure loop</td><td>13 failed tool result(s) out of 100 (13.0%)</td><td>MEDIUM</td></tr>
+<tr><td>Local session 2</td><td>Touched surface</td><td>2 unique tool(s), 100 total calls; top tool Read x87</td><td>LOW</td></tr>
+<tr><td>Local session 2</td><td>Burn divergence</td><td>100.0K tokens per assistant turn across 100 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>Local session 3</td><td>Last milestone</td><td>14 assistant turn(s) completed over 49s</td><td>LOW</td></tr>
+<tr><td>Local session 3</td><td>Longest idle gap</td><td>49.0s gap between recorded events</td><td>LOW</td></tr>
+<tr><td>Local session 3</td><td>Touched surface</td><td>1 unique tool(s), 14 total calls; top tool Read x14</td><td>LOW</td></tr>
+<tr><td>Local session 4</td><td>Last milestone</td><td>100 assistant turn(s) completed over 1h 14m</td><td>LOW</td></tr>
+<tr><td>Local session 4</td><td>Longest idle gap</td><td>4440.0s gap between recorded events</td><td>HIGH</td></tr>
+<tr><td>Local session 4</td><td>Failure loop</td><td>14 failed tool result(s) out of 100 (14.0%)</td><td>MEDIUM</td></tr>
+<tr><td>Local session 4</td><td>Touched surface</td><td>2 unique tool(s), 100 total calls; top tool Read x86</td><td>LOW</td></tr>
+<tr><td>Local session 4</td><td>Burn divergence</td><td>339.9K tokens per assistant turn across 100 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>Local session 5</td><td>Last milestone</td><td>26 assistant turn(s) completed over 1.7m</td><td>LOW</td></tr>
+<tr><td>Local session 5</td><td>Longest idle gap</td><td>101.0s gap between recorded events</td><td>MEDIUM</td></tr>
+<tr><td>Local session 5</td><td>Touched surface</td><td>2 unique tool(s), 26 total calls; top tool Read x25</td><td>LOW</td></tr>
+<tr><td>Local session 5</td><td>Burn divergence</td><td>12.5K tokens per assistant turn across 26 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>Local session 6</td><td>Last milestone</td><td>34 assistant turn(s) completed over 7.9m</td><td>LOW</td></tr>
+<tr><td>Local session 6</td><td>Longest idle gap</td><td>473.0s gap between recorded events</td><td>HIGH</td></tr>
+<tr><td>Local session 6</td><td>Failure loop</td><td>5 failed tool result(s) out of 34 (14.7%)</td><td>MEDIUM</td></tr>
+<tr><td>Local session 6</td><td>Touched surface</td><td>2 unique tool(s), 34 total calls; top tool Read x29</td><td>LOW</td></tr>
+<tr><td>Local session 6</td><td>Burn divergence</td><td>57.2K tokens per assistant turn across 34 turn(s)</td><td>MEDIUM</td></tr>
+<tr><td>Local session 7</td><td>Last milestone</td><td>51 assistant turn(s) completed over 1.7m</td><td>LOW</td></tr>
+<tr><td>Local session 7</td><td>Longest idle gap</td><td>102.0s gap between recorded events</td><td>MEDIUM</td></tr>
+<tr><td>Local session 7</td><td>Touched surface</td><td>1 unique tool(s), 51 total calls; top tool Read x51</td><td>LOW</td></tr>
+<tr><td>Local session 8</td><td>Last milestone</td><td>100 assistant turn(s) completed over 1h 6m</td><td>LOW</td></tr>
+<tr><td>Local session 8</td><td>Longest idle gap</td><td>4018.0s gap between recorded events</td><td>HIGH</td></tr>
+<tr><td>Local session 8</td><td>Failure loop</td><td>33 failed tool result(s) out of 100 (33.0%)</td><td>HIGH</td></tr>
+<tr><td>Local session 8</td><td>Touched surface</td><td>2 unique tool(s), 100 total calls; top tool Read x67</td><td>LOW</td></tr>
+<tr><td>Local session 8</td><td>Burn divergence</td><td>396.4K tokens per assistant turn across 100 turn(s)</td><td>MEDIUM</td></tr>
 </tbody></table>
 </section>
 <section><h2>Recent sessions</h2><table><thead><tr><th>Session</th><th>Source</th><th>Model</th><th class="num">Total tokens</th><th class="num">Cost</th><th class="num">Health</th><th class="num">Anomalies</th></tr></thead><tbody>
-<tr><td>Local session 1</td><td>Codex CLI</td><td>gpt-5.6-sol</td><td class="num">801.4K</td><td class="num">$0.7107</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 2</td><td>Codex CLI</td><td>gpt-5.6-sol</td><td class="num">121.8M</td><td class="num">$18.16</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 3</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">12.3M</td><td class="num">$4.7401</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 4</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">6.1M</td><td class="num">$1.1556</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 5</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">4.7M</td><td class="num">$1.5482</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 6</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">7.5M</td><td class="num">$1.0671</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 7</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">1.1K</td><td class="num">$0.0033</td><td class="num health-good">88</td><td class="num">1</td></tr>
-<tr><td>Local session 8</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">30.5M</td><td class="num">$6.3198</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 9</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">32.1M</td><td class="num">$2.8116</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 10</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">2.5M</td><td class="num">$0.7959</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 11</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">1.1M</td><td class="num">$0.5281</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 12</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">6.0M</td><td class="num">$2.0965</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 13</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">4.8M</td><td class="num">$1.5469</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 14</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">747.8K</td><td class="num">$0.5526</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 15</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">4.7M</td><td class="num">$1.4864</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 16</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">7.9M</td><td class="num">$2.0678</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 17</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">51.3M</td><td class="num">$11.71</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 18</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">2.0M</td><td class="num">$0.6909</td><td class="num health-good">88</td><td class="num">1</td></tr>
-<tr><td>Local session 19</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">1.4M</td><td class="num">$0.6791</td><td class="num health-warn">70</td><td class="num">1</td></tr>
-<tr><td>Local session 20</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">24.5M</td><td class="num">$5.3941</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 1</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">60.9K</td><td class="num">$0.1485</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>Local session 2</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">10.0M</td><td class="num">$3.8721</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 3</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">131.8K</td><td class="num">$0.2018</td><td class="num health-good">96</td><td class="num">1</td></tr>
+<tr><td>Local session 4</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">34.0M</td><td class="num">$3.4415</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 5</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">326.2K</td><td class="num">$0.3335</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>Local session 6</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">1.9M</td><td class="num">$0.3393</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 7</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">468.4K</td><td class="num">$0.4137</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>Local session 8</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">39.6M</td><td class="num">$10.20</td><td class="num health-bad">40</td><td class="num">2</td></tr>
+<tr><td>Local session 9</td><td>Codex CLI</td><td>gpt-5.6-sol</td><td class="num">697.8K</td><td class="num">$0.5859</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>Local session 10</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">185.9K</td><td class="num">$0.3003</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>Local session 11</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">439.1K</td><td class="num">$0.5267</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>Local session 12</td><td>Pi</td><td>gpt-5.6-terra</td><td class="num">23.5M</td><td class="num">$4.6641</td><td class="num health-warn">58</td><td class="num">2</td></tr>
+<tr><td>Local session 13</td><td>Pi</td><td>gpt-5.6-sol</td><td class="num">555.2K</td><td class="num">$0.1567</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>Local session 14</td><td>Pi</td><td>gpt-5.6-sol</td><td class="num">1.1M</td><td class="num">$0.4647</td><td class="num health-good">88</td><td class="num">1</td></tr>
+<tr><td>Local session 15</td><td>Codex CLI</td><td>gpt-5.6-sol</td><td class="num">166.6M</td><td class="num">$28.35</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 16</td><td>Codex CLI</td><td>gpt-5.6-sol</td><td class="num">165.9M</td><td class="num">$28.08</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 17</td><td>Codex CLI</td><td>gpt-5.6-sol</td><td class="num">165.5M</td><td class="num">$27.97</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 18</td><td>Codex CLI</td><td>gpt-5.6-sol</td><td class="num">801.4K</td><td class="num">$0.7107</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 19</td><td>Codex CLI</td><td>gpt-5.6-sol</td><td class="num">222.8M</td><td class="num">$36.16</td><td class="num health-warn">70</td><td class="num">1</td></tr>
+<tr><td>Local session 20</td><td>Codex CLI</td><td>gpt-5.6-luna</td><td class="num">12.3M</td><td class="num">$4.7401</td><td class="num health-warn">70</td><td class="num">1</td></tr>
 </tbody></table></section>
 <section><h2>By agent</h2><table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>
-<tr><td>Codex CLI</td><td class="num">215</td><td class="num">$1.9K</td></tr>
+<tr><td>Codex CLI</td><td class="num">215</td><td class="num">$2.0K</td></tr>
 <tr><td>Claude Code</td><td class="num">115</td><td class="num">$319.56</td></tr>
-<tr><td>Pi</td><td class="num">102</td><td class="num">$246.88</td></tr>
-<tr><td>Hermes Agent (DB)</td><td class="num">52</td><td class="num">$23.62</td></tr>
+<tr><td>Pi</td><td class="num">109</td><td class="num">$269.68</td></tr>
+<tr><td>Hermes Agent (DB)</td><td class="num">45</td><td class="num">$23.03</td></tr>
 <tr><td>workbuddy</td><td class="num">8</td><td class="num">$0.5499</td></tr>
 <tr><td>OpenCode (DB)</td><td class="num">5</td><td class="num">$26.50</td></tr>
 <tr><td>Generic JSON/JSONL</td><td class="num">3</td><td class="num">$0.0000</td></tr>
 </tbody></table></section>
 <section><h2>By model</h2><table><thead><tr><th>Model</th><th class="num">Sessions</th><th class="num">Cost</th></tr></thead><tbody>
-<tr><td>gpt-5.5</td><td class="num">149</td><td class="num">$1.7K</td></tr>
+<tr><td>gpt-5.5</td><td class="num">145</td><td class="num">$1.7K</td></tr>
 <tr><td>glm-5.2</td><td class="num">83</td><td class="num">$359.35</td></tr>
 <tr><td>gpt-5.6-luna</td><td class="num">43</td><td class="num">$197.86</td></tr>
+<tr><td>gpt-5.6-sol</td><td class="num">22</td><td class="num">$164.05</td></tr>
 <tr><td>mimo-v2.5-pro-ultraspeed</td><td class="num">89</td><td class="num">$150.86</td></tr>
-<tr><td>gpt-5.6-sol</td><td class="num">16</td><td class="num">$60.43</td></tr>
 <tr><td>claude-opus-4-8</td><td class="num">2</td><td class="num">$47.10</td></tr>
+<tr><td>gpt-5.6-terra</td><td class="num">14</td><td class="num">$28.36</td></tr>
 <tr><td>gpt-5.4</td><td class="num">5</td><td class="num">$14.64</td></tr>
-<tr><td>kimi-k2.7-code</td><td class="num">12</td><td class="num">$12.56</td></tr>
 <tr><td>claude-sonnet-5</td><td class="num">18</td><td class="num">$11.28</td></tr>
+<tr><td>kimi-k2.7-code</td><td class="num">9</td><td class="num">$9.7057</td></tr>
 <tr><td>kimi-k2.7-code-highspeed</td><td class="num">9</td><td class="num">$7.4208</td></tr>
-<tr><td>gpt-5.6-terra</td><td class="num">3</td><td class="num">$3.9158</td></tr>
 <tr><td>deepseek-v4-pro</td><td class="num">8</td><td class="num">$0.9617</td></tr>
 </tbody></table></section>
 <section><h2>Recent anomalies</h2>
 <table><thead><tr><th>Session</th><th>Type</th><th>Age</th></tr></thead><tbody>
-<tr><td>Local session 1</td><td>hanging</td><td>now</td></tr>
-<tr><td>Local session 10</td><td>hanging</td><td>now</td></tr>
-<tr><td>Local session 100</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 101</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 102</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 104</td><td>hanging</td><td>now</td></tr>
-<tr><td>Local session 105</td><td>hanging</td><td>now</td></tr>
-<tr><td>Local session 106</td><td>hanging</td><td>now</td></tr>
-<tr><td>Local session 11</td><td>hanging</td><td>now</td></tr>
-<tr><td>Local session 110</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 108</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 109</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 111</td><td>hanging</td><td>now</td></tr>
-<tr><td>Local session 114</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 112</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 116</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 117</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 118</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 119</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 12</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 121</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 122</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 123</td><td>hanging</td><td>now</td></tr>
-<tr><td>Local session 125</td><td>hanging</td><td>now</td></tr>
 <tr><td>Local session 127</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 128</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 131</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 134</td><td>hanging</td><td>now</td></tr>
+<tr><td>Local session 135</td><td>hanging</td><td>now</td></tr>
 </tbody></table>
 </section>
-</main>
+<section><h2>Scope and confidence</h2><table><tbody><tr><th>Range</th><td>all</td></tr><tr><th>Session window</th><td>2026-06-14T06:58:55Z → 2026-07-19T22:59:00Z</td></tr><tr><th>Parse coverage</th><td>500/500 parsed; 0 skipped; 0 cache hits</td></tr><tr><th>Confidence</th><td>low</td></tr><tr><th>Pricing</th><td>LiteLLM (stale cache 2026-05-04 21:41)</td></tr></tbody></table></section><section><h2>Prioritized recommendations</h2><table><thead><tr><th>Priority</th><th>Finding</th><th>Impact</th><th>Action</th></tr></thead><tbody><tr><td>P1</td><td>tool_failure: Tool failures increase wall time and often precede repeated work.</td><td>$10.6791; 0 tokens; high</td><td>Inspect arguments and results, then change the approach instead of retrying unchanged calls.</td></tr><tr><td>P1</td><td>latency: A tool exceeded the latency threshold or returned without a result.</td><td>$0.5653; 0 tokens; high</td><td>Set a timeout and batch independent work instead of serial retries.</td></tr><tr><td>P2</td><td>retry_loop: 99 repeated tool events or loop group(s) were detected.</td><td>$2.2350; 0 tokens; medium</td><td>Stop after two unchanged failures; inspect the failure boundary before retrying.</td></tr></tbody></table></section></main>
 </body>
 </html>
