@@ -47,7 +47,7 @@ It helps you answer:
 
 ## Real local run
 
-These screenshots and figures are a redacted sample of the latest 500 real local sessions captured for the v0.7.0 source tree. They are not `--demo` output, current telemetry, or test fixtures.
+These screenshots and figures are a redacted sample of the latest 500 real local sessions captured for the v0.7.1 source tree. They are not `--demo` output, current telemetry, or test fixtures.
 
 ```bash
 agenttrace
@@ -64,7 +64,7 @@ agenttrace
 That local run found:
 
 ```text
-AGENTTRACE v0.7.0
+AGENTTRACE v0.7.1
 ```
 
 | Signal | What agenttrace found |
@@ -79,7 +79,7 @@ AGENTTRACE v0.7.0
 ## Install
 
 The commands below install the latest public channel, which can lag behind the
-`v0.7.0` source tree until its release assets and tap formula are published.
+`v0.7.1` source tree until its release assets and tap formula are published.
 Check the installed version with `agenttrace --version`. To test the current
 source tree, use the Git-based Cargo command below.
 

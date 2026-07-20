@@ -47,7 +47,7 @@ AI 编程 Agent 越来越像一套小型构建系统：会调用工具、重试�
 
 ## 真实本机运行
 
-以下截图和数字来自为 v0.7.0 源码树采集的最新 500 条真实本机会话脱敏样本，不是当前遥测数据，也不是测试 fixture。
+以下截图和数字来自为 v0.7.1 源码树采集的最新 500 条真实本机会话脱敏样本，不是当前遥测数据，也不是测试 fixture。
 
 ```bash
 agenttrace
@@ -70,8 +70,8 @@ agenttrace
 
 ## 安装
 
-以下命令安装当前公开渠道版本；在 v0.7.0 Release 资产和 Homebrew Formula
-发布前，它们可能落后于 v0.7.0 源码树。可用 `agenttrace --version` 检查实际版本；
+以下命令安装当前公开渠道版本；在 v0.7.1 Release 资产和 Homebrew Formula
+发布前，它们可能落后于 v0.7.1 源码树。可用 `agenttrace --version` 检查实际版本；
 如需体验当前源码树，请使用下面的 Git Cargo 安装命令。
 
 ```bash
