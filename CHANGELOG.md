@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.1 - 2026-07-20
+
+### Changed
+
+- Refreshed the redacted real-local-run GIF, TUI screenshots, and static HTML overview evidence for the v0.7.1 release surface.
+- Updated release-facing metadata across the CLI, plugin, Homebrew Formula, README, Pages, and sample report.
+
 ## v0.7.0 - 2026-07-19
 
 ### Added
