@@ -128,7 +128,7 @@ jobs:
             fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
           '
           cd npm
-          npm pack --pack-destination ../dist
+          npm pack --pack-destination ../dist --json > ../dist/npm-pack.json
 
       - name: Configure npm registry authentication
         env:
@@ -142,7 +142,7 @@ jobs:
 
       - name: Publish npm launcher
         run: |
-          npm publish "./dist/agenttrace-${GITHUB_REF_NAME#v}.tgz" --access public
+          npm publish "./dist/$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("dist/npm-pack.json", "utf8"))[0].filename)')" --access public
 
       - name: Render Homebrew and WinGet manifests
         run: |

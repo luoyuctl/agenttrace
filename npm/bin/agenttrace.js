@@ -13,7 +13,7 @@ const executable = join(
 
 if (!existsSync(executable)) {
 	console.error(
-		"agenttrace could not find its platform binary. Reinstall it with `npm install -g agenttrace`.",
+		"agenttrace could not find its platform binary. Reinstall it with `npm install -g @luoyuctl/agenttrace`.",
 	);
 	process.exit(1);
 }

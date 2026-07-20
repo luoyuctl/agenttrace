@@ -5,7 +5,7 @@
 ## Install
 
 ```bash
-npm install -g agenttrace
+npm install -g @luoyuctl/agenttrace
 agenttrace
 ```
 

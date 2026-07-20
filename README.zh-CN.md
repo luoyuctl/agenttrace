@@ -79,7 +79,7 @@ agenttrace
 brew install luoyuctl/tap/agenttrace
 
 # macOS、Linux 和 Windows（需要 Node.js 18+）
-npm install -g agenttrace
+npm install -g @luoyuctl/agenttrace
 ```
 
 Windows：

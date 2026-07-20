@@ -1,5 +1,5 @@
 {
-  "name": "agenttrace",
+  "name": "@luoyuctl/agenttrace",
   "version": "0.0.0-release",
   "description": "Local-first TUI and reports for AI coding-agent session history, cost, tokens, time, and slow-run diagnosis.",
   "license": "MIT",

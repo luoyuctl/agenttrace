@@ -88,7 +88,7 @@ version with `agenttrace --version`.
 brew install luoyuctl/tap/agenttrace
 
 # macOS, Linux, and Windows (requires Node.js 18+)
-npm install -g agenttrace
+npm install -g @luoyuctl/agenttrace
 ```
 
 Windows:
