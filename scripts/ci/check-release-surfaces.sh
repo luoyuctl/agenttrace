@@ -30,12 +30,12 @@ grep -q "brew install luoyuctl/tap/agenttrace" README.md ||
 	fail "README must document Homebrew installation"
 grep -q "winget install --id Luoyuctl.AgentTrace --exact" README.md ||
 	fail "README must document WinGet installation"
-grep -q "npm install -g agenttrace" README.md ||
+grep -q "npm install -g @zack78/agenttrace" README.md ||
 	fail "README must document npm installation"
-grep -q "npm install -g agenttrace" README.zh-CN.md ||
+grep -q "npm install -g @zack78/agenttrace" README.zh-CN.md ||
 	fail "README.zh-CN must document npm installation"
-grep -q '"name": "agenttrace"' npm/package.json ||
-	fail "npm package must use the agenttrace name"
+grep -q '"name": "@zack78/agenttrace"' npm/package.json ||
+	fail "npm package must use the @zack78/agenttrace name"
 grep -q '"postinstall": "node scripts/install.js"' npm/package.json ||
 	fail "npm package must install the matching native release binary"
 grep -q '"access": "public"' npm/package.json ||

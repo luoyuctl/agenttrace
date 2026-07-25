@@ -5,7 +5,7 @@
 ## Install
 
 ```bash
-npm install -g agenttrace
+npm install -g @zack78/agenttrace
 agenttrace
 ```
 

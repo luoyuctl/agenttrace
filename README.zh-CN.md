@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Rust-stable-f74c00.svg" alt="Rust">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
   <a href="https://github.com/luoyuctl/homebrew-tap"><img src="https://img.shields.io/badge/Homebrew-tap-2bbc8a.svg" alt="Homebrew tap"></a>
-  <a href="https://www.npmjs.com/package/agenttrace"><img src="https://img.shields.io/npm/v/agenttrace?label=npm" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/@zack78/agenttrace"><img src="https://img.shields.io/npm/v/@zack78/agenttrace?label=npm" alt="npm"></a>
   <a href="https://github.com/microsoft/winget-pkgs"><img src="https://img.shields.io/badge/WinGet-Luoyuctl.AgentTrace-0078D4.svg" alt="WinGet"></a>
 </p>
 
@@ -79,7 +79,7 @@ agenttrace
 brew install luoyuctl/tap/agenttrace
 
 # macOS、Linux 和 Windows（需要 Node.js 18+）
-npm install -g agenttrace
+npm install -g @zack78/agenttrace
 ```
 
 Windows：

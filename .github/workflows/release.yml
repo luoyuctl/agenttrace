@@ -142,7 +142,7 @@ jobs:
 
       - name: Publish npm launcher
         run: |
-          npm publish "./dist/agenttrace-${GITHUB_REF_NAME#v}.tgz" --access public
+          npm publish "./dist/zack78-agenttrace-${GITHUB_REF_NAME#v}.tgz" --access public
 
       - name: Render Homebrew and WinGet manifests
         run: |

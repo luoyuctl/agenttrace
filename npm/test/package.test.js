@@ -7,7 +7,7 @@ const packageRoot = join(__dirname, "..");
 const manifest = require(join(packageRoot, "package.json"));
 
 test("publishes one agenttrace command backed by the native installer", () => {
-	assert.equal(manifest.name, "agenttrace");
+	assert.equal(manifest.name, "@zack78/agenttrace");
 	assert.equal(manifest.bin.agenttrace, "bin/agenttrace.js");
 	assert.equal(manifest.scripts.postinstall, "node scripts/install.js");
 	assert.equal(manifest.publishConfig.access, "public");
@@ -27,6 +27,9 @@ test("publishes one agenttrace command backed by the native installer", () => {
 		join(packageRoot, "..", ".github", "workflows", "release.yml"),
 		"utf8",
 	);
-	assert.match(releaseWorkflow, /npm config set \/\/registry\.npmjs\.org\/:_authToken/);
-	assert.match(releaseWorkflow, /npm publish "\.\/dist\/agenttrace-/);
+	assert.match(
+		releaseWorkflow,
+		/npm config set \/\/registry\.npmjs\.org\/:_authToken/,
+	);
+	assert.match(releaseWorkflow, /npm publish "\.\/dist\/zack78-agenttrace-/);
 });
