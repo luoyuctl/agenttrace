@@ -21,8 +21,6 @@ mkdir -p "$out_dir/docs"
 "$bin" --demo --search internal/ws -f json >"$out_dir/docs/search.json"
 "$bin" --demo --overview -f markdown -o "$out_dir/docs/overview.md" >/tmp/agenttrace-docs-md.stdout
 "$bin" --demo --overview -f html -o "$out_dir/docs/overview.html" >/tmp/agenttrace-docs-html.stdout
-python3 scripts/generate-testdata.py --check
-
 for path in "$out_dir"/docs/*.json; do
   node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$path" \
     || fail "invalid JSON from documented command: $path"

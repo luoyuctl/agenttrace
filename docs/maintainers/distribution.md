@@ -39,6 +39,6 @@ Run the local Rust release gate before tagging:
 scripts/ci/check-rust-release-local.sh
 ```
 
-It validates formatting, linting, tests, build output, generated fixtures, report contracts, release surfaces, Pages assets, Homebrew syntax, helper scripts, and real-data smoke paths.
+It validates formatting, linting, tests, build output, parser fixtures, report contracts, release surfaces, Homebrew syntax, helper scripts, and real-data smoke paths.
 
 For public-facing changes, follow the protected-surface rules in [AgentOps prompt rules](agentops-prompt-rules.md).

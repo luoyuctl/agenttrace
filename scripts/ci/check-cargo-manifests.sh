@@ -5,13 +5,13 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
 fail() {
-  echo "check-cargo-manifests: $*" >&2
-  exit 1
+	echo "check-cargo-manifests: $*" >&2
+	exit 1
 }
 
 metadata_file="$(mktemp "${TMPDIR:-/tmp}/agenttrace-cargo-metadata.XXXXXX")"
 cleanup() {
-  rm -f "$metadata_file"
+	rm -f "$metadata_file"
 }
 trap cleanup EXIT
 
@@ -23,7 +23,7 @@ const metadata = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const required = {
   description: "Local-first TUI and reports for AI coding-agent session history, cost, tokens, time, and slow-run diagnosis.",
   repository: "https://github.com/luoyuctl/agenttrace",
-  homepage: "https://luoyuctl.github.io/agenttrace/",
+  homepage: "https://github.com/luoyuctl/agenttrace",
   license: "MIT",
   rust_version: "1.80",
 };

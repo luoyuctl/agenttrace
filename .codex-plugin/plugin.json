@@ -6,7 +6,7 @@
     "name": "luoyuctl",
     "url": "https://github.com/luoyuctl"
   },
-  "homepage": "https://luoyuctl.github.io/agenttrace/",
+  "homepage": "https://github.com/luoyuctl/agenttrace",
   "repository": "https://github.com/luoyuctl/agenttrace",
   "license": "MIT",
   "keywords": [
@@ -29,7 +29,7 @@
       "Interactive",
       "Read"
     ],
-    "websiteURL": "https://luoyuctl.github.io/agenttrace/",
+    "websiteURL": "https://github.com/luoyuctl/agenttrace",
     "privacyPolicyURL": "https://github.com/luoyuctl/agenttrace/blob/master/PRIVACY.md",
     "termsOfServiceURL": "https://github.com/luoyuctl/agenttrace/blob/master/LICENSE",
     "defaultPrompt": [

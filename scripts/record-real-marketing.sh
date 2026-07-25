@@ -79,9 +79,6 @@ exec "$tmpdir/agenttrace-bin" -d "$snapshot" "\$@"
 EOF
 chmod +x "$tmpdir/agenttrace"
 
-agenttrace --overview -f html -o site/demo-report.html >/dev/null
-perl -0pi -e 's/\n+\z/\n/' site/demo-report.html
-
 record_env=(env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor CLICOLOR_FORCE=1 FORCE_COLOR=1)
 "${record_env[@]}" vhs docs/demos/real-run.tape
 

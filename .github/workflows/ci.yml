@@ -38,14 +38,11 @@ jobs:
       - name: Rust tests
         run: cargo test -p agenttrace-core -p agenttrace-tui -p agenttrace
 
-      - name: Generated testdata is current
-        run: python3 scripts/generate-testdata.py --check
-
       - name: Build CLI
         run: cargo build --release -p agenttrace
 
       - name: Single binary CLI and TUI entrypoints
-        run: python3 scripts/ci/check-single-binary-entrypoints.py
+        run: cargo test -p agenttrace --test entrypoints
 
       - name: Demo and report output contract
         run: |
@@ -73,9 +70,6 @@ jobs:
           AGENTTRACE_BIN=target/release/agenttrace \
           AGENTTRACE_CI_OUT=ci-artifacts \
             scripts/ci/check-docs-commands.sh
-
-      - name: Pages source artifact check
-        run: scripts/ci/check-pages-artifact.sh site
 
       - name: Rust CLI fixture smoke
         run: |

@@ -8,7 +8,7 @@ The Rust migration is complete in the `v0.6.0` source tree. Rust is the only imp
 
 - `cmd/`, `internal/`, `go.mod`, and `go.sum` were removed.
 - Go golden generation and Go/Rust parity scripts were removed.
-- CI, release, install, Homebrew, docs, and Pages checks use Rust/Cargo surfaces only.
+- CI, release, install, Homebrew, and docs checks use Rust/Cargo surfaces only.
 - The local release gate no longer invokes `go`.
 - Real local-data coverage is kept through `scripts/ci/check-rust-real-cli-smoke.sh` and `scripts/ci/check-rust-tui-real-smoke.sh`.
 
@@ -31,7 +31,6 @@ AGENTTRACE_BIN="$PWD/target/release/agenttrace" scripts/ci/check-report-semantic
 AGENTTRACE_BIN="$PWD/target/release/agenttrace" scripts/ci/check-docs-commands.sh
 AGENTTRACE_BIN="$PWD/target/release/agenttrace" scripts/ci/check-rust-real-cli-smoke.sh
 scripts/ci/check-release-surfaces.sh
-scripts/ci/check-pages-artifact.sh site
 ruby -c homebrew/Formula/agenttrace.rb
 bash -n scripts/record-demo.sh scripts/record-real-marketing.sh scripts/ci/*.sh
 AGENTTRACE_BIN="$PWD/target/release/agenttrace" scripts/ci/check-rust-tui-real-smoke.sh

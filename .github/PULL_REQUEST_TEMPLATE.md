@@ -19,7 +19,6 @@ What changed and why?
 - [ ] `scripts/ci/check-report-semantics.sh`
 - [ ] `scripts/ci/check-release-surfaces.sh`
 - [ ] `scripts/ci/check-docs-commands.sh`
-- [ ] `scripts/ci/check-pages-artifact.sh site`
 - [ ] `AGENTTRACE_BIN="$PWD/target/release/agenttrace" scripts/ci/check-rust-real-cli-smoke.sh`
 - [ ] `AGENTTRACE_BIN="$PWD/target/release/agenttrace" scripts/ci/check-rust-tui-real-smoke.sh`
 - [ ] `scripts/ci/check-rust-release-local.sh`

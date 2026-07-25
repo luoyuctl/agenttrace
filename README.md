@@ -14,7 +14,6 @@
 
 <p align="center">
   <a href="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml"><img src="https://github.com/luoyuctl/agenttrace/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://luoyuctl.github.io/agenttrace/"><img src="https://img.shields.io/badge/site-agenttrace-54ff00.svg" alt="Site"></a>
   <a href="https://github.com/luoyuctl/agenttrace/releases/latest"><img src="https://img.shields.io/github/v/release/luoyuctl/agenttrace?color=00ADD8" alt="Release"></a>
   <img src="https://img.shields.io/badge/Rust-stable-f74c00.svg" alt="Rust">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
@@ -168,8 +167,6 @@ a commit reached `main`.
 
 ## Docs
 
-- Site: <https://luoyuctl.github.io/agenttrace/>
-- Sample HTML report: <https://luoyuctl.github.io/agenttrace/demo-report.html>
 - Documentation index: [docs/README.md](docs/README.md)
 - CI setup: [docs/guides/ci-integration.md](docs/guides/ci-integration.md)
 - Governance reports: [docs/guides/governance-reports.md](docs/guides/governance-reports.md)
@@ -192,18 +189,10 @@ Parser PRs are welcome. A good parser contribution usually includes:
 - role, timestamp, model, token usage, tool call, and tool error extraction
 - tests for successful parsing and malformed input
 
-Generated parser fixtures are deterministic:
-
-```bash
-python3 scripts/generate-testdata.py
-python3 scripts/generate-testdata.py --check
-```
-
 Run before sending a PR:
 
 ```bash
 cargo test
-python3 scripts/generate-testdata.py --check
 cargo build --release -p agenttrace
 target/release/agenttrace --doctor
 ```

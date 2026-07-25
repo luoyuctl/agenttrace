@@ -61,7 +61,6 @@ agenttrace --demo
 The pain point: when an agent gets stuck, retries a tool loop, or silently burns context, the output alone does not tell you what happened. agenttrace gives a quick local view before you dig through raw JSONL logs.
 
 Repo: https://github.com/luoyuctl/agenttrace
-Sample HTML report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
 ## Short Posts
 
@@ -86,7 +85,6 @@ Would love feedback from anyone using Claude Code, Codex CLI, Gemini CLI, Qwen C
 Repo: https://github.com/luoyuctl/agenttrace
 
 Feedback thread: https://github.com/luoyuctl/agenttrace/discussions/2
-Sample report: https://luoyuctl.github.io/agenttrace/demo-report.html
 
 ## Target Channels
 
@@ -310,7 +308,7 @@ Manual-only / blocked / stale follow-up:
 - brandonhimpfen/awesome-ai-coding-agents: closed without merge https://github.com/brandonhimpfen/awesome-ai-coding-agents/pull/11.
 - awesome-cli-apps: PR https://github.com/agarrharr/awesome-cli-apps/pull/1032 was closed without maintainer feedback. Revisit after more external adoption or a clearer category fit.
 - awesome-tuis: blocked until the repo is at least 6 months old; its PR template requires repos to be at least 6 months old, and follow-up PR https://github.com/rothgar/awesome-tuis/pull/659 was closed after reviewer feedback.
-- Terminal Trove: submit through https://terminaltrove.com/post/ after confirming the author contact email. Suggested categories: `macos`, `linux`, `windows`, `monitoring`, `observability`, `tui`, `json`, `ai`, `cli`, `debugging`, `cross-platform`. Preview PNG: `https://luoyuctl.github.io/agenttrace/assets/readme-real-overview.png`; GIF: `https://luoyuctl.github.io/agenttrace/assets/agenttrace-demo.gif`.
+- Terminal Trove: submit through https://terminaltrove.com/post/ after confirming the author contact email. Suggested categories: `macos`, `linux`, `windows`, `monitoring`, `observability`, `tui`, `json`, `ai`, `cli`, `debugging`, `cross-platform`.
 - Terminal Apps: submitted suggestion issue https://github.com/scmmishra/terminal-apps.dev/issues/55. Name: `agenttrace`; GitHub URL: `https://github.com/luoyuctl/agenttrace`.
 - awesome-ai-coding-techniques: submitted technique suggestion https://github.com/inmve/awesome-ai-coding-techniques/issues/37. Suggested technique: inspect AI agent session traces after a run. Followed up on semantic-drift feedback in https://github.com/inmve/awesome-ai-coding-techniques/issues/37#issuecomment-4414284882.
 - awesome-hermes-agent: submitted resource recommendation issue https://github.com/0xNyk/awesome-hermes-agent/issues/67. Suggested category: agentskills.io Ecosystem or Tools & Utilities.
@@ -376,7 +374,6 @@ AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-output-contract.sh
 AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-deterministic-output.sh
 AGENTTRACE_BIN=/tmp/agenttrace scripts/ci/check-report-semantics.sh
 scripts/ci/check-release-surfaces.sh
-scripts/ci/check-pages-artifact.sh site
 ```
 
 ## Release Consistency Checklist
@@ -386,7 +383,6 @@ Before sharing a release publicly, compare these surfaces against `gh release li
 - README release links point at the latest public release, while the Homebrew
   badge remains version-neutral until the tap is verified separately.
 - `homebrew/Formula/agenttrace.rb` and `homebrew/README.md` match the current install story.
-- `site/index.html` JSON-LD `softwareVersion`, `site/demo-report.html`, `site/llms.txt`, `site/robots.txt`, and `site/sitemap.xml` remain present and version-consistent where they mention a release.
 - GitHub Discussions, release notes, and launch copy do not point readers at stale release links.
 - Public CTAs use neutral product actions such as `Get agenttrace`, `Install`, or `Latest release`.
 

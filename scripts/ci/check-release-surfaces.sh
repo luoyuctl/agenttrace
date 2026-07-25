@@ -85,15 +85,15 @@ grep -q "gh release create" .github/workflows/release.yml ||
 	fail "release workflow must publish GitHub releases"
 
 if grep -R -Eqi "go install github.com/luoyuctl/agenttrace|go build .*cmd/agenttrace|setup-go|go-version-file" \
-	README.md README.zh-CN.md CONTRIBUTING.md docs/maintainers/launch-kit.md docs/maintainers/demo-playbook.md docs/guides/parser-guide.md docs/maintainers/agentops-prompt-rules.md install.sh install.ps1 .github homebrew site skills; then
+	README.md README.zh-CN.md CONTRIBUTING.md docs/maintainers/launch-kit.md docs/maintainers/demo-playbook.md docs/guides/parser-guide.md docs/maintainers/agentops-prompt-rules.md install.sh install.ps1 .github homebrew skills; then
 	fail "public release surfaces must not advertise Go build/install paths"
 fi
 
-if grep -R -Eqi "pkg.go.dev|goreportcard|img.shields.io/badge/go-" README.md README.zh-CN.md site docs/maintainers/launch-kit.md; then
+if grep -R -Eqi "pkg.go.dev|goreportcard|img.shields.io/badge/go-" README.md README.zh-CN.md docs/maintainers/launch-kit.md; then
 	fail "README badges must advertise the Rust default implementation, not Go"
 fi
 
-if grep -R -Eqi "built in Go|Bubble Tea terminal UI" README.md README.zh-CN.md site .codex-plugin skills; then
+if grep -R -Eqi "built in Go|Bubble Tea terminal UI" README.md README.zh-CN.md .codex-plugin skills; then
 	fail "public surfaces must describe the Rust ratatui implementation"
 fi
 
@@ -102,10 +102,6 @@ for asset in assets/readme-real-overview.png assets/readme-real-diagnostics.png;
 	grep -q "\"./$asset\"" .codex-plugin/plugin.json ||
 		fail "plugin manifest must reference existing screenshot $asset"
 done
-
-if grep -q "crates.io/crates/agenttrace" site/index.html; then
-	fail "site must not advertise crates.io before the crate exists"
-fi
 
 if grep -R -Eqi "setup-go|(^|[^[:alnum:]_/-])go[[:space:]]+build|GOOS|GOARCH" .github/workflows; then
 	fail "GitHub workflows must not use Go release/build matrix settings"

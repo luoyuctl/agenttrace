@@ -23,7 +23,6 @@ Run the relevant checks before opening a PR:
 cargo fmt --check
 cargo clippy -- -D warnings
 cargo test
-python3 scripts/generate-testdata.py --check
 cargo build --release -p agenttrace
 ruby -c homebrew/Formula/agenttrace.rb
 ```
@@ -47,13 +46,6 @@ A good parser PR includes:
 - extraction for role, timestamp, model, token usage, tool calls, and tool errors when available
 - regression tests for malformed or partial records
 - no private prompts, API keys, file paths, or proprietary source snippets
-
-Prefer deterministic generated fixtures for reusable provider samples:
-
-```bash
-python3 scripts/generate-testdata.py
-python3 scripts/generate-testdata.py --check
-```
 
 Do not make a fixture look more complete than the source format. Aggregate-only
 sources should remain Aggregate or Limited instead of receiving synthetic event

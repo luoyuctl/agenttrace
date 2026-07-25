@@ -32,12 +32,7 @@ Detection should be conservative. If the file could be a generic JSON/JSONL sess
 
 ## Add Tests
 
-Use small synthetic fixtures under `testdata/` or focused Rust tests in `crates/agenttrace-core/tests/`. Reusable synthetic provider fixtures live under `testdata/generated/` and are produced deterministically:
-
-```bash
-python3 scripts/generate-testdata.py
-python3 scripts/generate-testdata.py --check
-```
+Use small synthetic fixtures under `testdata/` or focused Rust tests in `crates/agenttrace-core/tests/`. Reusable synthetic provider fixtures live under `testdata/generated/` and are covered by Rust integration tests.
 
 Keep source capability honest: raw event formats may produce Detailed sessions;
 aggregate SQLite rows must not gain invented timestamps, tool spans, or content.
