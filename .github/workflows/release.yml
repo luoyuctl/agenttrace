@@ -6,8 +6,36 @@ on:
       - "v*"
 
 jobs:
+  verify:
+    name: Verify release sources
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-verify-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Rust tests
+        run: cargo test -p agenttrace-core -p agenttrace-tui -p agenttrace
+
   build:
     name: Build release assets
+    needs: verify
     permissions:
       contents: read
     runs-on: ${{ matrix.os }}
@@ -49,8 +77,14 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      - name: Verify
-        run: cargo test -p agenttrace-core -p agenttrace-tui -p agenttrace
+      - name: Cache Rust dependencies
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build
         shell: bash
@@ -87,6 +121,7 @@ jobs:
       attestations: write
       contents: write
       id-token: write
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -177,12 +212,14 @@ jobs:
 
       - name: Submit WinGet manifest
         env:
+          GH_TOKEN: ${{ github.token }}
           WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
         run: |
           test -n "$WINGET_GITHUB_TOKEN" || {
             echo "WINGET_GITHUB_TOKEN is required to submit the WinGet manifest." >&2
             exit 1
           }
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker run --rm \
             -e WINGET_GITHUB_TOKEN \
             -v "$PWD/channel-dist/winget/manifests:/manifests:ro" \
