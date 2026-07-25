@@ -35,7 +35,6 @@ jobs:
 
   build:
     name: Build release assets
-    needs: verify
     permissions:
       contents: read
     runs-on: ${{ matrix.os }}
@@ -114,7 +113,7 @@ jobs:
 
   release:
     name: Publish GitHub release
-    needs: build
+    needs: [build, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
