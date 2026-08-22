@@ -20,7 +20,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub use demo::demo_sessions;
 pub use diagnostics::{
-    fix_suggestions, inspect_first, loop_waste_percent, predict_cost_anomaly, session_findings,
+    attention_priority, attention_rank, fix_suggestions, inspect_first, inspect_reason,
+    loop_waste_percent, needs_attention, predict_cost_anomaly, session_findings,
     ContextUtilization, CostAlert, Diagnostics, FindingEvidence, FixSuggestion, InspectFirst,
     LargeParam, LoopCost, LoopFingerprint, SessionFinding, StuckPattern, ToolLatency, TraceStep,
     UnusedTool,
@@ -35,9 +36,10 @@ pub use discovery::{
 pub use doctor::{build_doctor_report, render_doctor_report, DoctorDirReport, DoctorReport};
 pub use governance::{
     context_trends, cost_audit, delivery_evidence, delivery_evidence_with_git, mcp_governance,
-    recommendations, ContextTrend, ContextTrendTotals, CostAudit, DeliveryEvidence,
-    DeliverySummary, McpGovernance, McpGovernanceItem, ModelCostAudit, PriceBreakdown,
-    PricingCoverage, ProjectContextTrend, Recommendation, SessionDeliveryEvidence, TokenBreakdown,
+    recommendations, session_cost_audit, ContextTrend, ContextTrendTotals, CostAudit,
+    DeliveryEvidence, DeliverySummary, McpGovernance, McpGovernanceItem, ModelCostAudit,
+    PriceBreakdown, PricingCoverage, ProjectContextTrend, Recommendation, SessionCostAudit,
+    SessionDeliveryEvidence, TokenBreakdown,
 };
 pub use history::{history_path, merge_preserved_history, preserve_derived_history};
 pub use insights::{
@@ -47,8 +49,8 @@ pub use insights::{
 };
 pub use parser::{parse_file, parse_raw_session};
 pub use pricing::{
-    lookup_price, pricing_cache_path, pricing_source, render_model_pricing_list, render_test_match,
-    update_pricing,
+    lookup_price, pricing_cache_path, pricing_source, pricing_source_for,
+    render_model_pricing_list, render_test_match, update_pricing,
 };
 pub use reports::{
     add_baseline_comparison, report_compare, report_compare_json, report_compare_with_language,
@@ -239,6 +241,23 @@ fn json_value_string(value: Option<&Value>) -> String {
     }
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MetricProvenance {
+    #[serde(rename = "Tokens")]
+    pub tokens: String,
+    #[serde(rename = "Duration")]
+    pub duration: String,
+    #[serde(rename = "ToolResults")]
+    pub tool_results: String,
+    #[serde(rename = "Files")]
+    pub files: String,
+    #[serde(rename = "Cost")]
+    pub cost: String,
+    #[serde(rename = "PricingSource")]
+    pub pricing_source: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Metrics {
     pub events_total: usize,
@@ -270,6 +289,7 @@ pub struct Metrics {
     pub session_end: String,
     pub duration_sec: f64,
     pub cost_estimated: f64,
+    pub provenance: MetricProvenance,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -474,7 +494,19 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
         tool_authority: BTreeMap::new(),
         ..Metrics::default()
     };
-    let mut has_meta_usage = false;
+    let has_meta_usage = events.iter().any(|event| {
+        matches!(event.role.as_str(), "session_meta" | "meta") && !event.usage.is_empty()
+    });
+    metrics.provenance.tokens = if has_meta_usage {
+        "reported_by_agent"
+    } else {
+        "estimated_from_text"
+    }
+    .to_string();
+    metrics.provenance.duration = "unavailable".to_string();
+    metrics.provenance.tool_results = "unavailable".to_string();
+    metrics.provenance.files = "unavailable".to_string();
+    metrics.provenance.pricing_source = pricing::pricing_source_for(model);
 
     for event in events {
         if metrics.source_tool.is_empty()
@@ -504,7 +536,6 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
                         .get("cache_read_input_tokens")
                         .copied()
                         .unwrap_or(0);
-                    has_meta_usage = true;
                 }
             }
             "user" => {
@@ -547,6 +578,7 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
                         higher_tool_authority(&metrics.highest_authority, &authority);
                     for file in extract_tool_call_files(&tool_call.args) {
                         *metrics.file_usage.entry(file).or_insert(0) += 1;
+                        metrics.provenance.files = "tool_arguments".to_string();
                     }
                 }
             }
@@ -569,6 +601,12 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
                 } else {
                     metrics.tool_calls_ok += 1;
                 }
+                metrics.provenance.tool_results = if event.is_error {
+                    "reported_by_agent"
+                } else {
+                    "reported_or_inferred"
+                }
+                .to_string();
             }
             _ => {}
         }
@@ -580,6 +618,7 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
         metrics.session_start = first.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         metrics.session_end = last.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         metrics.duration_sec = (*last - *first).num_milliseconds() as f64 / 1000.0;
+        metrics.provenance.duration = "timestamp_span".to_string();
     }
     for pair in metrics.timestamps.windows(2) {
         let gap = (pair[1] - pair[0]).num_milliseconds() as f64 / 1000.0;
@@ -599,6 +638,7 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
             + metrics.tokens_cache_w as f64 / 1e6 * price.cw
             + metrics.tokens_cache_r as f64 / 1e6 * price.cr,
     );
+    metrics.provenance.cost = "calculated_from_tokens".to_string();
     metrics
 }
 
@@ -1591,6 +1631,90 @@ mod tests {
         assert_eq!(metrics.tool_calls_total, 3);
         assert_eq!(metrics.tool_calls_ok, 1);
         assert_eq!(metrics.tool_calls_fail, 2);
+    }
+
+    #[test]
+    fn metric_provenance_distinguishes_reported_and_estimated_values() {
+        let estimated = analyze(
+            &[
+                Event {
+                    role: "user".to_string(),
+                    content: "hello world".to_string(),
+                    timestamp: "2026-01-01T00:00:00Z".to_string(),
+                    ..Event::default()
+                },
+                Event {
+                    role: "assistant".to_string(),
+                    content: "answer".to_string(),
+                    timestamp: "2026-01-01T00:00:01Z".to_string(),
+                    ..Event::default()
+                },
+            ],
+            "gpt-5",
+        );
+        assert_eq!(estimated.provenance.tokens, "estimated_from_text");
+        assert_eq!(estimated.provenance.duration, "timestamp_span");
+
+        let mut usage = BTreeMap::new();
+        usage.insert("input_tokens".to_string(), 100);
+        usage.insert("output_tokens".to_string(), 20);
+        let reported = analyze(
+            &[
+                Event {
+                    role: "user".to_string(),
+                    content: "this text must not be estimated".to_string(),
+                    ..Event::default()
+                },
+                Event {
+                    role: "meta".to_string(),
+                    usage,
+                    ..Event::default()
+                },
+            ],
+            "gpt-5",
+        );
+        assert_eq!(reported.tokens_input, 100);
+        assert_eq!(reported.tokens_output, 20);
+        assert_eq!(reported.provenance.tokens, "reported_by_agent");
+    }
+
+    #[test]
+    fn token_provenance_scans_usage_before_and_after_messages_without_text_double_counting() {
+        let mut first_usage = BTreeMap::new();
+        first_usage.insert("input_tokens".to_string(), 100);
+        first_usage.insert("output_tokens".to_string(), 20);
+        let mut second_usage = BTreeMap::new();
+        second_usage.insert("input_tokens".to_string(), 3);
+        let metrics = analyze(
+            &[
+                Event {
+                    role: "meta".to_string(),
+                    usage: first_usage,
+                    ..Event::default()
+                },
+                Event {
+                    role: "user".to_string(),
+                    content: "a very long message that would otherwise be estimated".to_string(),
+                    ..Event::default()
+                },
+                Event {
+                    role: "assistant".to_string(),
+                    content: "a very long answer that would otherwise be estimated".to_string(),
+                    ..Event::default()
+                },
+                Event {
+                    role: "session_meta".to_string(),
+                    usage: second_usage,
+                    ..Event::default()
+                },
+            ],
+            "gpt-5",
+        );
+        assert_eq!(metrics.tokens_input, 103);
+        assert_eq!(metrics.tokens_output, 20);
+        assert_eq!(metrics.tokens_cache_r, 0);
+        assert_eq!(metrics.tokens_cache_w, 0);
+        assert_eq!(metrics.provenance.tokens, "reported_by_agent");
     }
 
     #[test]

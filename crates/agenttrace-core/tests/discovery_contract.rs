@@ -414,12 +414,20 @@ fn rust_writes_and_reuses_go_compatible_session_cache() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(16)
+            Some(17)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
             .expect("cache entry");
         assert!(entry.get("mod_time").and_then(Value::as_i64).is_some());
+        assert!(entry
+            .pointer("/session/Metrics/Provenance/Tokens")
+            .and_then(Value::as_str)
+            .is_some());
+        assert!(entry
+            .pointer("/session/Metrics/Provenance/PricingSource")
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.is_empty()));
         assert_eq!(
             entry.pointer("/session/Name").and_then(Value::as_str),
             Some("Inspect billing export.")
@@ -552,7 +560,7 @@ fn rust_refreshes_cache_entries_from_old_schema_version() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(16)
+            Some(17)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
@@ -822,7 +830,7 @@ fn rust_parses_fixture_formats_used_by_compare_gate() {
             1,
             1,
             1,
-            181,
+            175,
         ),
         (
             "testdata/copilot-attrs-map.jsonl",
@@ -831,7 +839,7 @@ fn rust_parses_fixture_formats_used_by_compare_gate() {
             0,
             2,
             1,
-            168,
+            160,
         ),
         (
             "testdata/kimi-tool-args.json",
@@ -1432,6 +1440,9 @@ fn default_discovery_uses_hermes_sqlite_when_present() {
         assert_eq!(metrics.tokens_output, 200);
         assert_eq!(metrics.tokens_cache_r, 50);
         assert_eq!(metrics.tokens_cache_w, 25);
+        assert_eq!(metrics.provenance.tokens, "reported_by_agent");
+        assert_eq!(metrics.provenance.duration, "timestamp_span");
+        assert_eq!(metrics.provenance.tool_results, "unavailable");
     });
 
     let _ = fs::remove_dir_all(root);
@@ -1480,6 +1491,9 @@ fn default_discovery_uses_opencode_sqlite_when_present() {
         assert_eq!(metrics.tokens_output, 22);
         assert_eq!(metrics.tokens_cache_r, 3);
         assert_eq!(metrics.tokens_cache_w, 2);
+        assert_eq!(metrics.provenance.tokens, "reported_by_agent");
+        assert_eq!(metrics.provenance.duration, "timestamp_span");
+        assert_eq!(metrics.provenance.tool_results, "unavailable");
     });
 
     let _ = fs::remove_dir_all(root);

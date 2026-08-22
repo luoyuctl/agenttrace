@@ -46,12 +46,8 @@ struct LiteLlmModel {
 
 pub fn lookup_price(model: &str) -> Price {
     let catalog = pricing_catalog();
-    let model = catalog
-        .aliases
-        .get(&normalize_model(model))
-        .map(String::as_str)
-        .unwrap_or(model);
-    lookup_price_in(model, &catalog.entries)
+    let model = resolve_alias(model, &catalog.aliases);
+    lookup_price_in(&model, &catalog.entries)
 }
 
 pub fn has_specific_price(model: &str) -> bool {
@@ -59,12 +55,8 @@ pub fn has_specific_price(model: &str) -> bool {
         return false;
     }
     let catalog = pricing_catalog();
-    let model = catalog
-        .aliases
-        .get(&normalize_model(model))
-        .map(String::as_str)
-        .unwrap_or(model);
-    match_variants(model)
+    let model = resolve_alias(model, &catalog.aliases);
+    match_variants(&model)
         .into_iter()
         .any(|variant| catalog.entries.contains_key(&variant))
 }
@@ -106,26 +98,26 @@ pub fn pricing_source() -> String {
     }
 }
 
+pub fn pricing_source_for(model: &str) -> String {
+    let catalog = pricing_catalog();
+    let model = resolve_alias(model, &catalog.aliases);
+    if match_variants(&model)
+        .into_iter()
+        .any(|variant| catalog.entries.contains_key(&variant))
+    {
+        pricing_source()
+    } else {
+        "built-in fallback".to_string()
+    }
+}
+
 pub fn pricing_cache_path() -> PathBuf {
     user_cache_dir().join("agenttrace").join("pricing.json")
 }
 
 pub fn update_pricing() -> anyhow::Result<usize> {
-    let raw = ureq::get(PRICING_URL)
-        .timeout(Duration::from_secs(30))
-        .call()
-        .map_err(|err| anyhow!("download failed: {err}"))?
-        .into_string()
-        .context("read pricing response")?;
-    let entries = convert_litellm(raw.as_bytes());
-    if entries.is_empty() {
-        return Err(anyhow!("no chat models found in downloaded data"));
-    }
-    let path = pricing_cache_path();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(path, raw)?;
+    let (raw, entries) = download_pricing(Duration::from_secs(30))?;
+    write_pricing_cache(&raw)?;
     Ok(entries.len())
 }
 
@@ -228,6 +220,18 @@ fn pricing_catalog() -> &'static PricingCatalog {
             source: "builtin".to_string(),
             loaded_at: None,
         });
+        if catalog.source == "cache(stale)" {
+            if let Ok((raw, entries)) = download_pricing(Duration::from_secs(5)) {
+                if write_pricing_cache(&raw).is_ok() {
+                    catalog = PricingCatalog {
+                        entries,
+                        aliases: BTreeMap::new(),
+                        source: "remote".to_string(),
+                        loaded_at: Some(SystemTime::now()),
+                    };
+                }
+            }
+        }
         if let Some((prices, aliases)) = load_pricing_overrides() {
             catalog.entries.extend(prices);
             catalog.aliases.extend(aliases);
@@ -256,6 +260,29 @@ fn load_pricing_cache() -> Option<PricingCatalog> {
         source: if stale { "cache(stale)" } else { "cache" }.to_string(),
         loaded_at,
     })
+}
+
+fn download_pricing(timeout: Duration) -> anyhow::Result<(String, BTreeMap<String, Price>)> {
+    let raw = ureq::get(PRICING_URL)
+        .timeout(timeout)
+        .call()
+        .map_err(|err| anyhow!("download failed: {err}"))?
+        .into_string()
+        .context("read pricing response")?;
+    let entries = convert_litellm(raw.as_bytes());
+    if entries.is_empty() {
+        return Err(anyhow!("no chat models found in downloaded data"));
+    }
+    Ok((raw, entries))
+}
+
+fn write_pricing_cache(raw: &str) -> anyhow::Result<()> {
+    let path = pricing_cache_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, raw)?;
+    Ok(())
 }
 
 fn lookup_price_in(model: &str, entries: &BTreeMap<String, Price>) -> Price {
@@ -302,6 +329,20 @@ fn parse_pricing_overrides(
             .map(|(alias, model)| (normalize_model(&alias), normalize_model(&model)))
             .collect(),
     ))
+}
+
+fn resolve_alias(model: &str, aliases: &BTreeMap<String, String>) -> String {
+    let mut current = normalize_model(model);
+    for _ in 0..8 {
+        let Some(next) = aliases.get(&current) else {
+            break;
+        };
+        if next == &current {
+            break;
+        }
+        current = next.clone();
+    }
+    current
 }
 
 fn convert_litellm(raw: &[u8]) -> BTreeMap<String, Price> {
@@ -1075,5 +1116,17 @@ mod tests {
             aliases.get("my-alias").map(String::as_str),
             Some("my-model")
         );
+    }
+
+    #[test]
+    fn aliases_resolve_normalized_chains_without_looping() {
+        let aliases = BTreeMap::from([
+            ("provider-model".to_string(), "model-v2".to_string()),
+            ("model-v2".to_string(), "model".to_string()),
+            ("loop".to_string(), "loop-2".to_string()),
+            ("loop-2".to_string(), "loop".to_string()),
+        ]);
+        assert_eq!(resolve_alias("PROVIDER-MODEL", &aliases), "model");
+        assert_eq!(resolve_alias("loop", &aliases), "loop");
     }
 }

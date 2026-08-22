@@ -1,4 +1,6 @@
-use crate::{pricing, project_name, resolve_project, round4, total_tokens, Session};
+use crate::{
+    pricing, project_name, resolve_project, round4, session_capability, total_tokens, Session,
+};
 use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -8,6 +10,8 @@ use std::process::Command;
 pub struct CostAudit {
     pub pricing_source: String,
     pub total_estimated_cost: f64,
+    pub stored_estimated_cost_usd: f64,
+    pub current_estimated_cost_usd: Option<f64>,
     pub pricing_coverage: PricingCoverage,
     pub by_provider_model: Vec<ModelCostAudit>,
 }
@@ -25,11 +29,13 @@ pub struct PricingCoverage {
 pub struct ModelCostAudit {
     pub provider: String,
     pub model: String,
+    pub pricing_source: String,
     pub sessions: usize,
     pub tokens: TokenBreakdown,
-    pub rates_per_million_usd: PriceBreakdown,
-    pub component_cost_usd: PriceBreakdown,
-    pub estimated_cost_usd: f64,
+    pub rates_per_million_usd: Option<PriceBreakdown>,
+    pub component_cost_usd: Option<PriceBreakdown>,
+    pub estimated_cost_usd: Option<f64>,
+    pub stored_estimated_cost_usd: f64,
     pub pricing_status: String,
     pub pricing_note: String,
 }
@@ -50,6 +56,50 @@ pub struct PriceBreakdown {
     pub cache_write: f64,
     pub cache_read: f64,
     pub total: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SessionCostAudit {
+    pub pricing_source: String,
+    pub stored_pricing_source: String,
+    pub capability: &'static str,
+    pub provider: String,
+    pub model: String,
+    pub tokens: TokenBreakdown,
+    pub rates_per_million_usd: Option<PriceBreakdown>,
+    pub component_cost_usd: Option<PriceBreakdown>,
+    pub estimated_cost_usd: Option<f64>,
+    pub stored_estimated_cost_usd: f64,
+    pub pricing_status: String,
+    pub pricing_note: String,
+}
+
+fn current_cost_estimate(
+    model: &str,
+    tokens: &TokenBreakdown,
+) -> Option<(String, PriceBreakdown, PriceBreakdown)> {
+    if model == "multiple" {
+        return None;
+    }
+    let rate = pricing::lookup_price(model);
+    let rates = PriceBreakdown {
+        input: rate.input,
+        output: rate.output,
+        cache_write: rate.cw,
+        cache_read: rate.cr,
+        total: 0.0,
+    };
+    let mut components = PriceBreakdown {
+        input: round4(tokens.input as f64 / 1e6 * rate.input),
+        output: round4(tokens.output as f64 / 1e6 * rate.output),
+        cache_write: round4(tokens.cache_write as f64 / 1e6 * rate.cw),
+        cache_read: round4(tokens.cache_read as f64 / 1e6 * rate.cr),
+        total: 0.0,
+    };
+    components.total = round4(
+        components.input + components.output + components.cache_write + components.cache_read,
+    );
+    Some((pricing::pricing_source_for(model), rates, components))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -179,7 +229,7 @@ pub fn cost_audit(sessions: &[Session]) -> CostAudit {
         row.tokens.cache_read += session.metrics.tokens_cache_r;
         row.tokens.total += total_tokens(session);
         row.cost += session.metrics.cost_estimated;
-        if matches!(model.as_str(), "default" | "unknown") {
+        if matches!(model.as_str(), "default" | "unknown" | "multiple") {
             row.unknown += 1;
             coverage.unpriced_or_unknown_sessions += 1;
         } else if pricing::has_specific_price(&model) {
@@ -207,15 +257,17 @@ pub fn cost_audit(sessions: &[Session]) -> CostAudit {
     let mut by_provider_model = rows
         .into_iter()
         .map(|((provider, model), row)| {
-            let rate = pricing::lookup_price(&model);
-            let component_cost_usd = PriceBreakdown {
-                input: round4(row.tokens.input as f64 / 1e6 * rate.input),
-                output: round4(row.tokens.output as f64 / 1e6 * rate.output),
-                cache_write: round4(row.tokens.cache_write as f64 / 1e6 * rate.cw),
-                cache_read: round4(row.tokens.cache_read as f64 / 1e6 * rate.cr),
-                total: round4(row.cost),
-            };
-            let (pricing_status, pricing_note) = if row.unknown > 0 {
+            let current = current_cost_estimate(&model, &row.tokens);
+            let pricing_source = current
+                .as_ref()
+                .map(|(source, _, _)| source.clone())
+                .unwrap_or_else(|| "unavailable: multiple models".to_string());
+            let (pricing_status, pricing_note) = if model == "multiple" {
+                (
+                    "aggregate_estimate",
+                    "SQLite aggregated multiple model IDs; no single-model exact price applies",
+                )
+            } else if row.unknown > 0 {
                 ("unpriced_or_unknown", "model name is missing or generic")
             } else if row.fallback > 0 {
                 (
@@ -228,37 +280,138 @@ pub fn cost_audit(sessions: &[Session]) -> CostAudit {
                     "exact normalized model match in pricing catalog",
                 )
             };
+            let pricing_note = if current
+                .as_ref()
+                .is_some_and(|(_, _, components)| (components.total - row.cost).abs() > 0.0001)
+            {
+                format!(
+                    "{pricing_note}; current rates recalculate a different total than the stored estimate"
+                )
+            } else {
+                pricing_note.to_string()
+            };
+            let (rates_per_million_usd, component_cost_usd, estimated_cost_usd) = current
+                .map(|(_, rates, components)| {
+                    let total = components.total;
+                    (Some(rates), Some(components), Some(total))
+                })
+                .unwrap_or((None, None, None));
             ModelCostAudit {
                 provider,
                 model,
+                pricing_source,
                 sessions: row.sessions,
                 tokens: row.tokens,
-                rates_per_million_usd: PriceBreakdown {
-                    input: rate.input,
-                    output: rate.output,
-                    cache_write: rate.cw,
-                    cache_read: rate.cr,
-                    total: 0.0,
-                },
+                rates_per_million_usd,
                 component_cost_usd,
-                estimated_cost_usd: round4(row.cost),
+                estimated_cost_usd,
+                stored_estimated_cost_usd: round4(row.cost),
                 pricing_status: pricing_status.to_string(),
-                pricing_note: pricing_note.to_string(),
+                pricing_note,
             }
         })
         .collect::<Vec<_>>();
+    let stored_estimated_cost_usd = round4(
+        sessions
+            .iter()
+            .map(|session| session.metrics.cost_estimated)
+            .sum(),
+    );
+    let current_estimated_cost_usd = by_provider_model
+        .iter()
+        .try_fold(0.0, |total, row| {
+            row.estimated_cost_usd.map(|cost| total + cost)
+        })
+        .map(round4);
     by_provider_model.sort_by(|left, right| {
-        right
+        let left_cost = left
             .estimated_cost_usd
-            .total_cmp(&left.estimated_cost_usd)
+            .unwrap_or(left.stored_estimated_cost_usd);
+        let right_cost = right
+            .estimated_cost_usd
+            .unwrap_or(right.stored_estimated_cost_usd);
+        right_cost
+            .total_cmp(&left_cost)
             .then_with(|| left.provider.cmp(&right.provider))
             .then_with(|| left.model.cmp(&right.model))
     });
     CostAudit {
         pricing_source: pricing::pricing_source(),
-        total_estimated_cost: round4(sessions.iter().map(|s| s.metrics.cost_estimated).sum()),
+        total_estimated_cost: stored_estimated_cost_usd,
+        stored_estimated_cost_usd,
+        current_estimated_cost_usd,
         pricing_coverage: coverage,
         by_provider_model,
+    }
+}
+
+pub fn session_cost_audit(session: &Session) -> SessionCostAudit {
+    let model = normalized_model(&session.metrics.model_used);
+    let tokens = TokenBreakdown {
+        input: session.metrics.tokens_input,
+        output: session.metrics.tokens_output,
+        cache_write: session.metrics.tokens_cache_w,
+        cache_read: session.metrics.tokens_cache_r,
+        total: total_tokens(session),
+    };
+    let current = current_cost_estimate(&model, &tokens);
+    let (pricing_status, pricing_note) = if model == "multiple" {
+        (
+            "aggregate_estimate",
+            "SQLite aggregated multiple model IDs; no single-model exact price applies",
+        )
+    } else if matches!(model.as_str(), "default" | "unknown") {
+        (
+            "unpriced_or_unknown",
+            "model name is missing or generic; cost is not a catalog match",
+        )
+    } else if pricing::has_specific_price(&model) {
+        (
+            "catalog_estimate",
+            "exact normalized model match in pricing catalog",
+        )
+    } else {
+        (
+            "fallback_estimate",
+            "no exact catalog match; built-in fallback rate used",
+        )
+    };
+    let pricing_note = if current.as_ref().is_some_and(|(_, _, components)| {
+        (components.total - session.metrics.cost_estimated).abs() > 0.0001
+    }) {
+        format!(
+            "{pricing_note}; current rates recalculate a different total than the stored estimate"
+        )
+    } else {
+        pricing_note.to_string()
+    };
+    let pricing_source = current
+        .as_ref()
+        .map(|(source, _, _)| source.clone())
+        .unwrap_or_else(|| "unavailable: multiple models".to_string());
+    let (rates_per_million_usd, component_cost_usd, estimated_cost_usd) = current
+        .map(|(_, rates, components)| {
+            let total = components.total;
+            (Some(rates), Some(components), Some(total))
+        })
+        .unwrap_or((None, None, None));
+    SessionCostAudit {
+        pricing_source,
+        stored_pricing_source: if session.metrics.provenance.pricing_source.is_empty() {
+            "not recorded".to_string()
+        } else {
+            session.metrics.provenance.pricing_source.clone()
+        },
+        capability: session_capability(session),
+        provider: session.metrics.source_tool.clone(),
+        model,
+        tokens,
+        rates_per_million_usd,
+        component_cost_usd,
+        estimated_cost_usd,
+        stored_estimated_cost_usd: round4(session.metrics.cost_estimated),
+        pricing_status: pricing_status.to_string(),
+        pricing_note,
     }
 }
 
@@ -807,6 +960,53 @@ mod tests {
             audit.by_provider_model[0].pricing_status,
             "unpriced_or_unknown"
         );
+        let audit_json = serde_json::to_value(&audit).expect("cost audit json");
+        assert_eq!(audit_json["stored_estimated_cost_usd"], 1.0);
+        assert!(audit_json["current_estimated_cost_usd"].as_f64().is_some());
+        assert!(
+            audit_json["by_provider_model"][0]["stored_estimated_cost_usd"]
+                .as_f64()
+                .is_some()
+        );
+        let mut historical = session("unknown-model");
+        historical.metrics.provenance.pricing_source = "historic price source".to_string();
+        let session_audit = session_cost_audit(&historical);
+        assert_eq!(session_audit.pricing_status, "unpriced_or_unknown");
+        assert_eq!(session_audit.capability, "aggregate");
+        assert_eq!(
+            session_audit.pricing_source,
+            pricing::pricing_source_for("unknown")
+        );
+        assert_eq!(session_audit.stored_pricing_source, "historic price source");
+        assert!(session_audit.pricing_note.contains("generic"));
+        let json = serde_json::to_value(&session_audit).expect("session audit json");
+        assert_eq!(json["stored_estimated_cost_usd"], 1.0);
+        assert!(json["estimated_cost_usd"].as_f64().is_some());
+    }
+
+    #[test]
+    fn audit_marks_sqlite_multi_model_aggregates_without_exact_pricing() {
+        let mut value = session("aggregate");
+        value.metrics.model_used = "multiple".to_string();
+        value.metrics.source_tool = "opencode_db".to_string();
+        value.metrics.provenance.pricing_source = "SQLite aggregate: multiple models".to_string();
+        let audit = session_cost_audit(&value);
+        assert_eq!(audit.pricing_status, "aggregate_estimate");
+        assert_eq!(audit.pricing_source, "unavailable: multiple models");
+        assert_eq!(
+            audit.stored_pricing_source,
+            "SQLite aggregate: multiple models"
+        );
+        assert!(audit.rates_per_million_usd.is_none());
+        assert!(audit.component_cost_usd.is_none());
+        assert!(audit.estimated_cost_usd.is_none());
+        assert_eq!(audit.stored_estimated_cost_usd, 1.0);
+        assert!(audit.pricing_note.contains("multiple model IDs"));
+
+        let aggregate = cost_audit(&[value]);
+        assert!(aggregate.current_estimated_cost_usd.is_none());
+        assert!(aggregate.by_provider_model[0].estimated_cost_usd.is_none());
+        assert!(aggregate.by_provider_model[0].component_cost_usd.is_none());
     }
 
     #[test]

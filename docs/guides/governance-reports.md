@@ -48,6 +48,10 @@ To map internal model names or override per-million-token rates locally, set `AG
 AGENTTRACE_PRICING_FILE=pricing-overrides.json agenttrace --audit -f json
 ```
 
+Pricing data is cached locally. A cache older than 24 hours is refreshed automatically when a price lookup starts; if the refresh fails, the stale cache remains usable and is reported as stale. Use `--update-pricing` to force an explicit refresh.
+
+The session cache is schema 17 and the SQLite snapshot is schema 4 because both now persist provenance. Older versions are discarded and rebuilt on the next load; the migration is read-only and does not modify source session files.
+
 ## Prioritized recommendations
 
 ```bash

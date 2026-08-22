@@ -2,7 +2,7 @@ use crate::{detect_anomalies, health_score, token_cost, Metrics, Session};
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default)]
@@ -17,6 +17,7 @@ struct SqliteSessionAgg {
     id: String,
     title: String,
     model: String,
+    models: BTreeSet<String>,
     start_unix: f64,
     end_unix: f64,
     events: usize,
@@ -190,6 +191,9 @@ fn query_hermes_sqlite_sessions(path: &Path, since: Option<DateTime<Utc>>) -> Ve
 
     rows.filter_map(Result::ok)
         .map(|mut agg| {
+            if !agg.model.is_empty() {
+                agg.models.insert(agg.model.clone());
+            }
             if let Some(counts) = roles.get(&agg.id) {
                 agg.user_messages = counts.user;
                 agg.assistant_turns = counts.assistant;
@@ -313,6 +317,7 @@ fn add_opencode_sqlite_messages(db: &Connection, aggs: &mut HashMap<String, Sqli
         }
         let model = opencode_sqlite_message_model(&doc);
         if !model.is_empty() {
+            agg.models.insert(model.clone());
             agg.model = model;
         }
         if add_opencode_sqlite_message_tokens(agg, &doc) {
@@ -463,7 +468,14 @@ fn sqlite_role_counts(
 }
 
 fn session_from_sqlite_agg(agg: SqliteSessionAgg) -> Session {
-    let model = if agg.model.is_empty() {
+    let mut models = agg.models;
+    if models.is_empty() && !agg.model.is_empty() {
+        models.insert(agg.model.clone());
+    }
+    let multiple_models = models.len() > 1;
+    let model = if multiple_models {
+        "multiple".to_string()
+    } else if agg.model.is_empty() {
         "default".to_string()
     } else {
         agg.model
@@ -478,6 +490,11 @@ fn session_from_sqlite_agg(agg: SqliteSessionAgg) -> Session {
     if agg.usage_cost_set {
         cost_estimated = crate::round4(agg.usage_cost);
     }
+    let pricing_source = if multiple_models {
+        "SQLite aggregate: multiple models".to_string()
+    } else {
+        crate::pricing::pricing_source_for(&model)
+    };
     let mut metrics = Metrics {
         events_total: agg.events,
         user_messages: agg.user_messages,
@@ -495,10 +512,27 @@ fn session_from_sqlite_agg(agg: SqliteSessionAgg) -> Session {
         session_start: unix_seconds_rfc3339(agg.start_unix),
         session_end: unix_seconds_rfc3339(agg.end_unix),
         cost_estimated,
+        provenance: crate::MetricProvenance {
+            tokens: "reported_by_agent".to_string(),
+            duration: "unavailable".to_string(),
+            tool_results: if agg.tool_results > 0 {
+                "reported_by_agent".to_string()
+            } else {
+                "unavailable".to_string()
+            },
+            files: "unavailable".to_string(),
+            cost: if agg.usage_cost_set {
+                "calculated_per_message_tokens".to_string()
+            } else {
+                "calculated_from_tokens".to_string()
+            },
+            pricing_source,
+        },
         ..Metrics::default()
     };
     if agg.end_unix > agg.start_unix {
         metrics.duration_sec = agg.end_unix - agg.start_unix;
+        metrics.provenance.duration = "timestamp_span".to_string();
     }
     let anomalies = detect_anomalies(&metrics);
     let name = if agg.title.is_empty() {
@@ -586,5 +620,22 @@ mod tests {
             ..SqliteSessionAgg::default()
         });
         assert_eq!(session.cwd, "/work/sqlite");
+    }
+
+    #[test]
+    fn sqlite_multi_model_aggregate_is_not_exactly_priced_as_one_model() {
+        let session = session_from_sqlite_agg(SqliteSessionAgg {
+            model: "gpt-5".to_string(),
+            models: BTreeSet::from(["gpt-5".to_string(), "claude-sonnet-4".to_string()]),
+            usage_cost: 1.25,
+            usage_cost_set: true,
+            ..SqliteSessionAgg::default()
+        });
+        assert_eq!(session.metrics.model_used, "multiple");
+        assert_eq!(
+            session.metrics.provenance.pricing_source,
+            "SQLite aggregate: multiple models"
+        );
+        assert_eq!(session.metrics.cost_estimated, 1.25);
     }
 }

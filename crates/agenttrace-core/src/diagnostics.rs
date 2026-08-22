@@ -139,6 +139,66 @@ pub struct InspectFirst {
     pub index: usize,
 }
 
+pub fn inspect_reason(session: &Session) -> &'static str {
+    if session.health < 50 {
+        "critical"
+    } else if session.metrics.tool_calls_fail > 0 {
+        "failures"
+    } else if !session.anomalies.is_empty() {
+        "anomaly"
+    } else if matches!(
+        session.diagnostics.context_utilization.risk_level.as_str(),
+        "warning" | "critical"
+    ) {
+        "context"
+    } else if session.diagnostics.loop_cost.loop_groups > 0
+        || !session.diagnostics.stuck_patterns.is_empty()
+    {
+        "loops"
+    } else if session.metrics.cost_estimated >= 1.0 {
+        "cost"
+    } else if session.metrics.duration_sec >= 300.0 || p95_gap(session) >= 60.0 {
+        "latency"
+    } else if session.health < 80 {
+        "warning"
+    } else {
+        "ok"
+    }
+}
+
+pub fn needs_attention(session: &Session) -> bool {
+    session.health < 80
+        || !session.anomalies.is_empty()
+        || session.metrics.tool_calls_fail > 0
+        || matches!(
+            session.diagnostics.context_utilization.risk_level.as_str(),
+            "warning" | "critical"
+        )
+        || session.diagnostics.loop_cost.loop_groups > 0
+        || !session.diagnostics.stuck_patterns.is_empty()
+        || session.metrics.duration_sec >= 300.0
+        || session.metrics.cost_estimated >= 1.0
+}
+
+pub fn attention_priority(session: &Session) -> u8 {
+    match inspect_reason(session) {
+        "critical" | "anomaly" | "failures" | "context" | "loops" => 1,
+        "latency" | "cost" | "warning" => 2,
+        _ => 3,
+    }
+}
+
+pub fn attention_rank(
+    session: &Session,
+) -> (u8, i32, std::cmp::Reverse<usize>, std::cmp::Reverse<u64>) {
+    (
+        attention_priority(session),
+        session.health,
+        std::cmp::Reverse(session.anomalies.len() + session.metrics.tool_calls_fail),
+        std::cmp::Reverse(session.metrics.cost_estimated.to_bits()),
+    )
+}
+
 pub fn inspect_first(sessions: &[Session]) -> Vec<InspectFirst> {
     let mut items = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
@@ -970,6 +1030,35 @@ mod tests {
         assert_eq!(alert.current, 0.4);
         assert_eq!(alert.baseline, 0.1);
         assert_eq!(alert.ratio, 4.0);
+    }
+
+    #[test]
+    fn attention_membership_excludes_ordinary_sessions() {
+        let ordinary = session_with_cost("ordinary", 1, 0.05);
+        let mut slow = session_with_cost("slow", 1, 0.05);
+        slow.metrics.duration_sec = 301.0;
+        let mut warning = session_with_cost("warning", 1, 0.05);
+        warning.health = 70;
+        assert!(!needs_attention(&ordinary));
+        assert!(needs_attention(&slow));
+        assert!(needs_attention(&warning));
+    }
+
+    #[test]
+    fn inspect_reason_matches_inspect_first_priority() {
+        let mut critical = session_with_cost("critical", 1, 0.1);
+        critical.health = 20;
+        let mut failing = session_with_cost("failing", 1, 5.0);
+        failing.metrics.tool_calls_fail = 4;
+        let costly = session_with_cost("costly", 1, 9.0);
+        assert_eq!(inspect_reason(&critical), "critical");
+        assert_eq!(inspect_reason(&failing), "failures");
+        assert_eq!(inspect_reason(&costly), "cost");
+        assert!(attention_rank(&critical) < attention_rank(&failing));
+        assert!(attention_rank(&failing) < attention_rank(&costly));
+        let ranked = inspect_first(&[costly, failing, critical]);
+        assert_eq!(ranked[0].reason, "critical");
+        assert_eq!(ranked[1].reason, "failures");
     }
 
     fn session_with_cost(path: &str, turns: usize, cost: f64) -> Session {

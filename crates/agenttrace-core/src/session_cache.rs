@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 16;
-const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 3;
+pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 17;
+const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 4;
 
 #[derive(Debug, Clone, Default)]
 pub struct SessionCache {
@@ -134,6 +134,8 @@ struct GoMetrics {
     duration_sec: f64,
     #[serde(default, rename = "CostEstimated")]
     cost_estimated: f64,
+    #[serde(default, rename = "Provenance")]
+    provenance: crate::MetricProvenance,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -680,6 +682,7 @@ impl GoMetrics {
             session_end: metrics.session_end.clone(),
             duration_sec: metrics.duration_sec,
             cost_estimated: metrics.cost_estimated,
+            provenance: metrics.provenance.clone(),
         }
     }
 
@@ -713,6 +716,7 @@ impl GoMetrics {
             session_end: self.session_end,
             duration_sec: self.duration_sec,
             cost_estimated: self.cost_estimated,
+            provenance: self.provenance,
         }
     }
 }
@@ -842,6 +846,63 @@ mod tests {
         )
         .expect("store snapshot with wal");
         fs::write(sqlite_shm_path(&database), b"shm").expect("write shm");
+        assert!(load_sqlite_snapshot_from(&database, &snapshot).is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn sqlite_snapshot_schema_four_round_trips_provenance_and_rejects_schema_three() {
+        let root = std::env::temp_dir().join(format!(
+            "agenttrace-sqlite-schema-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let database = root.join("state.db");
+        let snapshot = root.join("snapshot.json");
+        fs::create_dir_all(&root).expect("create temp dir");
+        fs::write(&database, b"db").expect("write database");
+        let session = Session {
+            name: "cached".to_string(),
+            path: database.to_string_lossy().to_string(),
+            cwd: String::new(),
+            metrics: Metrics {
+                provenance: crate::MetricProvenance {
+                    tokens: "reported_by_agent".to_string(),
+                    duration: "timestamp_span".to_string(),
+                    tool_results: "reported_by_agent".to_string(),
+                    pricing_source: "LiteLLM (cached)".to_string(),
+                    ..crate::MetricProvenance::default()
+                },
+                ..Metrics::default()
+            },
+            anomalies: Vec::new(),
+            health: 100,
+            tool_warnings: Vec::new(),
+            diagnostics: Diagnostics::default(),
+        };
+        store_sqlite_snapshot_at(&database, &snapshot, &[session]).expect("store snapshot");
+        let raw = fs::read_to_string(&snapshot).expect("read snapshot");
+        let doc: serde_json::Value = serde_json::from_str(&raw).expect("snapshot json");
+        assert_eq!(doc["schema_version"], 4);
+        assert_eq!(
+            doc.pointer("/sessions/0/Metrics/Provenance/Tokens")
+                .and_then(serde_json::Value::as_str),
+            Some("reported_by_agent")
+        );
+        assert_eq!(
+            load_sqlite_snapshot_from(&database, &snapshot).expect("schema four cache hit")[0]
+                .metrics
+                .provenance
+                .duration,
+            "timestamp_span"
+        );
+        let mut old = doc;
+        old["schema_version"] = serde_json::Value::from(3);
+        fs::write(
+            &snapshot,
+            serde_json::to_vec(&old).expect("schema three json"),
+        )
+        .expect("write old snapshot");
         assert!(load_sqlite_snapshot_from(&database, &snapshot).is_none());
         let _ = fs::remove_dir_all(root);
     }
