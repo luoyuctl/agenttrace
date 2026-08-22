@@ -404,7 +404,9 @@ fn explorer_attention_uses_core_inspect_reason_and_cost_shows_provenance() {
     assert!(cost.contains("Current rates"));
     assert!(cost.contains("Stored estimate"));
     assert!(
-        cost.contains("can't price this model yet") || cost.contains("priced from our model list"),
+        cost.contains("can't price this model yet")
+            || cost.contains("priced from our model list")
+            || cost.contains("best-effort price, no exact model match"),
         "missing pricing status: {cost}"
     );
 }
