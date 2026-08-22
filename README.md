@@ -48,8 +48,6 @@ It helps you answer:
 
 ## Real local run
 
-These screenshots and figures are a redacted sample of the latest 500 real local sessions captured for the v0.7.1 source tree. They are not `--demo` output, current telemetry, or test fixtures.
-
 ```bash
 agenttrace
 ```
@@ -61,21 +59,6 @@ agenttrace
 | Session detail | Diagnostics |
 |---|---|
 | <img src="assets/readme-real-detail.png" alt="agenttrace detail view showing health, cost, tool failures, and next action from a real local session" width="100%"> | <img src="assets/readme-real-diagnostics.png" alt="agenttrace diagnostics view showing latency, context window, and large parameter calls from real local logs" width="100%"> |
-
-That local run found:
-
-```text
-AGENTTRACE v0.7.1
-```
-
-| Signal | What agenttrace found |
-| --- | ---: |
-| Analyzed sessions | 500 |
-| Total tokens | 4.0B |
-| Estimated cost | $2.6K |
-| Tool failure rate | 2.9% |
-| Critical sessions | 2 |
-| Average health | 77.7% |
 
 ## Install
 
