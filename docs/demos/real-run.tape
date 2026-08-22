@@ -19,8 +19,14 @@ Type "!"
 Sleep 1200ms
 Enter
 Sleep 1200ms
-Type "w"
+Type "l"
 Sleep 1200ms
-Type "0"
+Type "l"
+Sleep 1200ms
+Escape
+Sleep 1200ms
+Type "v"
+Sleep 1200ms
+Escape
 Sleep 1200ms
 Type "q"

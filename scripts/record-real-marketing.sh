@@ -117,6 +117,6 @@ EOF
 record_png assets/readme-real-overview.png ""
 record_png assets/readme-real-critical.png "Type \"!\""
 record_png assets/readme-real-detail.png $'Type "!"\nSleep 900ms\nEnter'
-record_png assets/readme-real-diagnostics.png $'Type "!"\nSleep 900ms\nEnter\nSleep 900ms\nType "w"'
+record_png assets/readme-real-diagnostics.png $'Type "!"\nSleep 900ms\nEnter\nSleep 900ms\nType "l"\nSleep 900ms\nType "l"'
 
 echo "Refreshed real marketing assets from $sessions local sessions."
