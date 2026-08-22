@@ -1,28 +1,38 @@
+#![cfg_attr(not(test), allow(dead_code))]
+
 use agenttrace_core::{
-    average_health, canonical_sessions, clear_session_cache, compute_overview,
-    compute_overview_iter, context_trends, cost_audit, data_health, delivery_evidence_with_git,
-    fix_suggestions, format_cost, format_tokens, inspect_first, load_cached_sessions_from_cache,
-    load_session_cache, load_sessions_with_progress, load_sessions_with_progress_from_cache_mode,
-    mcp_governance, predict_cost_anomaly, project_name, recommendations,
-    render_waste_report_with_language, report_compare_with_language, report_text_with_language,
-    resolve_project, session_capability, session_matches_time_range, total_tokens, ContextTrend,
-    CostAudit, DataHealth, DeliveryEvidence, LoadOptions, LoadProgress, LoadReport, McpGovernance,
-    Overview, Recommendation, ReportLanguage, Session, SessionCache, TimeRange, VERSION,
+    attention_priority, attention_rank, average_health, canonical_sessions, clear_session_cache,
+    compute_overview, compute_overview_iter, context_trends, cost_audit, data_health,
+    delivery_evidence_with_git, format_cost, format_tokens, inspect_first, inspect_reason,
+    load_cached_sessions_from_cache, load_session_cache, load_sessions_with_progress,
+    load_sessions_with_progress_from_cache_mode, mcp_governance, needs_attention, project_name,
+    recommendations, resolve_project, session_capability, session_cost_audit,
+    session_matches_time_range, total_tokens, ContextTrend, CostAudit, DataHealth,
+    DeliveryEvidence, LoadOptions, LoadProgress, LoadReport, McpGovernance, Overview,
+    Recommendation, ReportLanguage, Session, SessionCache, TimeRange,
+};
+#[cfg(test)]
+use agenttrace_core::{
+    fix_suggestions, predict_cost_anomaly, render_waste_report_with_language,
+    report_compare_with_language, report_text_with_language, VERSION,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+#[cfg(test)]
+use ratatui::layout::Direction;
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Tabs, Wrap};
+use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(120);
+const AUTO_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 const LOAD_BATCH_SIZE: usize = 8;
 enum LoadMessage {
     Progress(Vec<LoadProgress>),
@@ -70,17 +80,20 @@ fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
     loop {
         dirty |= app.poll_pending_load();
         dirty |= app.poll_governance_delivery();
+        dirty |= app.poll_auto_refresh()?;
         if dirty {
-            terminal.draw(|frame| render(frame, &mut app))?;
+            terminal.draw(|frame| render_explorer(frame, &mut app))?;
             dirty = false;
         }
+        let auto_refresh_wait =
+            AUTO_REFRESH_INTERVAL.saturating_sub(app.last_auto_refresh.elapsed());
         let timeout = if app.pending_load.is_some() || app.governance_delivery_pending() {
             POLL_INTERVAL
         } else {
-            Duration::from_secs(60)
+            Duration::from_secs(60).min(auto_refresh_wait)
         };
         if event::poll(timeout)? {
-            if app.handle_event(event::read()?)? {
+            if app.handle_explorer_event(event::read()?)? {
                 break;
             }
             dirty = true;
@@ -121,7 +134,6 @@ struct GovernanceSnapshot {
 enum InputMode {
     Normal,
     Search,
-    Command,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,7 +152,6 @@ enum SortKey {
 enum DriverKind {
     Source,
     Model,
-    Anomaly,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,6 +176,35 @@ impl Language {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExplorerView {
+    Attention,
+    Recent,
+    All,
+    Projects,
+    Context,
+    Storage,
+    Cost,
+    Tools,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DetailSection {
+    Summary,
+    Timeline,
+    Context,
+    Files,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExplorerOverlay {
+    None,
+    ViewPicker,
+    Filter,
+    Command,
+    Help,
+}
+
 struct App {
     sessions: Vec<Session>,
     overview: Overview,
@@ -181,13 +221,17 @@ struct App {
     source_filter: String,
     model_filter: String,
     project_filter: String,
+    project_id_filter: String,
     range_filter: TimeRange,
     cost_filter: Option<(CostOp, f64)>,
+    failure_filter: Option<(CostOp, i32)>,
+    context_filter: Option<(CostOp, f64)>,
     anomaly_filter: Option<String>,
     capability_filter: String,
     issue_filter: String,
     input: String,
     input_original: String,
+    search_snapshot: Option<SearchSnapshot>,
     status: String,
     sort_key: SortKey,
     sort_desc: bool,
@@ -199,6 +243,14 @@ struct App {
     raw_report_expanded: bool,
     governance: Option<GovernanceSnapshot>,
     governance_dirty: bool,
+    explorer_view: ExplorerView,
+    explorer_detail: Option<DetailSection>,
+    explorer_overlay: ExplorerOverlay,
+    explorer_selected: usize,
+    overlay_selected: usize,
+    last_auto_refresh: Instant,
+    compare_anchor: Option<String>,
+    compare_open: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -217,6 +269,24 @@ struct OverviewDerived {
     stuck_sessions: usize,
     context_risk_sessions: usize,
     loop_sessions: usize,
+}
+
+#[derive(Debug, Clone)]
+struct SearchSnapshot {
+    query: String,
+    health_filter: String,
+    source_filter: String,
+    model_filter: String,
+    project_filter: String,
+    project_id_filter: String,
+    range_filter: TimeRange,
+    cost_filter: Option<(CostOp, f64)>,
+    failure_filter: Option<(CostOp, i32)>,
+    context_filter: Option<(CostOp, f64)>,
+    anomaly_filter: Option<String>,
+    capability_filter: String,
+    issue_filter: String,
+    explorer_selected: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -262,8 +332,8 @@ impl App {
             overview,
             source_label: source_label.to_string(),
             reload_dir,
-            view: View::Overview,
-            help_context: View::Overview,
+            view: View::List,
+            help_context: View::List,
             mode: InputMode::Normal,
             filtered: Vec::new(),
             selected: 0,
@@ -273,13 +343,17 @@ impl App {
             source_filter: String::new(),
             model_filter: String::new(),
             project_filter: String::new(),
+            project_id_filter: String::new(),
             range_filter: TimeRange::All,
             cost_filter: None,
+            failure_filter: None,
+            context_filter: None,
             anomaly_filter: None,
             capability_filter: String::new(),
             issue_filter: String::new(),
             input: String::new(),
             input_original: String::new(),
+            search_snapshot: None,
             status: String::new(),
             sort_key: SortKey::Recent,
             sort_desc: true,
@@ -291,6 +365,14 @@ impl App {
             raw_report_expanded: false,
             governance: None,
             governance_dirty: true,
+            explorer_view: ExplorerView::Attention,
+            explorer_detail: None,
+            explorer_overlay: ExplorerOverlay::None,
+            explorer_selected: 0,
+            overlay_selected: 0,
+            last_auto_refresh: Instant::now(),
+            compare_anchor: None,
+            compare_open: false,
         };
         app.refresh_filtered();
         app
@@ -307,39 +389,18 @@ impl App {
     }
 
     fn handle_event(&mut self, event: Event) -> anyhow::Result<bool> {
-        match event {
-            Event::Paste(text) => self.handle_paste(text),
-            Event::Key(key) if key.kind == KeyEventKind::Press => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-                    return Ok(true);
-                }
-                match self.mode {
-                    InputMode::Search => Ok(self.handle_search_key(key)),
-                    InputMode::Command => self.handle_command_key(key),
-                    InputMode::Normal => self.handle_normal_key(key),
-                }
-            }
-            _ => Ok(false),
-        }
-    }
-
-    fn handle_paste(&mut self, text: String) -> anyhow::Result<bool> {
-        match self.mode {
-            InputMode::Search => {
-                self.input.push_str(&text.replace(['\r', '\n'], " "));
-                self.apply_search_input();
-            }
-            InputMode::Command => self.input.push_str(&text.replace(['\r', '\n'], " ")),
-            InputMode::Normal => {}
-        }
-        Ok(false)
+        self.handle_explorer_event(event)
     }
 
     fn handle_search_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Esc => {
-                self.query.clone_from(&self.input_original);
-                self.refresh_filtered();
+                if let Some(snapshot) = self.search_snapshot.take() {
+                    self.restore_search_snapshot(snapshot);
+                } else {
+                    self.query.clone_from(&self.input_original);
+                    self.refresh_filtered();
+                }
                 self.mode = InputMode::Normal;
                 self.input.clear();
                 self.input_original.clear();
@@ -350,6 +411,7 @@ impl App {
                 self.mode = InputMode::Normal;
                 self.input.clear();
                 self.input_original.clear();
+                self.search_snapshot = None;
                 self.status = if self.query.is_empty() {
                     self.t("filter cleared", "已清除筛选").to_string()
                 } else {
@@ -358,10 +420,12 @@ impl App {
             }
             KeyCode::Backspace => {
                 self.input.pop();
+                self.clear_invalid_structured_filter();
                 self.apply_search_input();
             }
             KeyCode::Char(c) => {
                 self.input.push(c);
+                self.clear_invalid_structured_filter();
                 self.apply_search_input();
             }
             _ => {}
@@ -369,155 +433,133 @@ impl App {
         false
     }
 
+    fn capture_search_snapshot(&mut self) {
+        self.search_snapshot = Some(SearchSnapshot {
+            query: self.query.clone(),
+            health_filter: self.health_filter.clone(),
+            source_filter: self.source_filter.clone(),
+            model_filter: self.model_filter.clone(),
+            project_filter: self.project_filter.clone(),
+            project_id_filter: self.project_id_filter.clone(),
+            range_filter: self.range_filter,
+            cost_filter: self.cost_filter,
+            failure_filter: self.failure_filter,
+            context_filter: self.context_filter,
+            anomaly_filter: self.anomaly_filter.clone(),
+            capability_filter: self.capability_filter.clone(),
+            issue_filter: self.issue_filter.clone(),
+            explorer_selected: self.explorer_selected,
+        });
+    }
+
+    fn restore_search_snapshot(&mut self, snapshot: SearchSnapshot) {
+        self.query = snapshot.query;
+        self.health_filter = snapshot.health_filter;
+        self.source_filter = snapshot.source_filter;
+        self.model_filter = snapshot.model_filter;
+        self.project_filter = snapshot.project_filter;
+        self.project_id_filter = snapshot.project_id_filter;
+        self.range_filter = snapshot.range_filter;
+        self.cost_filter = snapshot.cost_filter;
+        self.failure_filter = snapshot.failure_filter;
+        self.context_filter = snapshot.context_filter;
+        self.anomaly_filter = snapshot.anomaly_filter;
+        self.capability_filter = snapshot.capability_filter;
+        self.issue_filter = snapshot.issue_filter;
+        self.explorer_selected = snapshot.explorer_selected;
+        self.refresh_filtered();
+    }
+
     fn apply_search_input(&mut self) {
-        self.query = self.input.trim().to_string();
+        let value = self.input.trim().to_string();
+        if !self.apply_structured_search(&value) {
+            self.query = value;
+        }
         self.refresh_filtered();
         self.view = View::List;
     }
 
-    fn handle_command_key(&mut self, key: KeyEvent) -> anyhow::Result<bool> {
-        match key.code {
-            KeyCode::Esc => {
-                self.mode = InputMode::Normal;
-                self.input.clear();
-            }
-            KeyCode::Enter => {
-                let command = self.input.trim().to_string();
-                self.input.clear();
-                self.mode = InputMode::Normal;
-                return self.run_command(&command);
-            }
-            KeyCode::Backspace => {
-                self.input.pop();
-            }
-            KeyCode::Char(c) => self.input.push(c),
+    fn clear_invalid_structured_filter(&mut self) {
+        let input = self.input.clone();
+        let key = input
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if self.apply_structured_search(input.trim()) {
+            return;
+        }
+        match key.as_str() {
+            "cost" => self.cost_filter = None,
+            "health" => self.health_filter.clear(),
+            "failed" | "failures" => self.failure_filter = None,
+            "context" => self.context_filter = None,
+            "source" => self.source_filter.clear(),
+            "project" => self.project_filter.clear(),
+            "model" => self.model_filter.clear(),
+            "today" | "7d" | "30d" => self.range_filter = TimeRange::All,
             _ => {}
         }
-        Ok(false)
+    }
+
+    fn apply_structured_search(&mut self, value: &str) -> bool {
+        let lower = value.trim().to_ascii_lowercase();
+        let mut fields = lower.splitn(2, char::is_whitespace);
+        let key = fields.next().unwrap_or("");
+        let rest = fields.next().unwrap_or("").trim();
+        let recognized = match key {
+            "cost" => parse_cost_filter(rest)
+                .map(|filter| self.cost_filter = Some(filter))
+                .is_some(),
+            "health" => {
+                if parse_health_filter(rest).is_some() {
+                    self.health_filter = rest.to_string();
+                    true
+                } else {
+                    false
+                }
+            }
+            "failed" | "failures" => parse_numeric_i32_filter(rest)
+                .map(|filter| self.failure_filter = Some(filter))
+                .is_some(),
+            "context" => parse_cost_filter(rest)
+                .map(|filter| self.context_filter = Some(filter))
+                .is_some(),
+            "source" => {
+                self.source_filter = rest.to_string();
+                !rest.is_empty()
+            }
+            "project" => {
+                self.project_filter = rest.to_string();
+                !rest.is_empty()
+            }
+            "model" => {
+                self.model_filter = rest.to_string();
+                !rest.is_empty()
+            }
+            "today" if rest.is_empty() => {
+                self.range_filter = TimeRange::Today;
+                true
+            }
+            "7d" if rest.is_empty() => {
+                self.range_filter = TimeRange::Days7;
+                true
+            }
+            "30d" if rest.is_empty() => {
+                self.range_filter = TimeRange::Days30;
+                true
+            }
+            _ => false,
+        };
+        if recognized {
+            self.query.clear();
+            self.status = format!("{}: {value}", self.t("filter", "筛选"));
+        }
+        recognized
     }
 
     fn handle_normal_key(&mut self, key: KeyEvent) -> anyhow::Result<bool> {
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('r') {
-            self.reload(true)?;
-            return Ok(false);
-        }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('d') {
-            self.move_page(8);
-            return Ok(false);
-        }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('u') {
-            self.move_page(-8);
-            return Ok(false);
-        }
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(true),
-            KeyCode::Char(':') => {
-                self.mode = InputMode::Command;
-                self.input.clear();
-            }
-            KeyCode::Char('/') => {
-                self.mode = InputMode::Search;
-                self.input.clone_from(&self.query);
-                self.input_original.clone_from(&self.query);
-                self.view = View::List;
-            }
-            KeyCode::Char('?') => {
-                if self.view == View::Help {
-                    self.view = self.help_context;
-                } else {
-                    self.help_context = self.view;
-                    self.view = View::Help;
-                }
-                self.scroll = 0;
-            }
-            KeyCode::Tab | KeyCode::Char('`') => self.next_view(),
-            KeyCode::Char('0') => self.view = View::Overview,
-            KeyCode::Char('1') => self.view = View::List,
-            KeyCode::Char('2') => {
-                if self.selected_session().is_some() {
-                    self.view = View::Detail;
-                    self.scroll = 0;
-                }
-            }
-            KeyCode::Enter => {
-                if self.view == View::Overview {
-                    self.open_inspect_first();
-                } else if self.selected_session().is_some() {
-                    self.view = View::Detail;
-                    self.scroll = 0;
-                }
-            }
-            KeyCode::Char('3') | KeyCode::Char('w') => {
-                if self.selected_session().is_some() {
-                    self.view = View::Diagnostics;
-                    self.scroll = 0;
-                }
-            }
-            KeyCode::Char('4') | KeyCode::Char('d') => {
-                self.view = View::Diff;
-                self.scroll = 0;
-            }
-            KeyCode::Char('5') => self.open_governance(GovernancePanel::ActionCenter),
-            KeyCode::Char('6') | KeyCode::Char('8') => {
-                self.open_governance(GovernancePanel::Efficiency)
-            }
-            KeyCode::Char('7') | KeyCode::Char('9') => {
-                self.open_governance(GovernancePanel::Delivery)
-            }
-            KeyCode::Char('g') | KeyCode::Char('G') if matches!(self.view, View::Governance(_)) => {
-                self.next_governance_panel();
-            }
-            KeyCode::Char('v') if self.view == View::Detail => {
-                self.raw_report_expanded = !self.raw_report_expanded;
-                self.scroll = 0;
-            }
-            KeyCode::Char('r') => self.reload(false)?,
-            KeyCode::Char('f') => self.cycle_health_filter(),
-            KeyCode::Char('s') => self.filter_selected_source(),
-            KeyCode::Char('S') => self.filter_top_driver(DriverKind::Source),
-            KeyCode::Char('M') => self.filter_top_driver(DriverKind::Model),
-            KeyCode::Char('A') => self.filter_top_driver(DriverKind::Anomaly),
-            KeyCode::Char('R') => self.cycle_range(),
-            KeyCode::Char('$') => self.filter_costly_sessions(),
-            KeyCode::Char('!') => self.filter_critical_sessions(),
-            KeyCode::Char('c') => self.set_sort(SortKey::Cost),
-            KeyCode::Char('e') => self.set_sort(SortKey::Failures),
-            KeyCode::Char('h') => self.set_sort(SortKey::Health),
-            KeyCode::Char('n') => self.set_sort(SortKey::Name),
-            KeyCode::Char('t') => self.set_sort(SortKey::Turns),
-            KeyCode::Char('a') => self.set_sort(SortKey::Anomalies),
-            KeyCode::Char('l') | KeyCode::Char('L') => self.toggle_language(),
-            KeyCode::Esc => {
-                if matches!(
-                    self.view,
-                    View::Detail | View::Diagnostics | View::Diff | View::Governance(_)
-                ) {
-                    self.view = View::List;
-                    self.scroll = 0;
-                } else if self.view == View::Help {
-                    self.view = self.help_context;
-                    self.scroll = 0;
-                } else if self.has_filters() {
-                    self.clear_filters();
-                    self.refresh_filtered();
-                    self.status = self.t("filter cleared", "已清除筛选").to_string();
-                } else {
-                    self.view = View::Overview;
-                }
-            }
-            KeyCode::Down | KeyCode::Char('j') => self.move_next(),
-            KeyCode::Up | KeyCode::Char('k') => self.move_previous(),
-            KeyCode::Char('G') => {
-                if !self.filtered.is_empty() {
-                    self.selected = self.filtered.len() - 1;
-                    self.clamp_selection();
-                }
-            }
-            KeyCode::PageDown => self.scroll = self.scroll.saturating_add(8),
-            KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(8),
-            _ => {}
-        }
-        Ok(false)
+        self.handle_explorer_event(Event::Key(key))
     }
 
     fn t(&self, en: &'static str, zh: &'static str) -> &'static str {
@@ -815,6 +857,13 @@ impl App {
     }
 
     fn start_reload_with_cache(&mut self, force: bool, cache: Option<SessionCache>) {
+        if self.pending_load.is_some() {
+            self.status = self
+                .t("reload already in progress", "正在加载，暂不重复刷新")
+                .to_string();
+            return;
+        }
+        self.last_auto_refresh = Instant::now();
         let Some(dir) = self.reload_dir.as_deref() else {
             self.status = self
                 .t(
@@ -879,6 +928,20 @@ impl App {
         });
     }
 
+    fn poll_auto_refresh(&mut self) -> anyhow::Result<bool> {
+        if self.reload_dir.is_none()
+            || self.pending_load.is_some()
+            || self.mode != InputMode::Normal
+            || self.explorer_overlay != ExplorerOverlay::None
+            || self.last_auto_refresh.elapsed() < AUTO_REFRESH_INTERVAL
+        {
+            return Ok(false);
+        }
+        self.last_auto_refresh = Instant::now();
+        self.start_reload(false);
+        Ok(true)
+    }
+
     fn poll_pending_load(&mut self) -> bool {
         let Some(rx) = self.pending_load.take() else {
             return false;
@@ -941,6 +1004,7 @@ impl App {
     }
 
     fn apply_loaded_sessions(&mut self, report: LoadReport, force: bool) {
+        let previous_count = self.sessions.len();
         let selected = self.selected_session().cloned();
         self.load_state.discovered = report.discovered;
         self.load_state.processed = report.discovered;
@@ -959,26 +1023,45 @@ impl App {
         self.scroll = 0;
         self.refresh_filtered();
         if let Some(position) = selected_index.and_then(|index| {
-            self.filtered
+            self.explorer_indices()
                 .iter()
                 .position(|candidate| *candidate == index)
         }) {
             self.selected = position;
+            self.explorer_selected = position;
             self.clamp_selection();
         } else if selection_missing {
             self.view = View::List;
+            self.explorer_detail = None;
+            self.explorer_selected = 0;
         }
         self.load_state.phase = LoadPhase::Ready;
         self.load_state.showing_cached = false;
         self.load_state.force = force;
         self.load_state.parsed = self.sessions.len();
         self.load_state.sources = source_counts(&self.sessions);
+        if self.compare_anchor.as_deref().is_some_and(|anchor| {
+            !self.sessions.iter().any(|session| {
+                format!("{}\n{}", session.path, session.metrics.session_start) == anchor
+            })
+        }) {
+            self.compare_anchor = None;
+            self.compare_open = false;
+        }
+        let new_sessions = self.sessions.len().saturating_sub(previous_count);
         self.status = if selection_missing {
             self.t(
                 "reloaded; selected session is no longer available",
                 "已重新加载；原选中会话已不存在",
             )
             .to_string()
+        } else if new_sessions > 0 && !force {
+            format!(
+                "{} {} {}",
+                format_count(new_sessions as i64),
+                self.t("new sessions loaded;", "个新会话已加载；"),
+                self.t("press r to refresh now", "按 r 可立即刷新")
+            )
         } else if force {
             format!(
                 "{} {} {} {} {}",
@@ -1000,26 +1083,12 @@ impl App {
         };
     }
 
-    fn next_view(&mut self) {
-        self.view = match self.view {
-            View::Overview => View::List,
-            View::List => {
-                if self.selected_session().is_some() {
-                    View::Detail
-                } else {
-                    View::Overview
-                }
-            }
-            View::Detail => View::Diagnostics,
-            View::Diagnostics => View::Diff,
-            View::Diff => View::Governance(GovernancePanel::ActionCenter),
-            View::Governance(_) | View::Help => View::Overview,
-        };
-        self.scroll = 0;
-    }
-
     fn set_sort(&mut self, key: SortKey) {
-        let selected = self.filtered.get(self.selected).copied();
+        let selected = self
+            .explorer_indices()
+            .get(self.explorer_selected)
+            .copied()
+            .or_else(|| self.filtered.get(self.selected).copied());
         if self.sort_key == key {
             self.sort_desc = !self.sort_desc;
         } else {
@@ -1028,11 +1097,12 @@ impl App {
         }
         self.refresh_filtered();
         if let Some(position) = selected.and_then(|index| {
-            self.filtered
+            self.explorer_indices()
                 .iter()
                 .position(|candidate| *candidate == index)
         }) {
             self.selected = position;
+            self.explorer_selected = position;
             self.clamp_selection();
         }
         self.status = format!(
@@ -1041,6 +1111,7 @@ impl App {
             sort_key_label(self.sort_key, self.language)
         );
         self.view = View::List;
+        self.explorer_view = ExplorerView::All;
     }
 
     fn set_sort_desc(&mut self, key: SortKey, desc: bool) {
@@ -1058,6 +1129,7 @@ impl App {
             }
         );
         self.view = View::List;
+        self.explorer_view = ExplorerView::All;
     }
 
     fn clear_filters(&mut self) {
@@ -1065,6 +1137,7 @@ impl App {
         self.source_filter.clear();
         self.model_filter.clear();
         self.project_filter.clear();
+        self.project_id_filter.clear();
         self.range_filter = TimeRange::All;
         self.capability_filter.clear();
         self.issue_filter.clear();
@@ -1074,6 +1147,8 @@ impl App {
         self.query.clear();
         self.health_filter.clear();
         self.cost_filter = None;
+        self.failure_filter = None;
+        self.context_filter = None;
         self.anomaly_filter = None;
     }
 
@@ -1083,8 +1158,11 @@ impl App {
             || !self.source_filter.is_empty()
             || !self.model_filter.is_empty()
             || !self.project_filter.is_empty()
+            || !self.project_id_filter.is_empty()
             || self.range_filter != TimeRange::All
             || self.cost_filter.is_some()
+            || self.failure_filter.is_some()
+            || self.context_filter.is_some()
             || self.anomaly_filter.is_some()
             || !self.capability_filter.is_empty()
             || !self.issue_filter.is_empty()
@@ -1148,14 +1226,12 @@ impl App {
         let value = match kind {
             DriverKind::Source => top_driver(&sessions, driver_source).map(|item| item.label),
             DriverKind::Model => top_driver(&sessions, driver_model).map(|item| item.label),
-            DriverKind::Anomaly => top_anomaly_driver(&sessions).map(|item| item.label),
         };
         let Some(value) = value else { return };
         self.clear_filters();
         match kind {
             DriverKind::Source => self.source_filter = value.clone(),
             DriverKind::Model => self.model_filter = value.clone(),
-            DriverKind::Anomaly => self.anomaly_filter = Some(value.clone()),
         }
         self.refresh_filtered();
         self.view = View::List;
@@ -1176,10 +1252,6 @@ impl App {
         self.refresh_filtered();
         self.view = View::List;
         self.status = self.t("quick critical filter", "快捷严重筛选").to_string();
-    }
-
-    fn open_inspect_first(&mut self) {
-        self.select_inspect_item(0);
     }
 
     fn select_inspect_item(&mut self, rank: usize) -> bool {
@@ -1246,6 +1318,9 @@ impl App {
             compare_sessions(&self.sessions[*a], &self.sessions[*b], sort_key, sort_desc)
         });
         self.clamp_selection();
+        self.explorer_selected = self
+            .explorer_selected
+            .min(self.filtered.len().saturating_sub(1));
         self.overview = compute_overview_iter(
             self.filtered
                 .iter()
@@ -1307,8 +1382,20 @@ impl App {
             && matches_source_filter(session, &self.source_filter)
             && matches_text_filter(&session.metrics.model_used, &self.model_filter)
             && matches_text_filter(&project_name(session), &self.project_filter)
+            && (self.project_id_filter.is_empty()
+                || resolve_project(session).id == self.project_id_filter)
             && session_matches_time_range(session, self.range_filter, now)
             && matches_cost_filter(session, self.cost_filter)
+            && self.failure_filter.map_or(true, |(op, value)| {
+                compare_i32(session.metrics.tool_calls_fail as i32, op, value)
+            })
+            && self.context_filter.map_or(true, |(op, value)| {
+                compare_f64(
+                    session.diagnostics.context_utilization.utilization_pct,
+                    op,
+                    value,
+                )
+            })
             && matches_anomaly_filter(session, self.anomaly_filter.as_deref())
             && (self.capability_filter.is_empty()
                 || session_capability(session) == self.capability_filter)
@@ -1328,47 +1415,15 @@ impl App {
     }
 
     fn move_next(&mut self) {
-        if matches!(
-            self.view,
-            View::Detail | View::Diagnostics | View::Diff | View::Governance(_)
-        ) {
-            self.scroll = self.scroll.saturating_add(1);
-            return;
-        }
-        if !self.filtered.is_empty() {
-            self.selected = (self.selected + 1).min(self.filtered.len() - 1);
-            self.clamp_selection();
-        }
-    }
-
-    fn move_previous(&mut self) {
-        if matches!(
-            self.view,
-            View::Detail | View::Diagnostics | View::Diff | View::Governance(_)
-        ) {
-            self.scroll = self.scroll.saturating_sub(1);
-            return;
-        }
-        self.selected = self.selected.saturating_sub(1);
-        self.clamp_selection();
-    }
-
-    fn move_page(&mut self, delta: i16) {
-        if matches!(
-            self.view,
-            View::Detail | View::Diagnostics | View::Diff | View::Governance(_)
-        ) {
-            self.scroll = self.scroll.saturating_add_signed(delta);
-            return;
-        }
-        self.selected = self.selected.saturating_add_signed(delta.into());
-        self.clamp_selection();
+        self.move_explorer(1);
     }
 
     fn selected_session(&self) -> Option<&Session> {
-        self.filtered
-            .get(self.selected)
-            .and_then(|idx| self.sessions.get(*idx))
+        self.explorer_session().or_else(|| {
+            self.filtered
+                .get(self.selected.min(self.filtered.len().saturating_sub(1)))
+                .and_then(|index| self.sessions.get(*index))
+        })
     }
 
     fn visible_sessions(&self) -> Vec<&Session> {
@@ -1626,16 +1681,26 @@ fn load_sessions_for_tui(
     Ok((force, report))
 }
 
+#[path = "explorer.rs"]
+mod explorer;
 #[path = "filters.rs"]
 mod filters;
 #[path = "i18n.rs"]
 mod i18n;
+#[cfg(test)]
 #[path = "presentation.rs"]
 mod presentation;
+#[cfg(not(test))]
+#[path = "shared.rs"]
+mod shared;
 
+use explorer::*;
 use filters::*;
 use i18n::UiText;
+#[cfg(test)]
 use presentation::*;
+#[cfg(not(test))]
+use shared::*;
 
 #[cfg(test)]
 #[path = "tests.rs"]

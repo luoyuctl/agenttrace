@@ -6,6 +6,410 @@ use ratatui::Terminal;
 use std::fs;
 
 #[test]
+fn explorer_navigation_reaches_views_details_and_overlays() {
+    let mut app = App::new(
+        vec![session("billing", "claude_code", "gpt-5", 45, 0.2, "bash")],
+        "test",
+        None,
+    );
+    assert_eq!(app.explorer_view, ExplorerView::Attention);
+
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('v'),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert_eq!(app.explorer_overlay, ExplorerOverlay::ViewPicker);
+    for _ in 0..4 {
+        app.handle_explorer_event(Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)))
+            .unwrap();
+    }
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert_eq!(app.explorer_view, ExplorerView::Context);
+
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert_eq!(app.explorer_detail, Some(DetailSection::Summary));
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Right,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert_eq!(app.explorer_detail, Some(DetailSection::Timeline));
+    app.handle_explorer_event(Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+        .unwrap();
+    assert_eq!(app.explorer_detail, None);
+
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('k'),
+        KeyModifiers::CONTROL,
+    )))
+    .unwrap();
+    assert_eq!(app.explorer_overlay, ExplorerOverlay::Command);
+}
+
+#[test]
+fn explorer_footer_shows_language_shortcut_in_list_and_detail() {
+    let mut app = App::new(
+        vec![session("language", "codex_cli", "gpt-5", 90, 0.1, "rg")],
+        "test",
+        None,
+    );
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).expect("terminal");
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render list footer");
+    let list = format!("{:?}", terminal.backend().buffer());
+    assert!(list.contains("l Language"));
+
+    app.explorer_detail = Some(DetailSection::Summary);
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render detail footer");
+    let detail = format!("{:?}", terminal.backend().buffer());
+    assert!(detail.contains("L Language"));
+
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('L'),
+        KeyModifiers::NONE,
+    )))
+    .expect("switch language in detail");
+    assert_eq!(app.language, Language::Zh);
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render chinese footer");
+    assert!(format!("{:?}", terminal.backend().buffer()).contains("L 切换语言"));
+}
+
+#[test]
+fn explorer_renders_specialized_previews_and_real_file_size() {
+    let path = std::env::temp_dir().join(format!(
+        "agenttrace-explorer-{}-{}.jsonl",
+        std::process::id(),
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    fs::write(&path, vec![b'x'; 2_048]).expect("write session file");
+    let mut item = session("local", "codex_cli", "gpt-5", 70, 0.42, "rg");
+    item.path = path.to_string_lossy().into_owned();
+    item.metrics.tokens_input = 12_000;
+    item.metrics.tool_calls_total = 3;
+    item.metrics.tool_calls_ok = 2;
+    item.metrics.tool_calls_fail = 1;
+    item.diagnostics.context_utilization.utilization_pct = 88.0;
+    item.diagnostics.context_utilization.risk_level = "warning".to_string();
+    let mut app = App::new(vec![item], "test", None);
+    let backend = TestBackend::new(140, 38);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+
+    for (view, expected) in [
+        (ExplorerView::Context, "Context filling up"),
+        (ExplorerView::Storage, "2.0 KB"),
+        (ExplorerView::Cost, "Estimated spend"),
+        (ExplorerView::Tools, "Tool trouble"),
+    ] {
+        app.explorer_view = view;
+        terminal
+            .draw(|frame| render_explorer(frame, &mut app))
+            .expect("render explorer");
+        let rendered = format!("{:?}", terminal.backend().buffer());
+        assert!(
+            rendered.contains(expected),
+            "missing {expected}: {rendered}"
+        );
+        if view == ExplorerView::Cost {
+            assert!(rendered.contains("Historical stored estimate"));
+            assert!(rendered.contains("Current-rate estimate"));
+            assert!(rendered.contains("Difference"));
+        }
+    }
+
+    app.explorer_detail = Some(DetailSection::Timeline);
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render timeline");
+    assert!(format!("{:?}", terminal.backend().buffer())
+        .contains("We didn't see a compaction event from this agent."));
+    fs::remove_file(path).expect("remove session file");
+}
+
+#[test]
+fn explorer_layout_uses_compact_standard_and_wide_space() {
+    let mut item = session("responsive", "codex_cli", "gpt-5", 72, 0.42, "exec_command");
+    item.diagnostics.steps.push(agenttrace_core::TraceStep {
+        kind: "tool".to_string(),
+        name: "exec_command with a long but useful step name".to_string(),
+        started_at: "2026-05-20T06:10:45Z".to_string(),
+        ended_at: "2026-05-20T06:10:47Z".to_string(),
+        duration_sec: 2.0,
+        status: "ok".to_string(),
+        tokens: 0,
+        call_id: "call-1".to_string(),
+        parent_id: String::new(),
+    });
+    let mut app = App::new(vec![item], "test", None);
+
+    let mut compact = Terminal::new(TestBackend::new(80, 24)).expect("compact terminal");
+    compact
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render compact explorer");
+    let compact_text = format!("{:?}", compact.backend().buffer());
+    assert!(compact_text.contains("Look here first"));
+    assert!(!compact_text.contains("Why look here"));
+
+    let mut standard = Terminal::new(TestBackend::new(120, 30)).expect("standard terminal");
+    standard
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render standard explorer");
+    let standard_text = format!("{:?}", standard.backend().buffer());
+    assert!(standard_text.contains("Why look here"));
+
+    app.explorer_detail = Some(DetailSection::Timeline);
+    let mut wide = Terminal::new(TestBackend::new(200, 50)).expect("wide terminal");
+    wide.draw(|frame| render_explorer(frame, &mut app))
+        .expect("render wide detail");
+    let wide_text = format!("{:?}", wide.backend().buffer());
+    assert!(wide_text.contains("Session at a glance"));
+    assert!(wide_text.contains("2026-05-20T06:10:45Z"));
+    assert!(wide_text.contains("exec_command with a long but useful step name"));
+}
+
+#[test]
+fn explorer_daily_workflow_supports_attention_detail_compare_range_and_projects() {
+    let mut healthy = session("healthy", "codex_cli", "gpt-5", 95, 0.05, "read_file");
+    healthy.cwd = "/work/project-a".to_string();
+    healthy.metrics.duration_sec = 20.0;
+    healthy.metrics.gaps_sec.clear();
+    let mut critical = session("critical", "claude_code", "gpt-5", 40, 1.2, "read_file");
+    critical.cwd = "/work/project-a".to_string();
+    critical
+        .metrics
+        .file_usage
+        .insert("src/app.rs".to_string(), 4);
+    let mut slow = session("slow", "pi", "gpt-5", 85, 0.2, "rg");
+    slow.cwd = "/work/project-b".to_string();
+    slow.metrics.duration_sec = 600.0;
+    let mut app = App::new(vec![healthy, critical, slow], "test", None);
+
+    let attention = app.explorer_indices();
+    assert_eq!(attention.len(), 2);
+    assert!(attention
+        .iter()
+        .all(|index| app.sessions[*index].name != "healthy"));
+
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .expect("open detail");
+    let first = app.selected_session().expect("first detail").name.clone();
+    app.scroll = 7;
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('j'),
+        KeyModifiers::NONE,
+    )))
+    .expect("next detail session");
+    assert_ne!(app.selected_session().expect("next detail").name, first);
+    assert_eq!(app.scroll, 0);
+
+    app.handle_explorer_event(Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+        .expect("back to list");
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char(' '),
+        KeyModifiers::NONE,
+    )))
+    .expect("mark compare start");
+    app.handle_explorer_event(Event::Key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)))
+        .expect("pick compare target");
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('d'),
+        KeyModifiers::NONE,
+    )))
+    .expect("open compare");
+    assert!(app.compare_open);
+    assert!(app.compare_sessions().is_some());
+
+    app.compare_open = false;
+    app.compare_anchor = None;
+    app.explorer_view = ExplorerView::All;
+    app.explorer_selected = app
+        .explorer_indices()
+        .iter()
+        .position(|index| app.sessions[*index].name == "critical")
+        .expect("critical position");
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('D'),
+        KeyModifiers::NONE,
+    )))
+    .expect("compare with previous project run");
+    assert!(app.compare_open);
+    assert!(app.compare_sessions().is_some());
+
+    app.compare_open = false;
+    app.explorer_view = ExplorerView::Projects;
+    let mut terminal = Terminal::new(TestBackend::new(160, 40)).expect("terminal");
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render project view");
+    let project = format!("{:?}", terminal.backend().buffer());
+    assert!(project.contains("Project summary"));
+    assert!(project.contains("sessions"));
+    assert!(project.contains("need attention"));
+
+    app.explorer_view = ExplorerView::All;
+    app.explorer_selected = app
+        .explorer_indices()
+        .iter()
+        .position(|index| app.sessions[*index].name == "critical")
+        .expect("critical position");
+    app.explorer_detail = Some(DetailSection::Summary);
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render health explanation");
+    assert!(format!("{:?}", terminal.backend().buffer()).contains("Health is affected by"));
+    app.explorer_detail = Some(DetailSection::Files);
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render repeated reads");
+    assert!(format!("{:?}", terminal.backend().buffer()).contains("Possible repeated reads"));
+}
+
+#[test]
+fn explorer_search_accepts_paste_and_filter_covers_context_risk() {
+    let mut risky = session("risky", "codex_cli", "gpt-5", 70, 0.1, "rg");
+    risky.diagnostics.context_utilization.risk_level = "critical".to_string();
+    let mut app = App::new(
+        vec![
+            risky,
+            session("healthy", "pi", "gpt-5", 95, 0.01, "read_file"),
+        ],
+        "test",
+        None,
+    );
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('/'),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    app.handle_explorer_event(Event::Paste("risky\n".to_string()))
+        .unwrap();
+    assert_eq!(app.query, "risky");
+    assert_eq!(app.filtered.len(), 1);
+
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('k'),
+        KeyModifiers::CONTROL,
+    )))
+    .unwrap();
+    app.handle_explorer_event(Event::Paste("context risk".to_string()))
+        .unwrap();
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Enter,
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
+    assert_eq!(app.issue_filter, "context");
+}
+
+#[test]
+fn explorer_search_understands_plain_structured_filters() {
+    let mut costly = session("costly", "codex_cli", "gpt-5", 60, 2.0, "rg");
+    costly.metrics.tool_calls_fail = 3;
+    costly.diagnostics.context_utilization.utilization_pct = 90.0;
+    let mut cheap = session("cheap", "pi", "gpt-5", 95, 0.1, "read_file");
+    cheap.metrics.tool_calls_fail = 0;
+    cheap.diagnostics.context_utilization.utilization_pct = 20.0;
+    let mut app = App::new(vec![costly, cheap], "test", None);
+
+    for (query, expected) in [
+        ("cost > 1", "costly"),
+        ("health < 70", "costly"),
+        ("failed > 0", "costly"),
+        ("context > 80", "costly"),
+        ("source codex", "costly"),
+    ] {
+        app.clear_filters();
+        app.input = query.to_string();
+        app.apply_search_input();
+        assert!(
+            app.query.is_empty(),
+            "structured query leaked into text search"
+        );
+        assert_eq!(app.filtered.len(), 1, "query={query}");
+        assert_eq!(
+            app.sessions[app.filtered[0]].name, expected,
+            "query={query}"
+        );
+    }
+}
+
+#[test]
+fn explorer_storage_lists_each_physical_file_once() {
+    let mut first = session("first", "hermes_db", "gpt-5", 90, 0.1, "rg");
+    let mut second = session("second", "hermes_db", "gpt-5", 90, 0.1, "rg");
+    first.path = "/tmp/shared-state.db".to_string();
+    second.path = first.path.clone();
+    let mut app = App::new(vec![first, second], "test", None);
+    app.explorer_view = ExplorerView::Storage;
+    let backend = TestBackend::new(140, 38);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render storage");
+    let rendered = format!("{:?}", terminal.backend().buffer());
+    assert_ne!(rendered.contains("first"), rendered.contains("second"));
+}
+
+#[test]
+fn explorer_attention_uses_core_inspect_reason_and_cost_shows_provenance() {
+    let mut critical = session("critical", "claude_code", "unknown", 20, 0.2, "bash");
+    critical.metrics.tool_calls_fail = 0;
+    let mut failing = session("failing", "codex_cli", "gpt-5", 80, 9.0, "rg");
+    failing.metrics.tool_calls_fail = 4;
+    let mut app = App::new(vec![failing, critical], "test", None);
+    let backend = TestBackend::new(140, 38);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render attention");
+    let attention = format!("{:?}", terminal.backend().buffer());
+    let critical_at = attention.find("critical").expect("critical session");
+    let failing_at = attention.find("failing").expect("failing session");
+    assert!(
+        critical_at < failing_at,
+        "inspect-first rank should put critical before failing: {attention}"
+    );
+    assert!(attention.contains("Why look here"));
+    assert!(attention.contains("This session looks unhealthy"));
+
+    app.explorer_view = ExplorerView::Cost;
+    app.explorer_selected = 0;
+    terminal
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render cost");
+    let cost = format!("{:?}", terminal.backend().buffer());
+    assert!(cost.contains("Estimated spend"));
+    assert!(cost.contains("Price sources"));
+    assert!(cost.contains("Current rates"));
+    assert!(cost.contains("Stored estimate"));
+    assert!(
+        cost.contains("can't price this model yet") || cost.contains("priced from our model list"),
+        "missing pricing status: {cost}"
+    );
+}
+
+#[test]
 fn chinese_workspace_copy_is_plain_language_and_width_aware() {
     let mut item = agenttrace_core::Recommendation {
         id: "tool-failures".to_string(),
@@ -100,14 +504,13 @@ fn workspaces_render_filtered_reports_and_project_resolution() {
     let delivery = format!("{:?}", terminal.backend().buffer());
     assert!(delivery.contains("Delivery evidence"));
 
-    app.handle_normal_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE))
-        .expect("cycle governance");
+    app.next_governance_panel();
     assert!(matches!(
         app.view,
         View::Governance(GovernancePanel::ActionCenter)
     ));
-    app.handle_normal_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-        .expect("leave governance");
+    app.view = View::List;
+    app.explorer_detail = None;
     assert_eq!(app.view, View::List);
 }
 
@@ -170,6 +573,35 @@ fn commands_switch_views_and_apply_search() {
 }
 
 #[test]
+fn simplified_navigation_uses_three_areas_and_command_palette_key() {
+    let mut app = App::new(
+        vec![session("billing", "claude_code", "m", 70, 0.0, "rg")],
+        "test",
+        None,
+    );
+    assert_eq!(app.explorer_view, ExplorerView::Attention);
+
+    app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect("open session summary");
+    assert_eq!(app.explorer_detail, Some(DetailSection::Summary));
+    app.handle_normal_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
+        .expect("open timeline");
+    assert_eq!(app.explorer_detail, Some(DetailSection::Timeline));
+    app.handle_normal_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+        .expect("leave detail");
+    assert_eq!(app.explorer_detail, None);
+
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL))
+        .expect("open command palette");
+    assert_eq!(app.explorer_overlay, ExplorerOverlay::Command);
+    for character in "project jk".chars() {
+        app.handle_normal_key(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE))
+            .expect("type command query");
+    }
+    assert_eq!(app.input, "project jk");
+}
+
+#[test]
 fn live_search_paste_and_escape_restore_the_previous_filter() {
     let mut app = App::new(
         vec![
@@ -198,6 +630,155 @@ fn live_search_paste_and_escape_restore_the_previous_filter() {
         app.selected_session().map(|session| session.name.as_str()),
         Some("docs")
     );
+}
+
+#[test]
+fn live_search_escape_restores_structured_and_project_filters() {
+    let mut first = session("first", "codex_cli", "gpt-5", 90, 2.0, "rg");
+    first.cwd = "/tmp/foo/project".to_string();
+    let mut second = session("second", "pi", "gpt-5", 90, 0.1, "rg");
+    second.cwd = "/tmp/bar/project".to_string();
+    let mut app = App::new(vec![first, second], "test", None);
+
+    app.run_command("cost >1").expect("cost filter");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE))
+        .expect("start cost search");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+        .expect("cancel cost search");
+    assert_eq!(app.cost_filter, Some((CostOp::Gt, 1.0)));
+
+    app.run_command("project foo").expect("project filter");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE))
+        .expect("start project search");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+        .expect("cancel project search");
+    assert_eq!(app.project_filter, "foo");
+
+    app.project_id_filter = "/tmp/foo/project".to_string();
+    app.refresh_filtered();
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE))
+        .expect("start project id search");
+    app.handle_event(Event::Paste("anything".to_string()))
+        .expect("type project id search");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+        .expect("cancel project id search");
+    assert_eq!(app.project_id_filter, "/tmp/foo/project");
+
+    app.clear_filters();
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE))
+        .expect("start invalidation search");
+    app.handle_event(Event::Paste("cost >1".to_string()))
+        .expect("type valid cost expression");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE))
+        .expect("make cost expression invalid");
+    assert!(app.cost_filter.is_none());
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE))
+        .expect("repair cost expression");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect("submit search");
+    assert!(app.cost_filter.is_some());
+    assert!(app.search_snapshot.is_none());
+}
+
+#[test]
+fn project_view_filters_by_canonical_id_and_keeps_same_names_separate() {
+    let mut left = session("left", "codex_cli", "gpt-5", 90, 0.1, "rg");
+    left.cwd = "/tmp/alpha/project".to_string();
+    let mut right = session("right", "codex_cli", "gpt-5", 90, 0.1, "rg");
+    right.cwd = "/tmp/beta/project".to_string();
+    let mut app = App::new(vec![left, right], "test", None);
+    app.explorer_view = ExplorerView::Projects;
+    let projects = app.explorer_indices();
+    assert_eq!(projects.len(), 2);
+    assert_ne!(
+        resolve_project(&app.sessions[projects[0]]).id,
+        resolve_project(&app.sessions[projects[1]]).id
+    );
+    app.explorer_selected = projects
+        .iter()
+        .position(|index| app.sessions[*index].name == "left")
+        .expect("left project");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE))
+        .expect("filter project");
+    assert_eq!(app.project_id_filter, "/tmp/alpha/project");
+    assert_eq!(app.filtered.len(), 1);
+    assert_eq!(app.sessions[app.filtered[0]].name, "left");
+    assert_eq!(app.status, "project filter: project");
+}
+
+#[test]
+fn previous_project_session_requires_time_and_uses_deterministic_ties() {
+    let mut current = session("current", "codex_cli", "m", 90, 0.1, "rg");
+    current.cwd = "/tmp/same-project".to_string();
+    current.metrics.session_start = "2026-05-03T10:00:00Z".to_string();
+    let mut tied_a = session("tie-a", "codex_cli", "m", 90, 0.1, "rg");
+    tied_a.cwd = current.cwd.clone();
+    tied_a.metrics.session_start = "2026-05-02T10:00:00Z".to_string();
+    let mut tied_b = session("tie-b", "codex_cli", "m", 90, 0.1, "rg");
+    tied_b.cwd = current.cwd.clone();
+    tied_b.metrics.session_start = tied_a.metrics.session_start.clone();
+    let mut no_time = session("no-time", "codex_cli", "m", 90, 0.1, "rg");
+    no_time.cwd = current.cwd.clone();
+    no_time.metrics.session_start.clear();
+    let mut app = App::new(vec![current, tied_a, tied_b, no_time], "test", None);
+    app.explorer_view = ExplorerView::All;
+    app.explorer_selected = app
+        .explorer_indices()
+        .iter()
+        .position(|index| app.sessions[*index].name == "current")
+        .expect("current session");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('D'), KeyModifiers::NONE))
+        .expect("find previous session");
+    assert_eq!(
+        app.compare_sessions().expect("previous session")[0].name,
+        "tie-b"
+    );
+
+    app.compare_open = false;
+    app.compare_anchor = None;
+    let current_index = app
+        .sessions
+        .iter()
+        .position(|session| session.name == "current")
+        .expect("current index");
+    app.sessions[current_index].metrics.session_start = "2026-05-01T10:00:00Z".to_string();
+    app.refresh_filtered();
+    app.explorer_selected = app
+        .explorer_indices()
+        .iter()
+        .position(|index| app.sessions[*index].name == "current")
+        .expect("earliest current session");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('D'), KeyModifiers::NONE))
+        .expect("report earliest session");
+    assert!(app.status.contains("earliest"));
+
+    app.sessions[current_index].metrics.session_start.clear();
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('D'), KeyModifiers::NONE))
+        .expect("report missing timestamp");
+    assert!(app.status.contains("no timestamp"));
+}
+
+#[test]
+fn auto_refresh_waits_ten_seconds_and_never_starts_concurrently() {
+    let root = std::env::temp_dir().join(format!("agenttrace-auto-refresh-{}", std::process::id()));
+    fs::create_dir_all(&root).expect("create reload dir");
+    let mut app = App::new(
+        vec![session("cached", "pi", "m", 90, 0.0, "rg")],
+        "test",
+        Some(root.to_string_lossy().into_owned()),
+    );
+    app.last_auto_refresh = Instant::now() - AUTO_REFRESH_INTERVAL - Duration::from_millis(1);
+    assert!(app.poll_auto_refresh().expect("auto refresh"));
+    assert!(app.pending_load.is_some());
+    assert!(!app.poll_auto_refresh().expect("no concurrent auto refresh"));
+    let refreshed_at = app.last_auto_refresh;
+    app.start_reload(false);
+    assert_eq!(app.last_auto_refresh, refreshed_at);
+
+    let mut no_reload = App::new(vec![], "test", None);
+    no_reload.last_auto_refresh = Instant::now() - AUTO_REFRESH_INTERVAL - Duration::from_secs(1);
+    assert!(!no_reload.poll_auto_refresh().expect("no reload source"));
+    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -252,17 +833,14 @@ fn overview_enter_opens_first_inspect_item() {
         "test",
         None,
     );
-    app.view = View::Overview;
-
     app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .expect("overview enter");
+        .expect("open top attention item");
 
-    assert_eq!(app.view, View::Diagnostics);
+    assert_eq!(app.explorer_detail, Some(DetailSection::Summary));
     assert_eq!(
         app.selected_session().map(|session| session.name.as_str()),
         Some("critical")
     );
-    assert!(app.status.contains("inspect critical #1"));
 }
 
 #[test]
@@ -283,6 +861,7 @@ fn language_defaults_to_english_and_l_toggles_chinese() {
 
     let backend = TestBackend::new(100, 24);
     let mut terminal = Terminal::new(backend).expect("test terminal");
+    app.view = View::Overview;
     terminal
         .draw(|frame| render(frame, &mut app))
         .expect("render zh overview");
@@ -460,7 +1039,10 @@ fn quick_filter_keys_match_go_keymap_semantics() {
     );
 
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE))
-        .expect("health filter key");
+        .expect("open filter overlay");
+    assert_eq!(app.explorer_overlay, ExplorerOverlay::Filter);
+    app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect("apply health filter");
     assert_eq!(app.health_filter, "good");
     assert_eq!(
         app.selected_session().map(|s| s.name.as_str()),
@@ -468,7 +1050,9 @@ fn quick_filter_keys_match_go_keymap_semantics() {
     );
 
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE))
-        .expect("health filter key");
+        .expect("open filter overlay");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect("cycle health filter");
     assert_eq!(app.health_filter, "warn");
     assert_eq!(
         app.selected_session().map(|s| s.name.as_str()),
@@ -511,11 +1095,14 @@ fn reload_missing_selection_returns_to_list() {
     let selected = session("selected", "codex_cli", "m", 95, 0.1, "rg");
     let remaining = session("remaining", "pi", "m", 80, 0.1, "rg");
     let mut app = App::new(vec![selected, remaining.clone()], "test", None);
-    app.selected = app
+    app.explorer_view = ExplorerView::All;
+    app.explorer_selected = app
         .filtered
         .iter()
         .position(|index| app.sessions[*index].name == "selected")
         .unwrap();
+    app.selected = app.explorer_selected;
+    app.explorer_detail = Some(DetailSection::Summary);
     app.view = View::Detail;
     app.apply_loaded_sessions(
         LoadReport {
@@ -549,17 +1136,12 @@ fn go_navigation_keys_and_pairwise_diff_stay_compatible() {
             KeyModifiers::CONTROL,
         )))
         .unwrap());
-    app.view = View::Overview;
-    app.handle_normal_key(KeyEvent::new(KeyCode::Char('`'), KeyModifiers::NONE))
-        .unwrap();
-    assert_eq!(app.view, View::List);
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE))
         .unwrap();
-    assert_eq!(app.view, View::Help);
-    assert!(help_text(app.help_context, app.language).contains("Current view: List"));
+    assert_eq!(app.explorer_overlay, ExplorerOverlay::Help);
     app.handle_normal_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
         .unwrap();
-    assert_eq!(app.view, View::List);
+    assert_eq!(app.explorer_overlay, ExplorerOverlay::None);
 
     app.selected = 1;
     app.view = View::Diff;
@@ -602,21 +1184,21 @@ fn vim_page_and_end_navigation_clamp_selection_and_scroll_details() {
         "test",
         None,
     );
-    app.view = View::List;
+    app.explorer_view = ExplorerView::All;
 
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL))
         .unwrap();
-    assert_eq!(app.selected, 8);
+    assert_eq!(app.explorer_selected, 8);
 
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL))
         .unwrap();
-    assert_eq!(app.selected, 0);
+    assert_eq!(app.explorer_selected, 0);
 
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::NONE))
         .unwrap();
-    assert_eq!(app.selected, app.filtered.len() - 1);
+    assert_eq!(app.explorer_selected, app.explorer_indices().len() - 1);
 
-    app.view = View::Detail;
+    app.explorer_detail = Some(DetailSection::Summary);
     app.scroll = 0;
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::CONTROL))
         .unwrap();
@@ -695,21 +1277,20 @@ fn overview_inspect_first_prioritizes_distinct_triage_entries() {
     assert!(items.iter().any(|item| item.label == "cost"));
     assert!(items.iter().any(|item| item.label == "latency"));
 
-    let backend = TestBackend::new(120, 42);
+    let backend = TestBackend::new(140, 38);
     let mut terminal = Terminal::new(backend).expect("test terminal");
     terminal
-        .draw(|frame| render(frame, &mut app))
-        .expect("render overview");
+        .draw(|frame| render_explorer(frame, &mut app))
+        .expect("render attention");
     let overview = format!("{:?}", terminal.backend().buffer());
-    assert!(overview.contains("Inspect First"));
+    assert!(overview.contains("Look here first"));
     assert!(overview.contains("critical"));
-    assert!(overview.contains("critical health"));
-    assert!(overview.contains("action: open diagnostics for critical"));
+    assert!(overview.contains("Why look here"));
+    assert!(overview.contains("This session looks unhealthy"));
 
-    app.view = View::Overview;
     app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .expect("open top inspect item");
-    assert_eq!(app.view, View::Diagnostics);
+    assert_eq!(app.explorer_detail, Some(DetailSection::Summary));
     assert_eq!(
         app.selected_session().map(|session| session.name.as_str()),
         Some("critical")
@@ -735,6 +1316,7 @@ fn renders_overview_and_list_with_test_backend() {
     );
     let backend = TestBackend::new(100, 38);
     let mut terminal = Terminal::new(backend).expect("test terminal");
+    app.view = View::Overview;
 
     terminal
         .draw(|frame| render(frame, &mut app))
@@ -762,6 +1344,8 @@ fn renders_overview_and_list_with_test_backend() {
         .draw(|frame| render(frame, &mut app))
         .expect("render wide overview");
     let wide = format!("{:?}", wide_terminal.backend().buffer());
+    assert!(wide.contains("List Status"));
+    assert!(wide.contains("Sessions - 2 visible"));
     assert!(wide.contains("Source  Claude Code"));
     assert!(wide.contains("Health Distribution"));
     assert!(wide.contains("Driver Distribution"));
@@ -808,6 +1392,9 @@ fn renders_overview_and_list_with_test_backend() {
         .expect("render responsive list");
     let wide_list = format!("{:?}", wide_terminal.backend().buffer());
     assert!(wide_list.contains(long_name));
+    assert!(wide_list.contains("List Status"));
+    assert!(wide_list.contains("Selected Triage"));
+    assert!(wide_list.contains("Driver Summary"));
     assert!(wide_list.contains("Selected Detail"));
     app.sessions[0].name = "billing".to_string();
     app.refresh_filtered();
@@ -830,8 +1417,7 @@ fn renders_overview_and_list_with_test_backend() {
     assert!(detail.contains("source=Claude Code"));
     assert!(detail.contains("Next Action"));
     assert!(!detail.contains("Raw report"));
-    app.handle_normal_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE))
-        .expect("expand raw report");
+    app.raw_report_expanded = true;
     assert!(app.raw_report_expanded);
     assert!(detail_text(&app).contains("Raw report"));
     app.raw_report_expanded = false;
@@ -842,6 +1428,7 @@ fn renders_overview_and_list_with_test_backend() {
         .draw(|frame| render(frame, &mut app))
         .expect("render wide detail");
     let wide_detail = format!("{:?}", wide_terminal.backend().buffer());
+    assert!(wide_detail.contains("Sessions - 2 visible"));
     assert!(wide_detail.contains("Session Overview"));
     assert!(wide_detail.contains("Diagnosis"));
     assert!(wide_detail.contains("Press v to view the raw report"));
@@ -891,7 +1478,9 @@ fn renders_overview_and_list_with_test_backend() {
         .expect("render help");
     let help = format!("{:?}", terminal.backend().buffer());
     assert!(help.contains("Triage workflow"));
-    assert!(help.contains("enter on Overview"));
+    assert!(help.contains("Start in Sessions"));
+    assert!(help.contains("Tab switches Sessions"));
+    assert!(help.contains("Ctrl+K"));
     assert!(help.contains("f cycles health"));
     assert!(help.contains("s selected source"));
     assert!(help.contains("$ costly sessions"));
@@ -994,7 +1583,7 @@ fn ctrl_r_force_reload_clears_session_cache_before_loading() {
     fs::write(
             &cache_path,
             format!(
-                r#"{{"schema_version":16,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
+                r#"{{"schema_version":17,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
                 session_path_json,
                 file_mod_time_nanos_for_test(&metadata),
                 metadata.len()
@@ -1085,6 +1674,7 @@ fn startup_uses_cache_immediately_but_waits_without_cache() {
     );
     cached.load_state.phase = LoadPhase::Parsing;
     cached.load_state.showing_cached = true;
+    cached.view = View::Overview;
     let backend = TestBackend::new(100, 24);
     let mut terminal = Terminal::new(backend).expect("terminal");
     terminal

@@ -1,6 +1,17 @@
 use super::*;
 use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
 
+fn panel(title: impl Into<String>) -> Block<'static> {
+    Block::default()
+        .borders(Borders::ALL)
+        .title(title.into())
+        .title_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+}
+
 pub(super) fn render(frame: &mut Frame<'_>, app: &mut App) {
     let area = frame.area();
     if area.width < 48 || area.height < 14 {
@@ -28,34 +39,89 @@ pub(super) fn render(frame: &mut Frame<'_>, app: &mut App) {
     render_tabs(frame, app, chunks[1]);
     if app.pending_load.is_some() && app.sessions.is_empty() {
         render_loading_status(frame, app, chunks[2]);
+    } else if chunks[2].width >= 140 {
+        render_workbench(frame, app, chunks[2]);
     } else {
-        match app.view {
-            View::Overview => render_overview(frame, app, chunks[2]),
-            View::List => render_list(frame, app, chunks[2]),
-            View::Detail => render_detail(frame, app, chunks[2]),
-            View::Diagnostics => render_report(
-                frame,
-                app,
-                chunks[2],
-                report_title(app, app.t("Diagnostics", "诊断")),
-                diagnostics_text(app),
-            ),
-            View::Diff => render_report(frame, app, chunks[2], diff_title(app), diff_text(app)),
-            View::Governance(panel) => render_workspace(frame, app, chunks[2], panel),
-            View::Help => render_report(
-                frame,
-                app,
-                chunks[2],
-                format!(
-                    "{} - {}",
-                    app.t("Help", "帮助"),
-                    context_view_label(app.help_context, app.language)
-                ),
-                help_text(app.help_context, app.language),
-            ),
-        }
+        render_view(frame, app, chunks[2]);
     }
     render_footer(frame, app, chunks[3]);
+}
+
+fn render_workbench(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
+        .split(area);
+    render_session_pane(frame, app, columns[0]);
+    if app.view == View::List {
+        render_list_workspace(frame, app, columns[1]);
+    } else if app.view == View::Detail && !app.raw_report_expanded {
+        render_detail_columns(frame, app, columns[1]);
+    } else {
+        render_view(frame, app, columns[1]);
+    }
+}
+
+fn render_view(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
+    match app.view {
+        View::Overview => render_overview(frame, app, area),
+        View::List => render_list(frame, app, area),
+        View::Detail => render_detail(frame, app, area),
+        View::Diagnostics => render_report(
+            frame,
+            app,
+            area,
+            report_title(app, app.t("Diagnostics", "诊断")),
+            diagnostics_text(app),
+        ),
+        View::Diff => render_report(frame, app, area, diff_title(app), diff_text(app)),
+        View::Governance(panel) => render_workspace(frame, app, area, panel),
+        View::Help => render_report(
+            frame,
+            app,
+            area,
+            format!(
+                "{} - {}",
+                app.t("Help", "帮助"),
+                context_view_label(app.help_context, app.language)
+            ),
+            help_text(app.help_context, app.language),
+        ),
+    }
+}
+
+fn render_session_pane(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(4)])
+        .split(area);
+    let filters = active_filter_summary(app, app.language);
+    render_list_status(frame, app, chunks[0], &filters);
+    render_session_table(frame, app, chunks[1], &filters, true);
+}
+
+fn render_list_workspace(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let loading_height = if matches!(
+        app.load_state.phase,
+        LoadPhase::Discovering | LoadPhase::Parsing
+    ) {
+        6
+    } else {
+        3
+    };
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(6),
+            Constraint::Length(6),
+            Constraint::Length(loading_height),
+            Constraint::Min(4),
+        ])
+        .split(area);
+    render_selected_summary(frame, app, chunks[0]);
+    render_driver_summary(frame, app, chunks[1]);
+    render_loading_status(frame, app, chunks[2]);
+    render_selected_detail(frame, app, chunks[3]);
 }
 
 pub(super) fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -152,33 +218,62 @@ pub(super) fn render_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 pub(super) fn render_tabs(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let selected = match app.view {
-        View::Overview => 0,
-        View::List => 1,
-        View::Detail => 2,
-        View::Diagnostics => 3,
-        View::Diff => 4,
-        View::Governance(_) => 5,
-        View::Help => 6,
+    let selected = Style::default()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD);
+    let normal = Style::default().fg(Color::Gray);
+    let primary = |label: &'static str, active: bool| {
+        Span::styled(
+            if active {
+                format!("[ {label} ]")
+            } else {
+                format!("  {label}  ")
+            },
+            if active { selected } else { normal },
+        )
     };
-    let tabs = Tabs::new([
-        format!("0 {}", UiText::Overview.get(app.language)),
-        format!("1 {}", UiText::List.get(app.language)),
-        format!("2 {}", UiText::Detail.get(app.language)),
-        format!("3 {}", UiText::Diagnostics.get(app.language)),
-        format!("4 {}", UiText::Diff.get(app.language)),
-        format!("5 {}", UiText::Workspace.get(app.language)),
-        format!("? {}", UiText::Help.get(app.language)),
-    ])
-    .select(selected)
-    .style(Style::default().fg(Color::Gray))
-    .highlight_style(
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD),
-    )
-    .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(tabs, area);
+    let sessions = matches!(
+        app.view,
+        View::List | View::Detail | View::Diagnostics | View::Diff
+    );
+    let insights = matches!(
+        app.view,
+        View::Overview | View::Governance(GovernancePanel::Efficiency)
+    );
+    let actions = matches!(
+        app.view,
+        View::Governance(GovernancePanel::ActionCenter | GovernancePanel::Delivery)
+    );
+    let section = match app.view {
+        View::List => app.t("Browse", "浏览"),
+        View::Detail => app.t("Summary", "摘要"),
+        View::Diagnostics => app.t("Issues", "问题"),
+        View::Diff => app.t("Compare", "对比"),
+        View::Overview => app.t("Overview", "概览"),
+        View::Governance(GovernancePanel::Efficiency) => app.t("Efficiency", "效率"),
+        View::Governance(GovernancePanel::ActionCenter) => app.t("Recommendations", "建议"),
+        View::Governance(GovernancePanel::Delivery) => app.t("Delivery", "交付"),
+        View::Help => app.t("Help", "帮助"),
+    };
+    let line = Line::from(vec![
+        primary(app.t("Sessions", "会话"), sessions),
+        Span::raw(" "),
+        primary(app.t("Insights", "洞察"), insights),
+        Span::raw(" "),
+        primary(app.t("Actions", "行动"), actions),
+        Span::styled(
+            format!("   {}: {section}", app.t("section", "分区")),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            app.t("   Tab switch  ←/→ section", "   Tab 切换  ←/→ 分区"),
+            Style::default().fg(Color::Gray),
+        ),
+    ]);
+    frame.render_widget(
+        Paragraph::new(line).block(Block::default().borders(Borders::ALL)),
+        area,
+    );
 }
 
 pub(super) fn render_overview(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -566,7 +661,7 @@ pub(super) fn render_session_table(
                     .add_modifier(Modifier::BOLD),
             ),
         )
-        .block(Block::default().borders(Borders::ALL).title(title))
+        .block(panel(title))
         .row_highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
@@ -610,7 +705,7 @@ pub(super) fn render_session_table(
                     .add_modifier(Modifier::BOLD),
             ),
         )
-        .block(Block::default().borders(Borders::ALL).title(title))
+        .block(panel(title))
         .row_highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
@@ -630,11 +725,7 @@ pub(super) fn render_selected_detail(frame: &mut Frame<'_>, app: &App, area: Rec
         .unwrap_or_else(|| app.t("No selected session.", "未选中会话。").to_string());
     frame.render_widget(
         Paragraph::new(text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(app.t("Selected Detail", "选中会话详情")),
-            )
+            .block(panel(app.t("Selected Detail", "选中会话详情")))
             .wrap(Wrap { trim: true }),
         area,
     );
@@ -677,11 +768,7 @@ pub(super) fn render_list_status(
     );
     frame.render_widget(
         Paragraph::new(text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(app.t("List Status", "列表状态")),
-            )
+            .block(panel(app.t("List Status", "列表状态")))
             .wrap(Wrap { trim: true }),
         area,
     );
@@ -690,11 +777,7 @@ pub(super) fn render_list_status(
 pub(super) fn render_loading_status(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(
         Paragraph::new(loading_status_lines(app))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(app.t("Loading Status", "加载状态")),
-            )
+            .block(panel(app.t("Loading Status", "加载状态")))
             .wrap(Wrap { trim: true }),
         area,
     );
@@ -736,11 +819,7 @@ pub(super) fn render_driver_summary(frame: &mut Frame<'_>, app: &App, area: Rect
     ];
     frame.render_widget(
         Paragraph::new(text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(app.t("Driver Summary", "主要影响因素")),
-            )
+            .block(panel(app.t("Driver Summary", "主要影响因素")))
             .wrap(Wrap { trim: true }),
         area,
     );
@@ -813,11 +892,7 @@ pub(super) fn render_selected_summary(frame: &mut Frame<'_>, app: &App, area: Re
     };
     frame.render_widget(
         Paragraph::new(text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(app.t("Selected Triage", "当前会话分析")),
-            )
+            .block(panel(app.t("Selected Triage", "当前会话分析")))
             .wrap(Wrap { trim: true }),
         area,
     );
@@ -1111,12 +1186,27 @@ fn action_center_text(governance: &GovernanceSnapshot, language: Language) -> St
             UiText::ExactPriceMatch.get(language),
             audit.pricing_coverage.exact_pricing_pct
         ));
+        lines.push(format!(
+            "  {}={}  {}={}  {}={}",
+            text(language, "stored", "缓存历史"),
+            format_compact_cost(audit.stored_estimated_cost_usd),
+            text(language, "current", "当前重算"),
+            format_optional_cost(audit.current_estimated_cost_usd, language),
+            text(language, "difference", "差异"),
+            format_optional_cost(
+                audit
+                    .current_estimated_cost_usd
+                    .map(|cost| cost - audit.stored_estimated_cost_usd),
+                language
+            )
+        ));
         for item in audit.by_provider_model.iter().take(3) {
             lines.push(format!(
-                "  {} / {}  {}  {}",
+                "  {} / {}  current={} stored={}  {}",
                 item.provider,
                 item.model,
-                format_compact_cost(item.estimated_cost_usd),
+                format_optional_cost(item.estimated_cost_usd, language),
+                format_compact_cost(item.stored_estimated_cost_usd),
                 pricing_status_label(&item.pricing_status, language)
             ));
         }
@@ -1383,9 +1473,11 @@ fn audit_text(audit: &CostAudit, language: Language) -> String {
         text(language, "Cost audit", "成本审计").to_string(),
         "----------".to_string(),
         format!(
-            "{}: {}  {}: {}",
-            text(language, "Estimated cost", "估算成本"),
+            "{}: {}  {}: {}  {}: {}",
+            text(language, "Stored estimate", "缓存历史估算"),
             format_compact_cost(audit.total_estimated_cost),
+            text(language, "Current estimate", "当前价格重算"),
+            format_optional_cost(audit.current_estimated_cost_usd, language),
             text(language, "Pricing source", "价格来源"),
             audit.pricing_source
         ),
@@ -1413,22 +1505,26 @@ fn audit_text(audit: &CostAudit, language: Language) -> String {
     }
     for item in audit.by_provider_model.iter().take(20) {
         lines.push(format!(
-            "- {} / {}  sessions={}  cost={}  tokens={}  {}",
+            "- {} / {}  sessions={}  current={}  stored={}  tokens={}  {}",
             item.provider,
             item.model,
             item.sessions,
-            format_compact_cost(item.estimated_cost_usd),
+            format_optional_cost(item.estimated_cost_usd, language),
+            format_compact_cost(item.stored_estimated_cost_usd),
             format_tokens(item.tokens.total),
             item.pricing_status
         ));
+        let rates = item.rates_per_million_usd.as_ref().map_or_else(
+            || text(language, "rates/M unavailable", "每百万 token 价格不可用").to_string(),
+            |rates| format!("rates/M in=${:.2} out=${:.2}", rates.input, rates.output),
+        );
         lines.push(format!(
-            "  in={} out={} cache-w={} cache-r={} | rates/M in=${:.2} out=${:.2} | {}",
+            "  in={} out={} cache-w={} cache-r={} | {} | {}",
             format_tokens(item.tokens.input),
             format_tokens(item.tokens.output),
             format_tokens(item.tokens.cache_write),
             format_tokens(item.tokens.cache_read),
-            item.rates_per_million_usd.input,
-            item.rates_per_million_usd.output,
+            rates,
             item.pricing_note
         ));
     }
@@ -1650,7 +1746,7 @@ fn render_scrollable_text(
     let title = title.into();
     frame.render_widget(
         Paragraph::new(text)
-            .block(Block::default().borders(Borders::ALL).title(title))
+            .block(panel(title))
             .scroll((scroll, 0))
             .wrap(Wrap { trim: false }),
         area,
@@ -1668,7 +1764,7 @@ fn render_scrollable_text(
 }
 
 pub(super) fn render_detail(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let Some(session) = app.selected_session() else {
+    if app.selected_session().is_none() {
         render_report(
             frame,
             app,
@@ -1677,7 +1773,7 @@ pub(super) fn render_detail(frame: &mut Frame<'_>, app: &App, area: Rect) {
             app.t("No selected session.", "未选中会话。").to_string(),
         );
         return;
-    };
+    }
     if app.raw_report_expanded || area.width < 110 {
         render_report(
             frame,
@@ -1689,6 +1785,20 @@ pub(super) fn render_detail(frame: &mut Frame<'_>, app: &App, area: Rect) {
         return;
     }
 
+    render_detail_columns(frame, app, area);
+}
+
+fn render_detail_columns(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let Some(session) = app.selected_session() else {
+        render_report(
+            frame,
+            app,
+            area,
+            app.t("Detail", "详情"),
+            app.t("No selected session.", "未选中会话。").to_string(),
+        );
+        return;
+    };
     let columns = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(52), Constraint::Percentage(48)])
@@ -1717,7 +1827,6 @@ pub(super) fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
             format_count(app.filtered.len() as i64),
             format_count(app.sessions.len() as i64)
         ),
-        InputMode::Command => format!(": {}", app.input),
         InputMode::Normal => {
             let base = context_actions(app, area.width);
             if app.status.is_empty() {
@@ -1735,47 +1844,25 @@ pub(super) fn render_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
 pub(super) fn context_actions(app: &App, width: u16) -> String {
     if width < 84 {
-        return match app.view {
-            View::Overview => app.t(
-                "enter inspect | ! critical | ? help | q quit",
-                "enter 检查 | ! 严重 | ? 帮助 | q 退出",
-            ),
-            View::List => app.t(
-                "j/k move | Ctrl+d/u page | G end | enter detail | / live search | ? help | q quit",
-                "j/k 移动 | Ctrl+d/u 翻页 | G 末尾 | enter 详情 | / 实时搜索 | ? 帮助 | q 退出",
-            ),
-            View::Detail | View::Diagnostics | View::Diff | View::Governance(_) => app.t(
-                "pgup/pgdn scroll | Esc back | ? help | q quit",
-                "pgup/pgdn 滚动 | Esc 返回 | ? 帮助 | q 退出",
-            ),
-            View::Help => app.t("? or Esc back | q quit", "? 或 Esc 返回 | q 退出"),
-        }
-        .to_string();
+        return app
+            .t(
+                "↑↓ select | enter open | esc back | ? help | q quit",
+                "↑↓ 选择 | enter 打开 | esc 返回 | ? 帮助 | q 退出",
+            )
+            .to_string();
     }
     match app.view {
-        View::Overview => app.t(
-            "enter inspect | ! critical | $ cost | f health | R range | tab view | : cmd | ? help | q quit",
-            "enter 检查 | ! 严重 | $ 成本 | f 健康 | R 范围 | tab 视图 | : 命令 | ? 帮助 | q 退出",
-        ),
         View::List => app.t(
-            "j/k select | Ctrl+d/u page | G end | enter detail | 3 diag | / live search | ? help | q quit",
-            "j/k 选择 | Ctrl+d/u 翻页 | G 末尾 | enter 详情 | 3 诊断 | / 实时搜索 | ? 帮助 | q 退出",
+            "↑↓ select | enter open | / search | f filter | ctrl+k commands | tab switch | ? help | q quit",
+            "↑↓ 选择 | enter 打开 | / 搜索 | f 筛选 | ctrl+k 命令 | tab 切换 | ? 帮助 | q 退出",
         ),
-        View::Detail => app.t(
-            "v raw report | 3 diagnostics | 4 diff | Esc back | ? help | q quit",
-            "v 原始报告 | 3 诊断 | 4 对比 | Esc 返回 | ? 帮助 | q 退出",
+        View::Detail | View::Diagnostics | View::Diff => app.t(
+            "←/→ section | pgup/pgdn scroll | esc back | ctrl+k commands | ? help | q quit",
+            "←/→ 分区 | pgup/pgdn 滚动 | esc 返回 | ctrl+k 命令 | ? 帮助 | q 退出",
         ),
-        View::Diagnostics => app.t(
-            "pgup/pgdn scroll | 2 detail | 4 diff | Esc back | ? help | q quit",
-            "pgup/pgdn 滚动 | 2 详情 | 4 对比 | Esc 返回 | ? 帮助 | q 退出",
-        ),
-        View::Diff => app.t(
-            "j/k pair | 2 detail | 3 diagnostics | 5 Action Center | Esc back | ? help | q quit",
-            "j/k 对比项 | 2 详情 | 3 诊断 | 5 行动中心 | Esc 返回 | ? 帮助 | q 退出",
-        ),
-        View::Governance(_) => app.t(
-            "g next workspace | 5 action | 6 efficiency | 7 delivery | Esc back | ? help | q quit",
-            "g 下个工作台 | 5 行动 | 6 效率 | 7 交付 | Esc 返回 | ? 帮助 | q 退出",
+        View::Overview | View::Governance(_) => app.t(
+            "←/→ section | enter open | tab switch | ctrl+k commands | ? help | q quit",
+            "←/→ 分区 | enter 打开 | tab 切换 | ctrl+k 命令 | ? 帮助 | q 退出",
         ),
         View::Help => app.t("? or Esc back | q quit", "? 或 Esc 返回 | q 退出"),
     }
@@ -2469,6 +2556,7 @@ fn pricing_status_label(value: &str, language: Language) -> String {
     match value {
         "catalog_estimate" => "目录匹配估算",
         "fallback_estimate" => "回退费率估算",
+        "aggregate_estimate" => "多模型聚合估算",
         "unpriced_or_unknown" => "模型价格未知",
         _ => value,
     }
@@ -2884,15 +2972,15 @@ pub(super) fn help_text(view: View, language: Language) -> String {
     let common = match language {
         Language::En => [
             "Triage workflow",
-            "  Start on Overview. Inspect First ranks the sessions most worth opening.",
-            "  enter on Overview opens the top Inspect First item.",
+            "  Start in Sessions. Use arrows to select and enter to open.",
+            "  Tab switches Sessions, Insights, and Actions; left/right changes section.",
             "  l switches language between English and Chinese.",
             "  ! critical sessions, $ costly sessions, f cycles health filters",
             "  R cycles Today/7d/30d/All ranges",
-            "  enter outside Overview opens detail, 3 opens diagnostics for the selected session",
+            "  / searches; Ctrl+K or : opens commands; Esc returns or clears filters.",
             "",
             "Navigation",
-            "  0-4 core views, 5 action, 6 efficiency, 7 delivery, tab next view",
+            "  Tab switches primary areas; left/right changes the current section.",
             "  j/k or arrows move selection; Ctrl+d/u moves half a page; G jumps to the end",
             "",
             "Filters and sorting",
@@ -2912,15 +3000,15 @@ pub(super) fn help_text(view: View, language: Language) -> String {
         ],
         Language::Zh => [
             "分诊流程",
-            "  默认从概览开始。优先检查会把最值得打开的会话排在前面。",
-            "  在概览按 enter 会打开优先检查的第一项。",
+            "  默认从会话开始。用方向键选择，按 Enter 打开。",
+            "  Tab 切换会话、洞察和行动；左右键切换当前分区。",
             "  按 l 在英文和中文之间切换。",
             "  ! 筛严重会话，$ 筛高成本会话，f 循环健康度筛选。",
             "  R 在今天/7天/30天/全部之间切换。",
-            "  在其它视图按 enter 打开详情，按 3 打开选中会话的诊断。",
+            "  / 搜索；Ctrl+K 或 : 打开命令；Esc 返回或清除筛选。",
             "",
             "导航",
-            "  0-4 核心视图，5 行动，6 效率，7 交付，tab 下一个视图。",
+            "  Tab 切换一级入口；左右键切换当前分区。",
             "  j/k 或方向键移动选择；Ctrl+d/u 半页移动；G 跳到末尾。",
             "",
             "筛选和排序",
@@ -3498,6 +3586,11 @@ pub(super) fn driver_chart_line(
 
 pub(super) fn format_compact_cost(cost: f64) -> String {
     format_cost(cost)
+}
+
+fn format_optional_cost(cost: Option<f64>, language: Language) -> String {
+    cost.map(format_compact_cost)
+        .unwrap_or_else(|| text(language, "not available", "不可用").to_string())
 }
 
 pub(super) fn total_tokens_all<T: Borrow<Session>>(sessions: &[T]) -> i64 {
