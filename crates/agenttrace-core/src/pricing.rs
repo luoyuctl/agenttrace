@@ -2,7 +2,7 @@ use crate::round4;
 use anyhow::{anyhow, Context};
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
@@ -11,6 +11,7 @@ const PRICING_URL: &str =
     "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 const CACHE_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 static PRICING_CATALOG: OnceLock<PricingCatalog> = OnceLock::new();
+static PRICING_OVERRIDE_MODELS: OnceLock<BTreeSet<String>> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, Deserialize)]
 pub struct Price {
@@ -82,12 +83,15 @@ pub fn default_price() -> Price {
 
 pub fn pricing_source() -> String {
     let catalog = pricing_catalog();
-    if catalog.source.ends_with("+override") {
-        return format!(
-            "{} + user override",
-            catalog.source.trim_end_matches("+override")
-        );
+    let source = catalog_source(catalog);
+    if pricing_override_models().is_empty() {
+        source
+    } else {
+        format!("{source} + user overrides available")
     }
+}
+
+fn catalog_source(catalog: &PricingCatalog) -> String {
     match (catalog.source.as_str(), catalog.loaded_at) {
         ("cache", Some(time)) => format!("LiteLLM (cached {})", format_cache_time(time)),
         ("cache(stale)", Some(time)) => {
@@ -100,14 +104,25 @@ pub fn pricing_source() -> String {
 
 pub fn pricing_source_for(model: &str) -> String {
     let catalog = pricing_catalog();
-    let model = resolve_alias(model, &catalog.aliases);
-    if match_variants(&model)
-        .into_iter()
-        .any(|variant| catalog.entries.contains_key(&variant))
-    {
-        pricing_source()
+    pricing_source_for_catalog(model, catalog, pricing_override_models())
+}
+
+fn pricing_source_for_catalog(
+    model: &str,
+    catalog: &PricingCatalog,
+    override_models: &BTreeSet<String>,
+) -> String {
+    let normalized = normalize_model(model);
+    let resolved = resolve_alias(&normalized, &catalog.aliases);
+    let Some(key) = matching_catalog_key(&resolved, &catalog.entries) else {
+        return "built-in fallback".to_string();
+    };
+    if override_models.contains(&key) {
+        "user override".to_string()
+    } else if normalized != resolved {
+        format!("{} via user override alias", catalog_source(catalog))
     } else {
-        "built-in fallback".to_string()
+        catalog_source(catalog)
     }
 }
 
@@ -232,11 +247,13 @@ fn pricing_catalog() -> &'static PricingCatalog {
                 }
             }
         }
+        let mut override_models = BTreeSet::new();
         if let Some((prices, aliases)) = load_pricing_overrides() {
+            override_models.extend(prices.keys().cloned());
             catalog.entries.extend(prices);
             catalog.aliases.extend(aliases);
-            catalog.source.push_str("+override");
         }
+        let _ = PRICING_OVERRIDE_MODELS.set(override_models);
         catalog
     })
 }
@@ -260,6 +277,10 @@ fn load_pricing_cache() -> Option<PricingCatalog> {
         source: if stale { "cache(stale)" } else { "cache" }.to_string(),
         loaded_at,
     })
+}
+
+fn pricing_override_models() -> &'static BTreeSet<String> {
+    PRICING_OVERRIDE_MODELS.get_or_init(BTreeSet::new)
 }
 
 fn download_pricing(timeout: Duration) -> anyhow::Result<(String, BTreeMap<String, Price>)> {
@@ -286,10 +307,8 @@ fn write_pricing_cache(raw: &str) -> anyhow::Result<()> {
 }
 
 fn lookup_price_in(model: &str, entries: &BTreeMap<String, Price>) -> Price {
-    for variant in match_variants(model) {
-        if let Some(price) = entries.get(&variant) {
-            return *price;
-        }
+    if let Some(key) = matching_catalog_key(model, entries) {
+        return entries.get(&key).copied().unwrap_or_default();
     }
     let builtin = builtin_pricing();
     for variant in match_variants(model) {
@@ -298,6 +317,12 @@ fn lookup_price_in(model: &str, entries: &BTreeMap<String, Price>) -> Price {
         }
     }
     builtin.get("default").copied().unwrap_or_default()
+}
+
+fn matching_catalog_key(model: &str, entries: &BTreeMap<String, Price>) -> Option<String> {
+    match_variants(model)
+        .into_iter()
+        .find(|variant| entries.contains_key(variant))
 }
 
 #[derive(Default, Deserialize)]
@@ -1128,5 +1153,31 @@ mod tests {
         ]);
         assert_eq!(resolve_alias("PROVIDER-MODEL", &aliases), "model");
         assert_eq!(resolve_alias("loop", &aliases), "loop");
+    }
+
+    #[test]
+    fn pricing_source_is_specific_to_the_price_that_matched() {
+        let catalog = PricingCatalog {
+            entries: BTreeMap::from([
+                ("catalog-model".to_string(), Price::default()),
+                ("override-model".to_string(), Price::default()),
+            ]),
+            aliases: BTreeMap::from([("alias-model".to_string(), "catalog-model".to_string())]),
+            source: "cache".to_string(),
+            loaded_at: Some(SystemTime::UNIX_EPOCH),
+        };
+        let overrides = BTreeSet::from(["override-model".to_string()]);
+        assert!(
+            pricing_source_for_catalog("catalog-model", &catalog, &overrides)
+                .starts_with("LiteLLM")
+        );
+        assert_eq!(
+            pricing_source_for_catalog("override-model", &catalog, &overrides),
+            "user override"
+        );
+        assert!(
+            pricing_source_for_catalog("alias-model", &catalog, &overrides)
+                .contains("via user override alias")
+        );
     }
 }

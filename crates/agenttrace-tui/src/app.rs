@@ -85,13 +85,7 @@ fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
             terminal.draw(|frame| render_explorer(frame, &mut app))?;
             dirty = false;
         }
-        let auto_refresh_wait =
-            AUTO_REFRESH_INTERVAL.saturating_sub(app.last_auto_refresh.elapsed());
-        let timeout = if app.pending_load.is_some() || app.governance_delivery_pending() {
-            POLL_INTERVAL
-        } else {
-            Duration::from_secs(60).min(auto_refresh_wait)
-        };
+        let timeout = event_poll_timeout(&app);
         if event::poll(timeout)? {
             if app.handle_explorer_event(event::read()?)? {
                 break;
@@ -100,6 +94,20 @@ fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn event_poll_timeout(app: &App) -> Duration {
+    if app.pending_load.is_some() || app.governance_delivery_pending() {
+        return POLL_INTERVAL;
+    }
+    if app.reload_dir.is_none()
+        || app.mode != InputMode::Normal
+        || app.explorer_overlay != ExplorerOverlay::None
+    {
+        return Duration::from_secs(60);
+    }
+    Duration::from_secs(60)
+        .min(AUTO_REFRESH_INTERVAL.saturating_sub(app.last_auto_refresh.elapsed()))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -531,6 +539,7 @@ impl App {
             }
             "project" => {
                 self.project_filter = rest.to_string();
+                self.project_id_filter.clear();
                 !rest.is_empty()
             }
             "model" => {
@@ -707,6 +716,7 @@ impl App {
             }
             _ if lower.starts_with("project ") => {
                 self.project_filter = command_value(command);
+                self.project_id_filter.clear();
                 self.refresh_filtered();
                 self.view = View::List;
                 self.status = format!(
@@ -1690,7 +1700,6 @@ mod i18n;
 #[cfg(test)]
 #[path = "presentation.rs"]
 mod presentation;
-#[cfg(not(test))]
 #[path = "shared.rs"]
 mod shared;
 

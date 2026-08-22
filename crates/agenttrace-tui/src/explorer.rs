@@ -528,6 +528,7 @@ impl App {
             .collect::<Vec<_>>();
         values.sort();
         values.dedup();
+        self.project_id_filter.clear();
         self.project_filter = cycle_value(&values, &self.project_filter);
         self.refresh_filtered();
     }
@@ -1452,10 +1453,10 @@ fn render_filter_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
         ),
         (
             app.t("Project", "项目"),
-            if app.project_filter.is_empty() {
+            if active_project_filter_label(app).is_empty() {
                 any.to_string()
             } else {
-                app.project_filter.clone()
+                active_project_filter_label(app)
             },
         ),
         (

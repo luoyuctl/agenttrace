@@ -706,6 +706,20 @@ fn project_view_filters_by_canonical_id_and_keeps_same_names_separate() {
     assert_eq!(app.filtered.len(), 1);
     assert_eq!(app.sessions[app.filtered[0]].name, "left");
     assert_eq!(app.status, "project filter: project");
+    assert_eq!(active_project_filter_label(&app), "project");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE))
+        .expect("open filter overlay");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
+        .expect("select source filter");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE))
+        .expect("select project filter");
+    app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect("replace project filter");
+    assert!(app.project_id_filter.is_empty());
+    app.project_id_filter = "/tmp/alpha/project".to_string();
+    app.run_command("project project")
+        .expect("replace project filter");
+    assert!(app.project_id_filter.is_empty());
 }
 
 #[test]
@@ -780,6 +794,15 @@ fn auto_refresh_waits_ten_seconds_and_never_starts_concurrently() {
     let mut no_reload = App::new(vec![], "test", None);
     no_reload.last_auto_refresh = Instant::now() - AUTO_REFRESH_INTERVAL - Duration::from_secs(1);
     assert!(!no_reload.poll_auto_refresh().expect("no reload source"));
+    assert_eq!(event_poll_timeout(&no_reload), Duration::from_secs(60));
+
+    let mut searching = App::new(vec![], "test", Some(root.to_string_lossy().into_owned()));
+    searching.last_auto_refresh = Instant::now() - AUTO_REFRESH_INTERVAL - Duration::from_millis(1);
+    searching.mode = InputMode::Search;
+    assert_eq!(event_poll_timeout(&searching), Duration::from_secs(60));
+    searching.mode = InputMode::Normal;
+    searching.explorer_overlay = ExplorerOverlay::Command;
+    assert_eq!(event_poll_timeout(&searching), Duration::from_secs(60));
     let _ = fs::remove_dir_all(root);
 }
 
@@ -1271,13 +1294,13 @@ fn overview_inspect_first_prioritizes_distinct_triage_entries() {
         None,
     );
 
-    let items = inspect_first_items(&app.sessions);
-    assert_eq!(items[0].label, "critical");
+    let items = inspect_first(&app.sessions);
+    assert_eq!(items[0].reason, "critical");
     assert_eq!(app.sessions[items[0].index].name, "critical");
-    assert!(items.iter().any(|item| item.label == "anomaly"));
-    assert!(items.iter().any(|item| item.label == "failures"));
-    assert!(items.iter().any(|item| item.label == "cost"));
-    assert!(items.iter().any(|item| item.label == "latency"));
+    assert!(items.iter().any(|item| item.reason == "anomaly"));
+    assert!(items.iter().any(|item| item.reason == "failures"));
+    assert!(items.iter().any(|item| item.reason == "cost"));
+    assert!(items.iter().any(|item| item.reason == "latency"));
 
     let backend = TestBackend::new(140, 38);
     let mut terminal = Terminal::new(backend).expect("test terminal");

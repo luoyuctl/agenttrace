@@ -276,3 +276,17 @@ pub(super) fn format_duration(seconds: f64) -> String {
         format!("{:.1}d", seconds / 86_400.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn production_helpers_render_their_own_loading_summary() {
+        let app = App::new(Vec::new(), "test", None);
+        let lines = loading_status_lines(&app);
+        assert_eq!(lines.len(), 3);
+        assert!(format!("{:?}", lines[0]).contains("Ready"));
+        assert_eq!(display_source_label("codex_cli"), "Codex");
+    }
+}

@@ -177,6 +177,7 @@ pub fn needs_attention(session: &Session) -> bool {
         || session.diagnostics.loop_cost.loop_groups > 0
         || !session.diagnostics.stuck_patterns.is_empty()
         || session.metrics.duration_sec >= 300.0
+        || p95_gap(session) >= 60.0
         || session.metrics.cost_estimated >= 1.0
 }
 
@@ -1037,10 +1038,14 @@ mod tests {
         let ordinary = session_with_cost("ordinary", 1, 0.05);
         let mut slow = session_with_cost("slow", 1, 0.05);
         slow.metrics.duration_sec = 301.0;
+        let mut delayed = session_with_cost("delayed", 1, 0.05);
+        delayed.metrics.gaps_sec = vec![60.0];
         let mut warning = session_with_cost("warning", 1, 0.05);
         warning.health = 70;
         assert!(!needs_attention(&ordinary));
         assert!(needs_attention(&slow));
+        assert_eq!(inspect_reason(&delayed), "latency");
+        assert!(needs_attention(&delayed));
         assert!(needs_attention(&warning));
     }
 
