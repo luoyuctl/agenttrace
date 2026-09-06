@@ -35,15 +35,44 @@ pub(super) fn source_counts(sessions: &[Session]) -> Vec<(String, usize)> {
 }
 
 pub(super) fn render_loading_status(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(app.t("Loading", "加载中"));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let rows = Layout::vertical([Constraint::Length(2), Constraint::Min(1)]).split(inner);
+    let state = &app.load_state;
+    let ratio = if state.discovered == 0 {
+        0.0
+    } else {
+        state.processed.min(state.discovered) as f64 / state.discovered as f64
+    };
+    let label = if state.discovered == 0 {
+        app.t("Discovering sessions…", "正在发现会话…").to_string()
+    } else if state.processed >= state.discovered {
+        app.t(
+            "Files processed · loading databases and finishing…",
+            "文件已处理 · 正在加载数据库并汇总…",
+        )
+        .to_string()
+    } else {
+        format!(
+            "{}/{} · {:.0}%",
+            state.processed,
+            state.discovered,
+            ratio * 100.0
+        )
+    };
     frame.render_widget(
-        Paragraph::new(loading_status_lines(app))
-            .wrap(Wrap { trim: true })
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(app.t("Loading", "加载中")),
-            ),
-        area,
+        ratatui::widgets::Gauge::default()
+            .ratio(ratio)
+            .label(label)
+            .gauge_style(Style::default().fg(Color::Cyan)),
+        rows[0],
+    );
+    frame.render_widget(
+        Paragraph::new(loading_status_lines(app)).wrap(Wrap { trim: true }),
+        rows[1],
     );
 }
 
@@ -82,6 +111,17 @@ pub(super) fn loading_status_lines(app: &App) -> Vec<Line<'static>> {
 }
 
 pub(super) fn load_summary_line(app: &App) -> String {
+    if app.pending_load.is_some() && !app.sessions.is_empty() {
+        let frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+        let frame =
+            frames[(app.last_auto_refresh.elapsed().as_millis() / 120) as usize % frames.len()];
+        return format!(
+            "{frame} {} {}/{}",
+            app.t("Refreshing", "刷新中"),
+            app.load_state.processed,
+            app.load_state.discovered
+        );
+    }
     match app.load_state.phase {
         LoadPhase::Discovering | LoadPhase::Parsing => format!(
             "{} {}/{}",

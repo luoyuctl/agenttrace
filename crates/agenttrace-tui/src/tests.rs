@@ -70,6 +70,7 @@ fn explorer_footer_shows_language_shortcut_in_list_and_detail() {
     assert!(list.contains("l Language"));
 
     app.explorer_detail = Some(DetailSection::Summary);
+    app.raw_report_expanded = true;
     terminal
         .draw(|frame| render_explorer(frame, &mut app))
         .expect("render detail footer");
@@ -269,6 +270,11 @@ fn explorer_daily_workflow_supports_attention_detail_compare_range_and_projects(
         .position(|index| app.sessions[*index].name == "critical")
         .expect("critical position");
     app.explorer_detail = Some(DetailSection::Summary);
+    app.handle_explorer_event(Event::Key(KeyEvent::new(
+        KeyCode::Char('e'),
+        KeyModifiers::NONE,
+    )))
+    .unwrap();
     terminal
         .draw(|frame| render_explorer(frame, &mut app))
         .expect("render health explanation");
@@ -715,6 +721,9 @@ fn project_view_filters_by_canonical_id_and_keeps_same_names_separate() {
         .expect("select project filter");
     app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
         .expect("replace project filter");
+    assert_eq!(app.explorer_overlay, ExplorerOverlay::ProjectPicker);
+    app.handle_normal_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect("select any project");
     assert!(app.project_id_filter.is_empty());
     app.project_id_filter = "/tmp/alpha/project".to_string();
     app.run_command("project project")

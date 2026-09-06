@@ -81,6 +81,8 @@ fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
         dirty |= app.poll_pending_load();
         dirty |= app.poll_governance_delivery();
         dirty |= app.poll_auto_refresh()?;
+        dirty |= app.expire_notice();
+        dirty |= app.pending_load.is_some();
         if dirty {
             terminal.draw(|frame| render_explorer(frame, &mut app))?;
             dirty = false;
@@ -97,17 +99,22 @@ fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
 }
 
 fn event_poll_timeout(app: &App) -> Duration {
+    let notice_timeout = app
+        .notice
+        .as_ref()
+        .and_then(|(_, expiry)| *expiry)
+        .map(|expiry| expiry.saturating_duration_since(Instant::now()))
+        .unwrap_or(Duration::from_secs(60));
     if app.pending_load.is_some() || app.governance_delivery_pending() {
-        return POLL_INTERVAL;
+        return POLL_INTERVAL.min(notice_timeout);
     }
     if app.reload_dir.is_none()
         || app.mode != InputMode::Normal
         || app.explorer_overlay != ExplorerOverlay::None
     {
-        return Duration::from_secs(60);
+        return notice_timeout;
     }
-    Duration::from_secs(60)
-        .min(AUTO_REFRESH_INTERVAL.saturating_sub(app.last_auto_refresh.elapsed()))
+    notice_timeout.min(AUTO_REFRESH_INTERVAL.saturating_sub(app.last_auto_refresh.elapsed()))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,6 +218,8 @@ enum ExplorerOverlay {
     Filter,
     Command,
     Help,
+    ProjectPicker,
+    SourcePicker,
 }
 
 struct App {
@@ -241,6 +250,7 @@ struct App {
     input_original: String,
     search_snapshot: Option<SearchSnapshot>,
     status: String,
+    notice: Option<(String, Option<Instant>)>,
     sort_key: SortKey,
     sort_desc: bool,
     scroll: u16,
@@ -363,6 +373,7 @@ impl App {
             input_original: String::new(),
             search_snapshot: None,
             status: String::new(),
+            notice: None,
             sort_key: SortKey::Recent,
             sort_desc: true,
             scroll: 0,
@@ -1030,7 +1041,6 @@ impl App {
         });
         let selection_missing = selected.is_some() && selected_index.is_none();
         self.selected = 0;
-        self.scroll = 0;
         self.refresh_filtered();
         if let Some(position) = selected_index.and_then(|index| {
             self.explorer_indices()
@@ -1041,6 +1051,7 @@ impl App {
             self.explorer_selected = position;
             self.clamp_selection();
         } else if selection_missing {
+            self.scroll = 0;
             self.view = View::List;
             self.explorer_detail = None;
             self.explorer_selected = 0;
