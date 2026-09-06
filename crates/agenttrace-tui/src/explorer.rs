@@ -31,7 +31,7 @@ impl ExplorerLayout {
     fn for_area(area: Rect) -> Self {
         if area.width >= 150 && area.height >= 28 {
             Self::Wide
-        } else if area.width >= 100 && area.height >= 22 {
+        } else if area.width >= 100 && area.height >= 16 {
             Self::Standard
         } else {
             Self::Compact
@@ -40,13 +40,26 @@ impl ExplorerLayout {
 }
 
 impl App {
+    pub(super) fn expire_notice(&mut self) -> bool {
+        if self
+            .notice
+            .as_ref()
+            .and_then(|(_, expiry)| *expiry)
+            .is_some_and(|expiry| Instant::now() >= expiry)
+        {
+            self.notice = None;
+            return true;
+        }
+        false
+    }
+
     pub(super) fn handle_explorer_event(&mut self, event: Event) -> anyhow::Result<bool> {
         if let Event::Paste(text) = event {
             if self.mode == InputMode::Search {
                 self.input.push_str(&text.replace(['\r', '\n'], " "));
                 self.apply_search_input();
                 self.explorer_selected = 0;
-            } else if self.explorer_overlay == ExplorerOverlay::Command {
+            } else if self.searchable_overlay() {
                 self.input.push_str(&text.replace(['\r', '\n'], " "));
                 self.overlay_selected = 0;
             }
@@ -104,6 +117,25 @@ impl App {
             KeyCode::Char('f') => self.open_explorer_overlay(ExplorerOverlay::Filter),
             KeyCode::Char('?') => self.open_explorer_overlay(ExplorerOverlay::Help),
             KeyCode::Char('r') => self.reload(false)?,
+            KeyCode::Char('e') if self.explorer_detail == Some(DetailSection::Summary) => {
+                self.raw_report_expanded = !self.raw_report_expanded;
+                self.scroll = 0;
+            }
+            KeyCode::Char('y') if self.explorer_detail.is_some() => {
+                if let Some(session) = self.explorer_session() {
+                    let summary = share_summary(session);
+                    self.notice = Some(match copy_summary(&summary) {
+                        Ok(()) => (
+                            self.t("Summary copied", "摘要已复制").to_string(),
+                            Some(Instant::now() + Duration::from_secs(2)),
+                        ),
+                        Err(error) => (
+                            format!("{}: {error}", self.t("Copy failed", "复制失败")),
+                            None,
+                        ),
+                    });
+                }
+            }
             KeyCode::Char('L') => self.toggle_language(),
             KeyCode::Char('l') if self.explorer_detail.is_none() => self.toggle_language(),
             KeyCode::Char('!') => {
@@ -151,6 +183,9 @@ impl App {
             KeyCode::Esc if self.compare_open => {
                 self.compare_open = false;
                 self.scroll = 0;
+            }
+            KeyCode::Esc if self.notice.is_some() => {
+                self.notice = None;
             }
             KeyCode::Esc => {
                 if self.explorer_detail.take().is_none() && self.has_filters() {
@@ -296,17 +331,55 @@ impl App {
         self.input.clear();
     }
 
+    fn searchable_overlay(&self) -> bool {
+        matches!(
+            self.explorer_overlay,
+            ExplorerOverlay::Command
+                | ExplorerOverlay::ProjectPicker
+                | ExplorerOverlay::SourcePicker
+        )
+    }
+
+    fn filter_choices(&self) -> Vec<(String, String)> {
+        let mut values = BTreeMap::new();
+        for session in &self.sessions {
+            let (id, label) = if self.explorer_overlay == ExplorerOverlay::ProjectPicker {
+                let project = resolve_project(session);
+                (project.id, project.display_name)
+            } else {
+                let source = session.metrics.source_tool.clone();
+                (source.clone(), source)
+            };
+            if !id.is_empty() {
+                values.insert(id, label);
+            }
+        }
+        let query = self.input.to_lowercase();
+        std::iter::once((String::new(), self.t("Any", "不限").to_string()))
+            .chain(values)
+            .filter(|(id, label)| format!("{label} {id}").to_lowercase().contains(&query))
+            .collect()
+    }
+
     fn handle_explorer_overlay(&mut self, key: KeyEvent) -> anyhow::Result<bool> {
         match key.code {
             KeyCode::Esc => {
-                self.explorer_overlay = ExplorerOverlay::None;
+                self.explorer_overlay = if matches!(
+                    self.explorer_overlay,
+                    ExplorerOverlay::ProjectPicker | ExplorerOverlay::SourcePicker
+                ) {
+                    ExplorerOverlay::Filter
+                } else {
+                    ExplorerOverlay::None
+                };
                 self.input.clear();
+                self.overlay_selected = 0;
             }
-            KeyCode::Backspace if self.explorer_overlay == ExplorerOverlay::Command => {
+            KeyCode::Backspace if self.searchable_overlay() => {
                 self.input.pop();
                 self.overlay_selected = 0;
             }
-            KeyCode::Char(c) if self.explorer_overlay == ExplorerOverlay::Command => {
+            KeyCode::Char(c) if self.searchable_overlay() => {
                 self.input.push(c);
                 self.overlay_selected = 0;
             }
@@ -333,12 +406,28 @@ impl App {
             ExplorerOverlay::ViewPicker => VIEW_CHOICES.len(),
             ExplorerOverlay::Filter => 6,
             ExplorerOverlay::Command => self.command_choices().len(),
+            ExplorerOverlay::ProjectPicker | ExplorerOverlay::SourcePicker => {
+                self.filter_choices().len()
+            }
             ExplorerOverlay::Help | ExplorerOverlay::None => 1,
         }
     }
 
     fn activate_explorer_overlay(&mut self) -> anyhow::Result<()> {
         match self.explorer_overlay {
+            ExplorerOverlay::ProjectPicker | ExplorerOverlay::SourcePicker => {
+                if let Some((id, _)) = self.filter_choices().get(self.overlay_selected) {
+                    if self.explorer_overlay == ExplorerOverlay::ProjectPicker {
+                        self.project_filter.clear();
+                        self.project_id_filter.clone_from(id);
+                    } else {
+                        self.source_filter.clone_from(id);
+                    }
+                    self.refresh_filtered();
+                    self.explorer_selected = 0;
+                    self.open_explorer_overlay(ExplorerOverlay::Filter);
+                }
+            }
             ExplorerOverlay::ViewPicker => {
                 if let Some(view) = VIEW_CHOICES.get(self.overlay_selected) {
                     self.explorer_view = *view;
@@ -350,8 +439,14 @@ impl App {
             ExplorerOverlay::Filter => {
                 match self.overlay_selected {
                     0 => self.cycle_health_filter(),
-                    1 => self.cycle_explorer_source(),
-                    2 => self.cycle_explorer_project(),
+                    1 => {
+                        self.open_explorer_overlay(ExplorerOverlay::SourcePicker);
+                        return Ok(());
+                    }
+                    2 => {
+                        self.open_explorer_overlay(ExplorerOverlay::ProjectPicker);
+                        return Ok(());
+                    }
                     3 => self.cycle_range(),
                     4 => {
                         self.issue_filter = if self.issue_filter == "context" {
@@ -506,33 +601,6 @@ impl App {
         indices
     }
 
-    fn cycle_explorer_source(&mut self) {
-        let mut values = self
-            .sessions
-            .iter()
-            .map(display_session_source)
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>();
-        values.sort();
-        values.dedup();
-        self.source_filter = cycle_value(&values, &self.source_filter);
-        self.refresh_filtered();
-    }
-
-    fn cycle_explorer_project(&mut self) {
-        let mut values = self
-            .sessions
-            .iter()
-            .map(project_name)
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>();
-        values.sort();
-        values.dedup();
-        self.project_id_filter.clear();
-        self.project_filter = cycle_value(&values, &self.project_filter);
-        self.refresh_filtered();
-    }
-
     pub(super) fn explorer_session(&self) -> Option<&Session> {
         self.explorer_indices()
             .get(self.explorer_selected)
@@ -559,8 +627,8 @@ pub(super) fn render_explorer(frame: &mut Frame<'_>, app: &mut App) {
     ])
     .split(area);
     render_explorer_header(frame, app, rows[0]);
-    if app.pending_load.is_some() && app.sessions.is_empty() {
-        render_loading_status(frame, app, rows[1]);
+    if app.pending_load.is_some() && !app.load_state.showing_cached {
+        shared::render_loading_status(frame, app, rows[1]);
     } else if app.compare_open {
         render_compare(frame, app, rows[1]);
     } else if let Some(section) = app.explorer_detail {
@@ -636,6 +704,37 @@ fn render_compare(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
 fn render_explorer_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let title = i18n::explorer_view_label(app.explorer_view, app.language);
+    let filters = if app.has_filters() {
+        format!(
+            "{}/{} · [{}] · {}",
+            app.filtered.len(),
+            app.sessions.len(),
+            active_filter_summary(app, app.language),
+            app.t("f Edit", "f 修改")
+        )
+    } else {
+        String::new()
+    };
+    let filter_line = Line::styled(
+        short(&filters, area.width as usize),
+        Style::default().fg(Color::Yellow),
+    );
+    if area.width < 140 {
+        let summary = format!(
+            "AgentTrace · {title} · {} · {}",
+            range_label(app.range_filter, app.language),
+            shared::load_summary_line(app)
+        );
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::raw(short(&summary, area.width as usize)),
+                filter_line,
+            ])
+            .block(bottom_rule()),
+            area,
+        );
+        return;
+    }
     let line = Line::from(vec![
         Span::styled(
             "AgentTrace",
@@ -648,14 +747,17 @@ fn render_explorer_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Span::raw(format!(
             "   │   {}   │   {}",
             range_summary(app),
-            load_summary_line(app)
+            shared::load_summary_line(app)
         )),
         Span::styled(
             app.t("   │   / search", "   │   / 搜索"),
             Style::default().fg(Color::Gray),
         ),
     ]);
-    frame.render_widget(Paragraph::new(line).block(bottom_rule()), area);
+    frame.render_widget(
+        Paragraph::new(vec![line, filter_line]).block(bottom_rule()),
+        area,
+    );
 }
 
 fn range_summary(app: &App) -> String {
@@ -716,7 +818,16 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
         let marker = if selected { "›" } else { " " };
         let style = if selected {
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Black)
+                .bg(
+                    if app.explorer_overlay == ExplorerOverlay::None
+                        && app.mode == InputMode::Normal
+                    {
+                        Color::Cyan
+                    } else {
+                        Color::DarkGray
+                    },
+                )
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
@@ -742,7 +853,13 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
     frame.render_widget(
         Paragraph::new(lines)
-            .block(right_rule())
+            .block(right_rule().border_style(Style::default().fg(
+                if app.explorer_overlay == ExplorerOverlay::None && app.mode == InputMode::Normal {
+                    Color::Cyan
+                } else {
+                    Color::DarkGray
+                },
+            )))
             .wrap(Wrap { trim: false }),
         area,
     );
@@ -1248,7 +1365,24 @@ fn render_detail_section(
         return;
     }
     let text = match section {
-        DetailSection::Summary => detail_summary(session, app.language),
+        DetailSection::Summary => {
+            let summary = detail_summary(session, app.language);
+            if app.raw_report_expanded {
+                summary
+            } else {
+                format!(
+                    "{}\n{}\n\n{}\n{}\n\n{}",
+                    app.t("What's going on", "现在的问题"),
+                    primary_finding(session, app.language),
+                    app.t("What to do", "建议怎么做"),
+                    explorer_recommendation(session, app.language),
+                    app.t(
+                        "e Expand evidence · y Copy safe summary",
+                        "e 展开证据 · y 复制安全摘要"
+                    )
+                )
+            }
+        }
         DetailSection::Context => detail_context(session, app.language),
         DetailSection::Files => detail_files(session, app.language),
         DetailSection::Timeline => unreachable!(),
@@ -1363,18 +1497,44 @@ fn render_explorer_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
         )
     } else if app.explorer_detail.is_some() {
         app.t(
-            "j/k Session   ←/→ Section   ↑/↓ Scroll   Esc Back   / Search   L Language",
-            "j/k 切会话   ←/→ 换分区   ↑/↓ 滚动   Esc 返回   / 搜索   L 切换语言",
+            "? Help  Esc Back  ←/→ Section  ↑/↓ Scroll  e Evidence  y Copy  L Language",
+            "? 帮助  Esc 返回  ←/→ 分区  ↑/↓ 滚动  e 证据  y 复制  L 切换语言",
         )
         .to_string()
     } else {
         app.t(
-            "↑/↓ Select   Enter Open   Space Mark   d Compare   D Previous run   / Search   l Language",
-            "↑/↓ 选择   Enter 打开   Space 标记   d 对比   D 同项目上次   / 搜索   l 切换语言",
+            "? Help  / Search  f Filter  v Views  Enter Open  l Language",
+            "? 帮助  / 搜索  f 筛选  v 视图  Enter 打开  l 语言",
         )
         .to_string()
     };
-    frame.render_widget(Paragraph::new(text).block(top_rule()), area);
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::raw(text),
+            Line::styled(
+                short(
+                    app.notice
+                        .as_ref()
+                        .map(|(message, _)| message.as_str())
+                        .unwrap_or(&app.status),
+                    area.width as usize,
+                ),
+                Style::default().fg(
+                    if app
+                        .notice
+                        .as_ref()
+                        .is_some_and(|(_, expiry)| expiry.is_none())
+                    {
+                        Color::Red
+                    } else {
+                        Color::Cyan
+                    },
+                ),
+            ),
+        ])
+        .block(top_rule()),
+        area,
+    );
 }
 
 fn render_explorer_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -1388,6 +1548,7 @@ fn render_explorer_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
             ExplorerOverlay::ViewPicker => 20,
             ExplorerOverlay::Filter => 17,
             ExplorerOverlay::Command => 20,
+            ExplorerOverlay::ProjectPicker | ExplorerOverlay::SourcePicker => 20,
             ExplorerOverlay::Help => 18,
             ExplorerOverlay::None => 0,
         }
@@ -1404,6 +1565,25 @@ fn render_explorer_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
         ExplorerOverlay::Filter => render_filter_overlay(frame, app, inner),
         ExplorerOverlay::Command => render_command_overlay(frame, app, inner),
         ExplorerOverlay::Help => render_help_overlay(frame, app, inner),
+        ExplorerOverlay::ProjectPicker | ExplorerOverlay::SourcePicker => {
+            let choices = app.filter_choices();
+            let visible = inner.height.saturating_sub(3) as usize;
+            let start = app
+                .overlay_selected
+                .saturating_sub(visible.saturating_sub(1));
+            let mut lines = vec![Line::raw(format!("/ {}▏", app.input))];
+            for (index, (id, label)) in choices.iter().enumerate().skip(start).take(visible) {
+                lines.push(overlay_row(index == app.overlay_selected, label, id));
+            }
+            if choices.is_empty() {
+                lines.push(Line::raw(app.t("No matches", "无匹配项")));
+            }
+            lines.push(Line::raw(app.t(
+                "↑↓ Select  Enter Apply  Esc Back",
+                "↑↓ 选择  Enter 应用  Esc 返回",
+            )));
+            frame.render_widget(Paragraph::new(lines), inner);
+        }
         ExplorerOverlay::None => {}
     }
 }
@@ -1525,13 +1705,52 @@ fn render_command_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn render_help_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let context = if app.explorer_detail.is_some() {
+        app.t("j/k Sessions · ←/→ Sections · ↑/↓ Scroll\ne Evidence (Summary) · y Copy summary · L Language", "j/k 会话 · ←/→ 分区 · ↑/↓ 滚动\ne 证据（摘要页） · y 复制摘要 · L 语言")
+    } else {
+        app.t(
+            "↑/↓ Select · Enter Open · l Language\nSpace Mark · d Compare · D Previous run",
+            "↑/↓ 选择 · Enter 打开 · l 语言\nSpace 标记 · d 对比 · D 同项目上次",
+        )
+    };
     frame.render_widget(
-        Paragraph::new(app.t(
-            "Keys\n\n↑/↓   Move or scroll\nEnter Open this session\nEsc   Go back or close\n/     Search\nf     Filter\nv     Switch view\nCtrl+K Commands\nr     Reload\nl     Switch language\nq     Quit\n\nPress Esc to close",
-            "快捷键\n\n↑/↓   移动或滚动\nEnter 打开这个会话\nEsc   返回或关闭\n/     搜索\nf     筛选\nv     换视图\nCtrl+K 命令\nr     重新加载\nl     切换语言\nq     退出\n\n按 Esc 关闭",
-        )),
+        Paragraph::new(format!("{}\n\n{context}\n\n{}", app.t("Keys", "快捷键"), app.t("/ Search · f Filter · v Views\nCtrl+K Commands · R Time range\nr Reload · Ctrl+R Force reload\nEsc Back/close · q Quit", "/ 搜索 · f 筛选 · v 视图\nCtrl+K 命令 · R 时间范围\nr 刷新 · Ctrl+R 强制刷新\nEsc 返回/关闭 · q 退出"))).wrap(Wrap { trim: false }),
         area,
     );
+}
+
+// Deliberately exclude titles, paths, arguments and log excerpts from clipboard output.
+fn share_summary(session: &Session) -> String {
+    format!("AgentTrace\nHealth: {}\nEstimated cost: ${:.4}\nDuration: {:.1}s\nTool failures: {}\nAnomalies: {}\n", session.health, session.metrics.cost_estimated, session.metrics.duration_sec, session.metrics.tool_calls_fail, session.anomalies.len())
+}
+
+fn copy_summary(summary: &str) -> anyhow::Result<()> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let (program, args): (&str, &[&str]) = if cfg!(target_os = "macos") {
+        ("pbcopy", &[])
+    } else if cfg!(target_os = "windows") {
+        ("clip.exe", &[])
+    } else if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        ("wl-copy", &[])
+    } else {
+        ("xclip", &["-selection", "clipboard"])
+    };
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let result = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("clipboard input unavailable"))?
+        .write_all(summary.as_bytes());
+    let status = child.wait()?;
+    result?;
+    anyhow::ensure!(status.success(), "{program} exited with {status}");
+    Ok(())
 }
 
 fn explorer_row(app: &App, session: &Session, marker: &str, width: u16) -> String {
@@ -2107,15 +2326,6 @@ fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
     )
 }
 
-fn cycle_value(values: &[String], current: &str) -> String {
-    values
-        .iter()
-        .position(|value| value.eq_ignore_ascii_case(current))
-        .and_then(|index| values.get(index + 1).cloned())
-        .or_else(|| values.first().cloned().filter(|_| current.is_empty()))
-        .unwrap_or_default()
-}
-
 fn bottom_rule() -> Block<'static> {
     Block::default()
         .borders(Borders::BOTTOM)
@@ -2138,4 +2348,96 @@ fn left_rule() -> Block<'static> {
     Block::default()
         .borders(Borders::LEFT)
         .border_style(Style::default().fg(Color::DarkGray))
+}
+
+#[cfg(test)]
+mod interaction_tests {
+    use super::*;
+
+    #[test]
+    fn initial_progress_remains_visible_after_first_batch() {
+        use ratatui::{backend::TestBackend, Terminal};
+        let mut app = App::new(agenttrace_core::demo_sessions().unwrap(), "demo", None);
+        let (_tx, rx) = mpsc::channel();
+        app.pending_load = Some(rx);
+        app.load_state.showing_cached = false;
+        app.load_state.discovered = 20;
+        app.load_state.processed = 8;
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|frame| render_explorer(frame, &mut app))
+            .unwrap();
+        assert!(format!("{:?}", terminal.backend().buffer()).contains("8/20 · 40%"));
+        app.load_state.processed = 20;
+        terminal
+            .draw(|frame| render_explorer(frame, &mut app))
+            .unwrap();
+        assert!(format!("{:?}", terminal.backend().buffer()).contains("loading databases"));
+    }
+
+    #[test]
+    fn notices_expire_without_busy_polling_and_filters_fit_narrow_header() {
+        use ratatui::{backend::TestBackend, Terminal};
+        let mut app = App::new(agenttrace_core::demo_sessions().unwrap(), "demo", None);
+        app.notice = Some((
+            "Copied".into(),
+            Some(Instant::now() + Duration::from_secs(2)),
+        ));
+        assert!(event_poll_timeout(&app) <= Duration::from_secs(2));
+        assert!(!app.expire_notice());
+        app.notice.as_mut().unwrap().1 = Some(Instant::now() - Duration::from_secs(1));
+        assert!(app.expire_notice());
+        assert_eq!(event_poll_timeout(&app), Duration::from_secs(60));
+        app.notice = Some(("Copy failed".into(), None));
+        assert!(!app.expire_notice());
+        app.handle_explorer_event(Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)))
+            .unwrap();
+        assert!(app.notice.is_none());
+        app.source_filter = "hermes".into();
+        app.refresh_filtered();
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|frame| render_explorer(frame, &mut app))
+            .unwrap();
+        let screen = format!("{:?}", terminal.backend().buffer());
+        assert!(screen.contains("source: hermes"));
+        assert!(screen.contains("? Help"));
+        let (_tx, rx) = mpsc::channel();
+        app.pending_load = Some(rx);
+        assert!(shared::load_summary_line(&app).contains("Refreshing"));
+        assert!(event_poll_timeout(&app) <= POLL_INTERVAL);
+    }
+
+    #[test]
+    fn searchable_projects_preserve_identity_and_refresh_reading_position() {
+        let mut sessions = agenttrace_core::demo_sessions().unwrap();
+        sessions[0].cwd = "/alpha/same".into();
+        sessions[1].cwd = "/beta/same".into();
+        let mut app = App::new(sessions.clone(), "demo", None);
+        app.open_explorer_overlay(ExplorerOverlay::ProjectPicker);
+        app.input = "beta".into();
+        assert_eq!(app.filter_choices().len(), 1);
+        app.activate_explorer_overlay().unwrap();
+        assert_eq!(app.project_id_filter, "/beta/same");
+        assert_eq!(app.filtered.len(), 1);
+        app.explorer_detail = Some(DetailSection::Summary);
+        app.scroll = 7;
+        app.apply_loaded_sessions(
+            LoadReport {
+                sessions,
+                discovered: 3,
+                ..Default::default()
+            },
+            false,
+        );
+        assert_eq!(app.scroll, 7);
+        assert_eq!(app.explorer_detail, Some(DetailSection::Summary));
+        assert_eq!(
+            ExplorerLayout::for_area(Rect::new(0, 0, 120, 18)),
+            ExplorerLayout::Standard
+        );
+        let summary = share_summary(app.explorer_session().unwrap());
+        assert!(!summary.contains("beta"));
+        assert!(!summary.contains(&app.explorer_session().unwrap().name));
+    }
 }
