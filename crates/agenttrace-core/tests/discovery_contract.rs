@@ -929,6 +929,37 @@ fn rust_codex_rollout_ignores_rewound_cumulative_totals() {
 }
 
 #[test]
+fn rust_codex_rollout_skips_bulky_events_but_keeps_token_counts() {
+    let root = temp_root("agenttrace-rust-codex-skip-bulky");
+    fs::create_dir_all(&root).expect("create codex temp dir");
+    let session_path = root.join("rollout.jsonl");
+    let big_output = "x".repeat(4096);
+    fs::write(
+        &session_path,
+        format!(
+            r#"{{"timestamp":"2026-05-03T10:00:00Z","type":"session_meta","payload":{{"model":"gpt-5.4"}}}}
+{{"timestamp":"2026-05-03T10:00:01Z","type":"event_msg","payload":{{"type":"item_completed","output":"{big_output}"}}}}
+{{"timestamp":"2026-05-03T10:00:02Z","type":"compacted","payload":{{"message":"{big_output}"}}}}
+{{"timestamp":"2026-05-03T10:00:03Z","ordinal":7,"type":"event_msg","payload":{{"type":"token_count","info":{{"total_token_usage":{{"input_tokens":900,"output_tokens":90}}}}}}}}
+{{"timestamp":"2026-05-03T10:00:04Z","type":"response_item","payload":{{"type":"function_call","call_id":"c1","name":"shell","arguments":"{{}}"}}}}
+{{"timestamp":"2026-05-03T10:00:05Z","type":"response_item","payload":{{"type":"function_call_output","call_id":"c1","output":"ok"}}}}
+"#
+        ),
+    )
+    .expect("write codex rollout");
+
+    let metrics = parse_file(&session_path)
+        .expect("parse codex rollout")
+        .metrics;
+    assert_eq!(metrics.source_tool, "codex_cli");
+    assert_eq!(metrics.tokens_input, 900);
+    assert_eq!(metrics.tokens_output, 90);
+    assert_eq!(metrics.tool_calls_total, 1);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn rust_codex_rollout_prefers_cached_input_tokens_like_go() {
     let root = temp_root("agenttrace-rust-codex-cache-read-priority");
     fs::create_dir_all(&root).expect("create codex temp dir");

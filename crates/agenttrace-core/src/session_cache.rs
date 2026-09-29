@@ -1,6 +1,6 @@
 use crate::{Anomaly, Diagnostics, Metrics, Session, ToolWarning};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -480,38 +480,39 @@ fn delete_cached_session_key(path: &str, cache: &mut SessionCache) {
 }
 
 pub fn save_session_cache(cache: &SessionCache) -> anyhow::Result<()> {
+    #[derive(Serialize)]
+    #[serde(untagged)]
+    enum EntryRef<'a> {
+        Raw(&'a Value),
+        Typed(&'a CacheEntry),
+    }
+    #[derive(Serialize)]
+    struct CacheDocRef<'a> {
+        schema_version: i64,
+        entries: BTreeMap<&'a str, EntryRef<'a>>,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        dirs: &'a BTreeMap<String, DirCacheEntry>,
+    }
+
     if let Some(parent) = cache.path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut doc = Map::new();
-    doc.insert(
-        "schema_version".to_string(),
-        Value::Number(SESSION_CACHE_SCHEMA_VERSION.into()),
-    );
-    let mut entries = Map::new();
-    for (path, value) in &cache.raw_entries {
-        entries.insert(path.clone(), value.clone());
-    }
-    for (path, entry) in &cache.entries {
-        entries.insert(
-            path.clone(),
-            serde_json::to_value(entry).expect("cache entry serialize"),
-        );
-    }
-    doc.insert("entries".to_string(), Value::Object(entries));
-    if !cache.dirs.is_empty() {
-        let dirs = cache
-            .dirs
+    let mut entries = cache
+        .raw_entries
+        .iter()
+        .map(|(path, value)| (path.as_str(), EntryRef::Raw(value)))
+        .collect::<BTreeMap<_, _>>();
+    entries.extend(
+        cache
+            .entries
             .iter()
-            .map(|(path, entry)| {
-                (
-                    path.clone(),
-                    serde_json::to_value(entry).expect("dir cache entry serialize"),
-                )
-            })
-            .collect();
-        doc.insert("dirs".to_string(), Value::Object(dirs));
-    }
+            .map(|(path, entry)| (path.as_str(), EntryRef::Typed(entry))),
+    );
+    let doc = CacheDocRef {
+        schema_version: SESSION_CACHE_SCHEMA_VERSION,
+        entries,
+        dirs: &cache.dirs,
+    };
     let tmp = cache.path.with_file_name(format!(
         "{}.tmp",
         cache
@@ -520,7 +521,7 @@ pub fn save_session_cache(cache: &SessionCache) -> anyhow::Result<()> {
             .and_then(|name| name.to_str())
             .unwrap_or("sessions.json")
     ));
-    fs::write(&tmp, serde_json::to_vec(&Value::Object(doc))?)?;
+    fs::write(&tmp, serde_json::to_vec(&doc)?)?;
     fs::rename(tmp, &cache.path)?;
     Ok(())
 }

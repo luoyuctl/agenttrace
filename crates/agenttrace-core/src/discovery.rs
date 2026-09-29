@@ -209,10 +209,14 @@ pub fn load_sessions_with_progress_from_cache_mode(
             }
         }
     }
+    // Largest files first so one huge rollout does not become the tail of the parse.
+    misses.sort_by_cached_key(|index| {
+        std::cmp::Reverse(fs::metadata(&files[*index]).map_or(0, |meta| meta.len()))
+    });
     let workers = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1)
-        .min(8)
+        .min(16)
         .min(misses.len())
         .max(1);
     let next_miss = std::sync::atomic::AtomicUsize::new(0);

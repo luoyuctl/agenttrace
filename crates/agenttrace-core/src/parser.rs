@@ -6,6 +6,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 type TokenUsage = BTreeMap<String, i64>;
+type JsonObject = Map<String, Value>;
+type JsonlProbe = fn(&[JsonObject]) -> Option<Vec<Event>>;
 
 pub fn parse_file(path: &Path) -> anyhow::Result<Session> {
     if path.is_dir() {
@@ -84,35 +86,31 @@ pub fn parse_raw_session(name: &str, path: &str, raw: &str) -> anyhow::Result<Se
         if let Some(events) = parse_codex_rollout_jsonl(raw) {
             return session_from_events(name, path, events);
         }
-        if let Some(events) = parse_workbuddy_jsonl(raw) {
-            return session_from_events(name, path, events);
-        }
-        if let Some(events) = parse_antigravity_jsonl(raw) {
-            return session_from_events(name, path, events);
-        }
-        if let Some(events) = parse_cursor_transcript_jsonl(raw) {
-            return session_from_events(name, path, events);
-        }
-        if let Some(events) = parse_claude_transcript_jsonl(raw) {
-            return session_from_events(name, path, events);
-        }
-        if let Some(events) = parse_copilot_session_jsonl(raw) {
-            return session_from_events(name, path, events);
-        }
-        if let Some(events) = parse_kimi_wire_jsonl(raw) {
+    }
+    let objs = jsonl_objects(raw).collect::<Vec<_>>();
+    if parsed_value.is_none() {
+        let probes: [JsonlProbe; 6] = [
+            parse_workbuddy_jsonl,
+            parse_antigravity_jsonl,
+            parse_cursor_transcript_jsonl,
+            parse_claude_transcript_jsonl,
+            parse_copilot_session_jsonl,
+            parse_kimi_wire_jsonl,
+        ];
+        if let Some(events) = probes.iter().find_map(|probe| probe(&objs)) {
             return session_from_events(name, path, events);
         }
     }
-    if is_qwen_code_jsonl(raw) {
-        return session_from_events(name, path, parse_qwen_code_jsonl(raw)?);
+    if is_qwen_code_jsonl(&objs) {
+        return session_from_events(name, path, parse_qwen_code_jsonl(&objs)?);
     }
-    if is_oh_my_pi_jsonl(raw) {
-        return session_from_events(name, path, parse_oh_my_pi_jsonl(path, raw)?);
+    if is_oh_my_pi_jsonl(&objs) {
+        return session_from_events(name, path, parse_oh_my_pi_jsonl(path, &objs)?);
     }
-    if let Some(events) = parse_claude_code_jsonl(raw) {
+    if let Some(events) = parse_claude_code_jsonl(&objs) {
         return session_from_events(name, path, events);
     }
-    if let Some(events) = parse_copilot_jsonl(raw) {
+    if let Some(events) = parse_copilot_jsonl(&objs) {
         return session_from_events(name, path, events);
     }
     if let Ok(events) = serde_json::from_str::<Vec<Event>>(trimmed) {
@@ -152,12 +150,15 @@ pub fn parse_raw_session(name: &str, path: &str, raw: &str) -> anyhow::Result<Se
     bail!("unsupported session format: {}", path)
 }
 
-fn parse_copilot_session_jsonl(raw: &str) -> Option<Vec<Event>> {
-    if !jsonl_objects(raw).any(|entry| string(entry.get("type")) == Some("session.start")) {
+fn parse_copilot_session_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
+    if !objs
+        .iter()
+        .any(|entry| string(entry.get("type")) == Some("session.start"))
+    {
         return None;
     }
     let mut events = Vec::new();
-    for entry in jsonl_objects(raw) {
+    for entry in objs.iter() {
         let typ = string(entry.get("type")).unwrap_or("");
         let timestamp = string(entry.get("timestamp")).unwrap_or("").to_string();
         let data = entry.get("data").and_then(Value::as_object);
@@ -247,8 +248,8 @@ fn parse_copilot_session_jsonl(raw: &str) -> Option<Vec<Event>> {
     non_empty(events)
 }
 
-fn parse_kimi_wire_jsonl(raw: &str) -> Option<Vec<Event>> {
-    if !jsonl_objects(raw).any(|entry| {
+fn parse_kimi_wire_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
+    if !objs.iter().any(|entry| {
         entry
             .get("message")
             .and_then(Value::as_object)
@@ -257,7 +258,7 @@ fn parse_kimi_wire_jsonl(raw: &str) -> Option<Vec<Event>> {
         return None;
     }
     let mut events = Vec::new();
-    for entry in jsonl_objects(raw) {
+    for entry in objs.iter() {
         let timestamp = entry
             .get("timestamp")
             .and_then(Value::as_f64)
@@ -358,8 +359,8 @@ fn parse_kimi_wire_jsonl(raw: &str) -> Option<Vec<Event>> {
     non_empty(events)
 }
 
-fn parse_antigravity_jsonl(raw: &str) -> Option<Vec<Event>> {
-    if !jsonl_objects(raw).any(|entry| {
+fn parse_antigravity_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
+    if !objs.iter().any(|entry| {
         matches!(
             string(entry.get("type")),
             Some("PLANNER_RESPONSE" | "USER_INPUT" | "CONVERSATION_HISTORY")
@@ -369,7 +370,7 @@ fn parse_antigravity_jsonl(raw: &str) -> Option<Vec<Event>> {
         return None;
     }
     let mut events = Vec::new();
-    for entry in jsonl_objects(raw) {
+    for entry in objs.iter() {
         let typ = string(entry.get("type")).unwrap_or("");
         let timestamp = string(entry.get("created_at")).unwrap_or("").to_string();
         match typ {
@@ -419,8 +420,8 @@ fn parse_antigravity_jsonl(raw: &str) -> Option<Vec<Event>> {
     non_empty(events)
 }
 
-fn parse_cursor_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
-    let mut entries = jsonl_objects(raw).peekable();
+fn parse_cursor_transcript_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
+    let mut entries = objs.iter().peekable();
     if entries.peek().is_none()
         || !entries.all(|entry| {
             entry.contains_key("role") && entry.get("message").and_then(Value::as_object).is_some()
@@ -429,7 +430,7 @@ fn parse_cursor_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
         return None;
     }
     let mut events = Vec::new();
-    for entry in jsonl_objects(raw) {
+    for entry in objs.iter() {
         let role = string(entry.get("role")).unwrap_or("");
         let Some(message) = entry.get("message").and_then(Value::as_object) else {
             continue;
@@ -466,8 +467,8 @@ fn parse_cursor_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
     non_empty(events)
 }
 
-fn parse_claude_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
-    if !jsonl_objects(raw).any(|entry| {
+fn parse_claude_transcript_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
+    if !objs.iter().any(|entry| {
         matches!(string(entry.get("type")), Some("tool_use" | "tool_result"))
             && entry.contains_key("timestamp")
             && entry.contains_key("tool_name")
@@ -475,7 +476,7 @@ fn parse_claude_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
         return None;
     }
     let mut events = Vec::new();
-    for entry in jsonl_objects(raw) {
+    for entry in objs.iter() {
         let timestamp = string(entry.get("timestamp")).unwrap_or("").to_string();
         match string(entry.get("type")).unwrap_or("") {
             "user" | "assistant" => events.push(Event {
@@ -509,8 +510,8 @@ fn parse_claude_transcript_jsonl(raw: &str) -> Option<Vec<Event>> {
     non_empty(events)
 }
 
-fn parse_workbuddy_jsonl(raw: &str) -> Option<Vec<Event>> {
-    if !jsonl_objects(raw).any(|entry| {
+fn parse_workbuddy_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
+    if !objs.iter().any(|entry| {
         matches!(
             string(entry.get("type")),
             Some("function_call" | "function_call_result" | "reasoning")
@@ -522,7 +523,7 @@ fn parse_workbuddy_jsonl(raw: &str) -> Option<Vec<Event>> {
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
     let mut latest_usage = None;
-    for entry in jsonl_objects(raw) {
+    for entry in objs.iter() {
         if let Some(next) = entry
             .get("providerData")
             .and_then(Value::as_object)
@@ -552,7 +553,7 @@ fn parse_workbuddy_jsonl(raw: &str) -> Option<Vec<Event>> {
                         ..Event::default()
                     });
                 }
-                latest_usage = workbuddy_usage(&entry).or(latest_usage);
+                latest_usage = workbuddy_usage(entry).or(latest_usage);
             }
             "reasoning" => {
                 let reasoning = workbuddy_content(
@@ -574,7 +575,7 @@ fn parse_workbuddy_jsonl(raw: &str) -> Option<Vec<Event>> {
                 }
             }
             "function_call" => {
-                latest_usage = workbuddy_usage(&entry).or(latest_usage);
+                latest_usage = workbuddy_usage(entry).or(latest_usage);
                 events.push(Event {
                     role: "assistant".to_string(),
                     timestamp,
@@ -1116,8 +1117,8 @@ fn parse_aider_token_count(value: &str) -> i64 {
         .unwrap_or(0)
 }
 
-fn is_oh_my_pi_jsonl(raw: &str) -> bool {
-    jsonl_objects(raw).any(|obj| is_oh_my_pi_session_header(&obj))
+fn is_oh_my_pi_jsonl(objs: &[JsonObject]) -> bool {
+    objs.iter().any(is_oh_my_pi_session_header)
 }
 
 fn is_oh_my_pi_session_header(obj: &Map<String, Value>) -> bool {
@@ -1128,14 +1129,14 @@ fn is_oh_my_pi_session_header(obj: &Map<String, Value>) -> bool {
             || obj.contains_key("parentSession"))
 }
 
-fn parse_oh_my_pi_jsonl(path: &str, raw: &str) -> anyhow::Result<Vec<Event>> {
+fn parse_oh_my_pi_jsonl(path: &str, objs: &[JsonObject]) -> anyhow::Result<Vec<Event>> {
     let source_tool = pi_source_for_path(path);
     let mut meta_events = Vec::new();
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
     let mut seen_header = false;
 
-    for obj in jsonl_objects(raw) {
+    for obj in objs.iter() {
         let typ = string(obj.get("type")).unwrap_or("");
         if !seen_header {
             // Older/newer Oh My Pi versions prepend non-session lines (e.g.
@@ -1409,8 +1410,8 @@ fn oh_my_pi_timestamp(raw: Option<&Value>, fallback: &str) -> String {
     string(raw).unwrap_or(fallback).to_string()
 }
 
-fn is_qwen_code_jsonl(raw: &str) -> bool {
-    jsonl_objects(raw).any(|obj| is_qwen_code_event(&obj))
+fn is_qwen_code_jsonl(objs: &[JsonObject]) -> bool {
+    objs.iter().any(is_qwen_code_event)
 }
 
 fn is_qwen_code_value(value: &Value) -> bool {
@@ -1449,8 +1450,8 @@ fn is_qwen_code_json_output(obj: &Map<String, Value>) -> bool {
         && (obj.contains_key("stats") || obj.contains_key("usage"))
 }
 
-fn parse_qwen_code_jsonl(raw: &str) -> anyhow::Result<Vec<Event>> {
-    parse_qwen_code_objects(jsonl_objects(raw))
+fn parse_qwen_code_jsonl(objs: &[JsonObject]) -> anyhow::Result<Vec<Event>> {
+    parse_qwen_code_objects(objs)
 }
 
 fn parse_qwen_code_value(value: &Value) -> anyhow::Result<Vec<Event>> {
@@ -1887,7 +1888,15 @@ fn parse_codex_rollout_jsonl(raw: &str) -> Option<Vec<Event>> {
     let mut model = "unknown".to_string();
     let mut saw_codex = false;
     let mut prev_token_total: Option<BTreeMap<String, i64>> = None;
-    for obj in jsonl_objects(raw) {
+    let lines = raw
+        .lines()
+        .filter(|line| !codex_line_is_ignorable(line))
+        .filter_map(|line| parse_jsonl_value_lenient(line.trim()))
+        .filter_map(|value| match value {
+            Value::Object(obj) => Some(obj),
+            _ => None,
+        });
+    for obj in lines {
         let typ = string(obj.get("type")).unwrap_or("");
         let ts = string(obj.get("timestamp")).unwrap_or("").to_string();
         match typ {
@@ -2046,6 +2055,20 @@ fn parse_codex_rollout_jsonl(raw: &str) -> Option<Vec<Event>> {
     }
 }
 
+// Codex rollouts are dominated by event_msg payloads (item_completed carries full tool output)
+// and compaction snapshots that the parser discards; skip them before JSON-decoding the line.
+fn codex_line_is_ignorable(line: &str) -> bool {
+    let Some(head) = line.get(..line.len().min(160)) else {
+        return false;
+    };
+    if head.contains(r#""type":"compacted""#) {
+        return true;
+    }
+    head.contains(r#""type":"event_msg""#)
+        && !head.contains(r#""type":"token_count""#)
+        && !line.contains(r#""payload":{"type":"token_count""#)
+}
+
 fn codex_token_count_usage(
     raw_info: Option<&Value>,
     prev_total: Option<&TokenUsage>,
@@ -2138,13 +2161,13 @@ fn token_usage_delta(cur: &TokenUsage, prev: Option<&TokenUsage>) -> TokenUsage 
     .collect()
 }
 
-fn parse_claude_code_jsonl(raw: &str) -> Option<Vec<Event>> {
+fn parse_claude_code_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
     let mut saw_claude = false;
     let mut seen_usage_snapshots = BTreeSet::new();
     let mut cwd = String::new();
-    for obj in jsonl_objects(raw) {
+    for obj in objs.iter() {
         let typ = string(obj.get("type")).unwrap_or("");
         if cwd.is_empty() {
             if let Some(body_cwd) = string(obj.get("cwd")).filter(|value| !value.is_empty()) {
@@ -2324,24 +2347,24 @@ fn claude_user_content_events(
     }
 }
 
-fn parse_copilot_jsonl(raw: &str) -> Option<Vec<Event>> {
+fn parse_copilot_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
     let mut saw_copilot = false;
-    for span in jsonl_objects(raw) {
+    for span in objs.iter() {
         let name = string(span.get("name")).unwrap_or("");
         if name.is_empty() || !span.contains_key("traceId") {
             continue;
         }
         saw_copilot = true;
-        if let Some(next_model) = copilot_string_attr(&span, "gen_ai.request.model") {
+        if let Some(next_model) = copilot_string_attr(span, "gen_ai.request.model") {
             model = next_model;
         }
         let ts = copilot_timestamp(span.get("startTimeUnixNano"));
-        let usage = copilot_usage(&span);
+        let usage = copilot_usage(span);
         match name {
             "chat.completion" => {
-                let content = copilot_span_content(&span);
+                let content = copilot_span_content(span);
                 if !content.is_empty() {
                     events.push(Event {
                         role: "assistant".to_string(),
@@ -2366,10 +2389,10 @@ fn parse_copilot_jsonl(raw: &str) -> Option<Vec<Event>> {
                 role: "assistant".to_string(),
                 timestamp: ts,
                 tool_calls: vec![ToolCall {
-                    id: copilot_string_attr(&span, "tool.call.id")
+                    id: copilot_string_attr(span, "tool.call.id")
                         .or_else(|| string(span.get("spanId")).map(str::to_string))
                         .unwrap_or_default(),
-                    name: copilot_string_attr(&span, "tool.name").unwrap_or_default(),
+                    name: copilot_string_attr(span, "tool.name").unwrap_or_default(),
                     ..ToolCall::default()
                 }],
                 model_used: model.clone(),
@@ -2378,18 +2401,18 @@ fn parse_copilot_jsonl(raw: &str) -> Option<Vec<Event>> {
             }),
             "tool.result" => events.push(Event {
                 role: "tool".to_string(),
-                content: copilot_span_content(&span),
+                content: copilot_span_content(span),
                 timestamp: ts,
-                tool_call_id: copilot_string_attr(&span, "tool.call.id")
+                tool_call_id: copilot_string_attr(span, "tool.call.id")
                     .or_else(|| string(span.get("parentSpanId")).map(str::to_string))
                     .unwrap_or_default(),
-                is_error: copilot_bool_attr(&span, "tool.result.is_error"),
+                is_error: copilot_bool_attr(span, "tool.result.is_error"),
                 model_used: model.clone(),
                 source_tool: "copilot_cli".to_string(),
                 ..Event::default()
             }),
             _ => {
-                let content = copilot_span_content(&span);
+                let content = copilot_span_content(span);
                 if !content.is_empty() {
                     events.push(Event {
                         role: "assistant".to_string(),
