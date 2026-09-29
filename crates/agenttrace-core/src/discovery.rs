@@ -197,38 +197,72 @@ pub fn load_sessions_with_progress_from_cache_mode(
     let discovered = files.len();
     let mut cache_hits = 0;
     let mut skipped = 0;
-    for (index, path) in files.into_iter().enumerate() {
-        let session = if let Some(session) = cached_session(&path, cache) {
-            cache_hits += 1;
-            Some(session)
-        } else if let Ok(session) = parse_file(&path) {
-            let _ = store_session(&path, &session, cache);
-            Some(session)
-        } else {
-            skipped += 1;
-            None
-        };
-        if let Some(session) = session {
-            on_progress(LoadProgress {
-                discovered,
-                processed: index + 1,
-                parsed: sessions.len() + 1,
-                skipped,
-                cache_hits,
-                session: emit_progress_sessions.then(|| session.clone()),
-            });
-            sessions.push(session);
-        } else {
-            on_progress(LoadProgress {
-                discovered,
-                processed: index + 1,
-                parsed: sessions.len(),
-                skipped,
-                cache_hits,
-                session: None,
-            });
+    // Slots hold (parsed session, came from cache); progress is still emitted in file order.
+    let mut slots: Vec<Option<(Option<Session>, bool)>> = Vec::with_capacity(files.len());
+    let mut misses = Vec::new();
+    for (index, path) in files.iter().enumerate() {
+        match cached_session(path, cache) {
+            Some(session) => slots.push(Some((Some(session), true))),
+            None => {
+                slots.push(None);
+                misses.push(index);
+            }
         }
     }
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(8)
+        .min(misses.len())
+        .max(1);
+    let next_miss = std::sync::atomic::AtomicUsize::new(0);
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, Option<Session>)>();
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            let tx = tx.clone();
+            let (files, misses, next_miss) = (&files, &misses, &next_miss);
+            scope.spawn(move || {
+                while let Some(&index) =
+                    misses.get(next_miss.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+                {
+                    if tx.send((index, parse_file(&files[index]).ok())).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+
+        let mut next = 0;
+        let mut drain = |slots: &mut Vec<Option<(Option<Session>, bool)>>,
+                         cache: &mut SessionCache| {
+            while let Some((result, from_cache)) = slots.get_mut(next).and_then(Option::take) {
+                match (&result, from_cache) {
+                    (Some(_), true) => cache_hits += 1,
+                    (Some(session), false) => {
+                        let _ = store_session(&files[next], session, cache);
+                    }
+                    (None, _) => skipped += 1,
+                }
+                report_load_progress(
+                    result,
+                    next,
+                    discovered,
+                    skipped,
+                    cache_hits,
+                    emit_progress_sessions,
+                    &mut sessions,
+                    &mut on_progress,
+                );
+                next += 1;
+            }
+        };
+        drain(&mut slots, cache);
+        for (index, result) in rx {
+            slots[index] = Some((result, false));
+            drain(&mut slots, cache);
+        }
+    });
     let live_parsed = sessions.len();
     if cache.is_dirty() {
         let _ = save_session_cache(cache);
@@ -700,4 +734,37 @@ fn entry_mod_time(entry: &fs::DirEntry) -> SystemTime {
         .metadata()
         .and_then(|metadata| metadata.modified())
         .unwrap_or(SystemTime::UNIX_EPOCH)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn report_load_progress(
+    session: Option<Session>,
+    index: usize,
+    discovered: usize,
+    skipped: usize,
+    cache_hits: usize,
+    emit_progress_sessions: bool,
+    sessions: &mut Vec<Session>,
+    on_progress: &mut impl FnMut(LoadProgress),
+) {
+    if let Some(session) = session {
+        on_progress(LoadProgress {
+            discovered,
+            processed: index + 1,
+            parsed: sessions.len() + 1,
+            skipped,
+            cache_hits,
+            session: emit_progress_sessions.then(|| session.clone()),
+        });
+        sessions.push(session);
+    } else {
+        on_progress(LoadProgress {
+            discovered,
+            processed: index + 1,
+            parsed: sessions.len(),
+            skipped,
+            cache_hits,
+            session: None,
+        });
+    }
 }

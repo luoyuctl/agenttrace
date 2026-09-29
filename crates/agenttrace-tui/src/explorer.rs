@@ -1370,15 +1370,22 @@ fn render_detail_section(
             if app.raw_report_expanded {
                 summary
             } else {
+                let evidence = explorer_evidence(session, app.language)
+                    .into_iter()
+                    .map(|item| format!("• {item}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 format!(
-                    "{}\n{}\n\n{}\n{}\n\n{}",
+                    "{}\n{}\n\n{}\n{}\n\n{}\n{}\n\n{}",
                     app.t("What's going on", "现在的问题"),
                     primary_finding(session, app.language),
+                    app.t("What we saw", "我们看到了什么"),
+                    evidence,
                     app.t("What to do", "建议怎么做"),
                     explorer_recommendation(session, app.language),
                     app.t(
-                        "e Expand evidence · y Copy safe summary",
-                        "e 展开证据 · y 复制安全摘要"
+                        "e Full report · y Copy safe summary",
+                        "e 完整报告 · y 复制安全摘要"
                     )
                 )
             }
@@ -1873,7 +1880,7 @@ fn render_timeline_table(frame: &mut Frame<'_>, app: &App, session: &Session, ar
     }
 
     let compact = area.width < 90;
-    let time_width = if area.width >= 130 { 25 } else { 19 };
+    let time_width = 14;
     let kind_width = if compact { 10 } else { 14 };
     let status_width = if compact { 8 } else { 12 };
     let fixed = time_width + kind_width + status_width + 12;
@@ -1894,31 +1901,50 @@ fn render_timeline_table(frame: &mut Frame<'_>, app: &App, session: &Session, ar
             Constraint::Length(status_width),
         ]
     };
-    let rows = session
-        .diagnostics
-        .steps
+    let steps = &session.diagnostics.steps;
+    let start = (app.scroll as usize).min(steps.len());
+    let mut previous_day = start
+        .checked_sub(1)
+        .and_then(|index| step_local_time(&steps[index].started_at))
+        .map(|time| time.date_naive());
+    let rows = steps
         .iter()
-        .skip(app.scroll as usize)
+        .skip(start)
         .take(area.height.saturating_sub(4) as usize)
         .map(|step| {
             let name = short(&step.name, name_width);
+            let status = Cell::from(step.status.clone()).style(step_status_style(&step.status));
             if compact {
                 Row::new(vec![
                     Cell::from(step.kind.clone()),
                     Cell::from(name),
                     Cell::from(format_duration(step.duration_sec)),
-                    Cell::from(step.status.clone()),
+                    status,
                 ])
             } else {
+                let started = match step_local_time(&step.started_at) {
+                    Some(time) => {
+                        let day = time.date_naive();
+                        let label = if previous_day == Some(day) {
+                            time.format("%H:%M:%S").to_string()
+                        } else {
+                            time.format("%m-%d %H:%M:%S").to_string()
+                        };
+                        previous_day = Some(day);
+                        label
+                    }
+                    None => short(&step.started_at, time_width as usize),
+                };
                 Row::new(vec![
-                    Cell::from(short(&step.started_at, time_width as usize)),
+                    Cell::from(started),
                     Cell::from(step.kind.clone()),
                     Cell::from(name),
                     Cell::from(format_duration(step.duration_sec)),
-                    Cell::from(step.status.clone()),
+                    status,
                 ])
             }
-        });
+        })
+        .collect::<Vec<_>>();
     let header = if compact {
         Row::new(vec![
             app.t("Type", "类型"),
@@ -1954,6 +1980,20 @@ fn render_timeline_table(frame: &mut Frame<'_>, app: &App, session: &Session, ar
             .block(Block::default().title(title).borders(Borders::BOTTOM)),
         area,
     );
+}
+
+fn step_local_time(value: &str) -> Option<chrono::DateTime<chrono::Local>> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|time| time.with_timezone(&chrono::Local))
+}
+
+fn step_status_style(status: &str) -> Style {
+    match status {
+        "error" | "failed" | "fail" => Style::default().fg(Color::Red),
+        "ok" | "success" => Style::default().fg(Color::Green),
+        _ => Style::default(),
+    }
 }
 
 fn detail_timeline_empty(session: &Session, language: Language) -> String {

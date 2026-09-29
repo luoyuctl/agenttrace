@@ -139,52 +139,50 @@ pub struct InspectFirst {
     pub index: usize,
 }
 
+const ATTENTION_FAIL_MIN: usize = 3;
+const ATTENTION_FAIL_RATE: f64 = 0.2;
+const ATTENTION_COST_USD: f64 = 10.0;
+const ATTENTION_P95_GAP_SEC: f64 = 120.0;
+
+// Ordering doubles as triage priority: the first matching signal is the one shown.
+// Context risk is intentionally excluded because its estimate is a heuristic.
 pub fn inspect_reason(session: &Session) -> &'static str {
+    let metrics = &session.metrics;
+    let fail_rate = metrics.tool_calls_fail as f64 / metrics.tool_calls_total.max(1) as f64;
     if session.health < 50 {
         "critical"
-    } else if session.metrics.tool_calls_fail > 0 {
+    } else if metrics.tool_calls_fail >= ATTENTION_FAIL_MIN && fail_rate >= ATTENTION_FAIL_RATE {
         "failures"
-    } else if !session.anomalies.is_empty() {
+    } else if session
+        .anomalies
+        .iter()
+        .any(|anomaly| anomaly.severity == "high" && anomaly.kind != "hanging")
+    {
         "anomaly"
-    } else if matches!(
-        session.diagnostics.context_utilization.risk_level.as_str(),
-        "warning" | "critical"
-    ) {
-        "context"
-    } else if session.diagnostics.loop_cost.loop_groups > 0
-        || !session.diagnostics.stuck_patterns.is_empty()
+    } else if session
+        .diagnostics
+        .loop_fingerprints
+        .iter()
+        .any(|loop_| matches!(loop_.severity.as_str(), "high" | "critical"))
     {
         "loops"
-    } else if session.metrics.cost_estimated >= 1.0 {
+    } else if metrics.cost_estimated >= ATTENTION_COST_USD {
         "cost"
-    } else if session.metrics.duration_sec >= 300.0 || p95_gap(session) >= 60.0 {
+    } else if p95_gap(session) >= ATTENTION_P95_GAP_SEC {
         "latency"
-    } else if session.health < 80 {
-        "warning"
     } else {
         "ok"
     }
 }
 
 pub fn needs_attention(session: &Session) -> bool {
-    session.health < 80
-        || !session.anomalies.is_empty()
-        || session.metrics.tool_calls_fail > 0
-        || matches!(
-            session.diagnostics.context_utilization.risk_level.as_str(),
-            "warning" | "critical"
-        )
-        || session.diagnostics.loop_cost.loop_groups > 0
-        || !session.diagnostics.stuck_patterns.is_empty()
-        || session.metrics.duration_sec >= 300.0
-        || p95_gap(session) >= 60.0
-        || session.metrics.cost_estimated >= 1.0
+    inspect_reason(session) != "ok"
 }
 
 pub fn attention_priority(session: &Session) -> u8 {
     match inspect_reason(session) {
-        "critical" | "anomaly" | "failures" | "context" | "loops" => 1,
-        "latency" | "cost" | "warning" => 2,
+        "critical" | "anomaly" | "failures" | "loops" => 1,
+        "latency" | "cost" => 2,
         _ => 3,
     }
 }
@@ -1036,17 +1034,22 @@ mod tests {
     #[test]
     fn attention_membership_excludes_ordinary_sessions() {
         let ordinary = session_with_cost("ordinary", 1, 0.05);
-        let mut slow = session_with_cost("slow", 1, 0.05);
-        slow.metrics.duration_sec = 301.0;
+        let mut long_but_fine = session_with_cost("long", 1, 0.05);
+        long_but_fine.metrics.duration_sec = 3_600.0;
+        long_but_fine.metrics.gaps_sec = [vec![5.0; 40], vec![900.0]].concat();
+        let mut one_failure = session_with_cost("one-failure", 1, 0.05);
+        one_failure.metrics.tool_calls_total = 40;
+        one_failure.metrics.tool_calls_fail = 1;
         let mut delayed = session_with_cost("delayed", 1, 0.05);
-        delayed.metrics.gaps_sec = vec![60.0];
-        let mut warning = session_with_cost("warning", 1, 0.05);
-        warning.health = 70;
+        delayed.metrics.gaps_sec = vec![150.0];
+        let mut unhealthy = session_with_cost("unhealthy", 1, 0.05);
+        unhealthy.health = 30;
         assert!(!needs_attention(&ordinary));
-        assert!(needs_attention(&slow));
+        assert!(!needs_attention(&long_but_fine));
+        assert!(!needs_attention(&one_failure));
         assert_eq!(inspect_reason(&delayed), "latency");
         assert!(needs_attention(&delayed));
-        assert!(needs_attention(&warning));
+        assert!(needs_attention(&unhealthy));
     }
 
     #[test]
@@ -1054,8 +1057,9 @@ mod tests {
         let mut critical = session_with_cost("critical", 1, 0.1);
         critical.health = 20;
         let mut failing = session_with_cost("failing", 1, 5.0);
+        failing.metrics.tool_calls_total = 10;
         failing.metrics.tool_calls_fail = 4;
-        let costly = session_with_cost("costly", 1, 9.0);
+        let costly = session_with_cost("costly", 1, 19.0);
         assert_eq!(inspect_reason(&critical), "critical");
         assert_eq!(inspect_reason(&failing), "failures");
         assert_eq!(inspect_reason(&costly), "cost");

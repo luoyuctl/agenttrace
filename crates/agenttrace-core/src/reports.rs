@@ -772,7 +772,7 @@ pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String
         if !authority.high_tools.is_empty() {
             for line in text_wrapped_key_values(
                 "High-authority tools",
-                &text_tool_values(&authority.high_tools),
+                &text_tool_values(&authority.top_high_tools()),
                 96,
             ) {
                 out.push_str(&format!("    {line}\n"));
@@ -891,7 +891,7 @@ pub fn report_overview_markdown(overview: &Overview, sessions: &[Session]) -> St
         if !authority.high_tools.is_empty() {
             out.push_str(&format!(
                 "| High-authority tools | {} |\n",
-                report_markdown_code_list(&authority.high_tools)
+                report_markdown_code_list(&authority.top_high_tools())
             ));
         }
         if !authority.counts.is_empty() {
@@ -1073,7 +1073,7 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
         if !authority.high_tools.is_empty() {
             w(format!(
                 "<p><strong>High-authority tools</strong>: {}</p>",
-                report_html_code_list(&authority.high_tools)
+                report_html_code_list(&authority.top_high_tools())
             ));
         }
         w("</section>".to_string());
@@ -1871,6 +1871,24 @@ struct OverviewAuthority {
     has_data: bool,
 }
 
+const HIGH_TOOLS_DISPLAY_LIMIT: usize = 15;
+
+impl OverviewAuthority {
+    fn top_high_tools(&self) -> Vec<String> {
+        let mut tools = self
+            .high_tools
+            .iter()
+            .take(HIGH_TOOLS_DISPLAY_LIMIT)
+            .cloned()
+            .collect::<Vec<_>>();
+        let hidden = self.high_tools.len().saturating_sub(tools.len());
+        if hidden > 0 {
+            tools.push(format!("+{hidden} more"));
+        }
+        tools
+    }
+}
+
 #[derive(Debug)]
 struct CostDriverNote {
     session: String,
@@ -1917,8 +1935,8 @@ fn overview_authority_summary(sessions: &[Session]) -> OverviewAuthority {
     let mut tool_surface = BTreeMap::new();
     let mut highest = String::new();
     for session in sessions {
-        for tool in session.metrics.tool_usage.keys() {
-            tool_surface.insert(tool.clone(), ());
+        for (tool, calls) in &session.metrics.tool_usage {
+            *tool_surface.entry(tool.clone()).or_insert(0usize) += *calls;
         }
         for (category, count) in &session.metrics.tool_authority {
             if *count > 0 {
@@ -1937,7 +1955,8 @@ fn overview_authority_summary(sessions: &[Session]) -> OverviewAuthority {
         })
         .collect::<Vec<_>>();
     let tool_names = sorted_keys(&tool_surface);
-    let high_tools = high_authority_tools(&tool_names);
+    let mut high_tools = high_authority_tools(&tool_names);
+    high_tools.sort_by(|a, b| tool_surface[b].cmp(&tool_surface[a]).then_with(|| a.cmp(b)));
     let has_data = !highest.is_empty() || !counts_vec.is_empty() || !high_tools.is_empty();
     OverviewAuthority {
         highest,

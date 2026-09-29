@@ -142,7 +142,7 @@ fn explorer_renders_specialized_previews_and_real_file_size() {
 
 #[test]
 fn explorer_layout_uses_compact_standard_and_wide_space() {
-    let mut item = session("responsive", "codex_cli", "gpt-5", 72, 0.42, "exec_command");
+    let mut item = session("responsive", "codex_cli", "gpt-5", 45, 0.42, "exec_command");
     item.diagnostics.steps.push(agenttrace_core::TraceStep {
         kind: "tool".to_string(),
         name: "exec_command with a long but useful step name".to_string(),
@@ -177,7 +177,12 @@ fn explorer_layout_uses_compact_standard_and_wide_space() {
         .expect("render wide detail");
     let wide_text = format!("{:?}", wide.backend().buffer());
     assert!(wide_text.contains("Session at a glance"));
-    assert!(wide_text.contains("2026-05-20T06:10:45Z"));
+    let expected_start = chrono::DateTime::parse_from_rfc3339("2026-05-20T06:10:45Z")
+        .unwrap()
+        .with_timezone(&chrono::Local)
+        .format("%m-%d %H:%M:%S")
+        .to_string();
+    assert!(wide_text.contains(&expected_start));
     assert!(wide_text.contains("exec_command with a long but useful step name"));
 }
 
@@ -196,6 +201,7 @@ fn explorer_daily_workflow_supports_attention_detail_compare_range_and_projects(
     let mut slow = session("slow", "pi", "gpt-5", 85, 0.2, "rg");
     slow.cwd = "/work/project-b".to_string();
     slow.metrics.duration_sec = 600.0;
+    slow.metrics.gaps_sec = vec![180.0];
     let mut app = App::new(vec![healthy, critical, slow], "test", None);
 
     let attention = app.explorer_indices();
@@ -583,7 +589,7 @@ fn commands_switch_views_and_apply_search() {
 #[test]
 fn simplified_navigation_uses_three_areas_and_command_palette_key() {
     let mut app = App::new(
-        vec![session("billing", "claude_code", "m", 70, 0.0, "rg")],
+        vec![session("billing", "claude_code", "m", 40, 0.0, "rg")],
         "test",
         None,
     );
@@ -1617,7 +1623,7 @@ fn ctrl_r_force_reload_clears_session_cache_before_loading() {
     fs::write(
             &cache_path,
             format!(
-                r#"{{"schema_version":17,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
+                r#"{{"schema_version":19,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
                 session_path_json,
                 file_mod_time_nanos_for_test(&metadata),
                 metadata.len()

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 17;
+pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 19;
 const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 4;
 
 #[derive(Debug, Clone, Default)]

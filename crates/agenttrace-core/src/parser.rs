@@ -2053,7 +2053,8 @@ fn codex_token_count_usage(
     let info = raw_info?.as_object()?;
     let total = token_usage_map(info.get("total_token_usage"));
     let (counts, next_total) = if !total.is_empty() {
-        (token_usage_delta(&total, prev_total), Some(total))
+        let delta = token_usage_delta(&total, prev_total);
+        (delta, Some(token_usage_high_water(&total, prev_total)))
     } else {
         (
             token_usage_map(info.get("last_token_usage")),
@@ -2104,6 +2105,17 @@ fn token_usage_map(raw: Option<&Value>) -> TokenUsage {
             .map(|value| ((*key).to_string(), value))
     })
     .collect()
+}
+
+// Codex can briefly rewind total_token_usage (e.g. after compaction) and then climb back;
+// tracking the high-water mark keeps the rebound from being counted twice.
+fn token_usage_high_water(cur: &TokenUsage, prev: Option<&TokenUsage>) -> TokenUsage {
+    let mut merged = prev.cloned().unwrap_or_default();
+    for (key, value) in cur {
+        let slot = merged.entry(key.clone()).or_insert(0);
+        *slot = (*slot).max(*value);
+    }
+    merged
 }
 
 fn token_usage_delta(cur: &TokenUsage, prev: Option<&TokenUsage>) -> TokenUsage {
