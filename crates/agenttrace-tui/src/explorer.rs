@@ -1,6 +1,7 @@
 use super::*;
 use ratatui::widgets::Clear;
 use std::fs;
+use std::path::Path;
 
 const VIEW_CHOICES: [ExplorerView; 8] = [
     ExplorerView::Attention,
@@ -541,6 +542,38 @@ impl App {
         self.scroll = 0;
     }
 
+    pub(super) fn project_totals(&self) -> std::collections::HashMap<String, ProjectTotals> {
+        let mut totals: std::collections::HashMap<String, ProjectTotals> =
+            std::collections::HashMap::new();
+        let mut names: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for index in &self.filtered {
+            let session = &self.sessions[*index];
+            let identity = resolve_project(session);
+            let entry = totals.entry(identity.id.clone()).or_insert_with(|| {
+                *names.entry(identity.display_name.clone()).or_insert(0) += 1;
+                ProjectTotals {
+                    label: identity.display_name.clone(),
+                    root: identity.root.clone(),
+                    ..ProjectTotals::default()
+                }
+            });
+            entry.count += 1;
+            entry.cost += session.metrics.cost_estimated;
+        }
+        for entry in totals.values_mut() {
+            if names.get(&entry.label).copied().unwrap_or(0) > 1 {
+                if let Some(parent) = Path::new(&entry.root)
+                    .parent()
+                    .and_then(Path::file_name)
+                    .and_then(|name| name.to_str())
+                {
+                    entry.label = format!("{parent}/{}", entry.label);
+                }
+            }
+        }
+        totals
+    }
+
     pub(super) fn explorer_indices(&self) -> Vec<usize> {
         let mut indices = self.filtered.clone();
         if self.explorer_view == ExplorerView::Storage {
@@ -553,19 +586,27 @@ impl App {
                 indices.sort_by_key(|index| attention_rank(&self.sessions[*index]));
             }
             ExplorerView::Projects => {
-                indices.sort_by(|a, b| {
-                    resolve_project(&self.sessions[*a])
-                        .id
-                        .cmp(&resolve_project(&self.sessions[*b]).id)
-                        .then_with(|| {
-                            self.sessions[*b]
-                                .metrics
-                                .cost_estimated
-                                .total_cmp(&self.sessions[*a].metrics.cost_estimated)
-                        })
+                let mut projects: std::collections::HashMap<String, (usize, f64)> =
+                    std::collections::HashMap::new();
+                for index in &indices {
+                    let session = &self.sessions[*index];
+                    let entry = projects
+                        .entry(resolve_project(session).id)
+                        .or_insert((*index, 0.0));
+                    entry.1 += session.metrics.cost_estimated;
+                    if session.metrics.session_start > self.sessions[entry.0].metrics.session_start
+                    {
+                        entry.0 = *index;
+                    }
+                }
+                let mut grouped = projects.into_iter().collect::<Vec<_>>();
+                grouped.sort_by(|(a_id, a), (b_id, b)| {
+                    (a_id == "unknown")
+                        .cmp(&(b_id == "unknown"))
+                        .then_with(|| b.1.total_cmp(&a.1))
+                        .then_with(|| a_id.cmp(b_id))
                 });
-                let mut projects = std::collections::HashSet::new();
-                indices.retain(|index| projects.insert(resolve_project(&self.sessions[*index]).id));
+                indices = grouped.into_iter().map(|(_, (index, _))| index).collect();
             }
 
             ExplorerView::Context => indices.sort_by(|a, b| {
@@ -720,14 +761,31 @@ fn render_explorer_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Style::default().fg(Color::Yellow),
     );
     if area.width < 140 {
+        let visible = app.visible_sessions();
         let summary = format!(
-            "AgentTrace · {title} · {} · {}",
+            " · {} · {} {} · {}",
             range_label(app.range_filter, app.language),
-            shared::load_summary_line(app)
+            visible.len(),
+            app.t("sessions", "个会话"),
+            format_compact_cost(visible.iter().map(|item| item.metrics.cost_estimated).sum())
         );
+        let used = 13 + unicode_width::UnicodeWidthStr::width(title);
         frame.render_widget(
             Paragraph::new(vec![
-                Line::raw(short(&summary, area.width as usize)),
+                Line::from(vec![
+                    Span::styled(
+                        "AgentTrace",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(" · "),
+                    Span::styled(title, Style::default().fg(Color::Cyan)),
+                    Span::styled(
+                        short(&summary, (area.width as usize).saturating_sub(used)),
+                        Style::default().fg(Color::Gray),
+                    ),
+                ]),
                 filter_line,
             ])
             .block(bottom_rule()),
@@ -788,13 +846,13 @@ fn render_explorer_master(frame: &mut Frame<'_>, app: &App, area: Rect) {
         ExplorerLayout::Compact => render_explorer_list(frame, app, area),
         ExplorerLayout::Standard => {
             let columns =
-                Layout::horizontal([Constraint::Percentage(42), Constraint::Percentage(58)])
+                Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)])
                     .split(area);
             render_explorer_list(frame, app, columns[0]);
             render_explorer_preview(frame, app, columns[1]);
         }
         ExplorerLayout::Wide => {
-            let list_width = (area.width / 3).clamp(48, 68);
+            let list_width = (area.width * 9 / 20).clamp(56, 96);
             let columns = Layout::horizontal([Constraint::Length(list_width), Constraint::Min(72)])
                 .split(area);
             render_explorer_list(frame, app, columns[0]);
@@ -808,10 +866,15 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let visible = area.height.saturating_sub(4) as usize;
     let start = app.explorer_selected.saturating_sub(visible / 2);
     let mut lines = vec![Line::styled(
-        explorer_list_title(app),
+        short(
+            &explorer_list_title(app),
+            area.width.saturating_sub(2) as usize,
+        ),
         Style::default().add_modifier(Modifier::BOLD),
     )];
     lines.push(Line::raw(""));
+    let project_totals =
+        (app.explorer_view == ExplorerView::Projects).then(|| app.project_totals());
     for (position, index) in indices.iter().enumerate().skip(start).take(visible) {
         let session = &app.sessions[*index];
         let selected = position == app.explorer_selected;
@@ -832,10 +895,17 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
         } else {
             Style::default()
         };
-        lines.push(Line::styled(
-            explorer_row(app, session, marker, area.width),
-            style,
-        ));
+        let row = explorer_row_spans(app, session, marker, area.width, project_totals.as_ref());
+        lines.push(if selected {
+            Line::styled(
+                row.into_iter()
+                    .map(|span| span.content.into_owned())
+                    .collect::<String>(),
+                style,
+            )
+        } else {
+            Line::from(row)
+        });
     }
     if indices.is_empty() {
         let message = if app.explorer_view == ExplorerView::Attention && !app.filtered.is_empty() {
@@ -851,16 +921,19 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
         };
         lines.push(Line::styled(message, Style::default().fg(Color::Gray)));
     }
+    let divider = if ExplorerLayout::for_area(frame.area()) == ExplorerLayout::Compact {
+        Block::default()
+    } else {
+        right_rule()
+    };
     frame.render_widget(
-        Paragraph::new(lines)
-            .block(right_rule().border_style(Style::default().fg(
-                if app.explorer_overlay == ExplorerOverlay::None && app.mode == InputMode::Normal {
-                    Color::Cyan
-                } else {
-                    Color::DarkGray
-                },
-            )))
-            .wrap(Wrap { trim: false }),
+        Paragraph::new(lines).block(divider.border_style(Style::default().fg(
+            if app.explorer_overlay == ExplorerOverlay::None && app.mode == InputMode::Normal {
+                Color::Cyan
+            } else {
+                Color::DarkGray
+            },
+        ))),
         area,
     );
 }
@@ -914,20 +987,9 @@ fn render_explorer_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        Line::raw(format!(
-            "{}  {}    {}  {}",
-            app.t("Agent", "来源"),
-            display_session_source(session),
-            app.t("Project", "项目"),
-            project_name(session)
-        )),
-        Line::raw(format!(
-            "{}  {}    {}  {}",
-            app.t("Model", "模型"),
-            short(&metrics.model_used, 24),
-            app.t("Session file", "会话文件"),
-            short(&session.path, 28)
-        )),
+        preview_field(app.t("Agent", "来源"), display_session_source(session)),
+        preview_field(app.t("Project", "项目"), project_name(session)),
+        preview_field(app.t("Model", "模型"), metrics.model_used.clone()),
         Line::raw(""),
         Line::from(vec![
             metric_span(
@@ -938,7 +1000,7 @@ fn render_explorer_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Span::raw("     "),
             metric_span(
                 app.t("Context", "上下文"),
-                format!("{:.0}%", context.utilization_pct),
+                format_context_pct(context.utilization_pct),
                 risk_color(&context.risk_level),
             ),
             Span::raw("     "),
@@ -1029,11 +1091,11 @@ fn context_preview(session: &Session, language: Language) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "{}\n{}\n\n{}         {:.1}%\n{}                {}\n{}     {}\n{}        {}\n{}       {}\n{}    {}\n{}           {}\n\n{}\n{}\n\n{}\n{}",
+        "{}\n{}\n\n{}         {}\n{}                {}\n{}     {}\n{}        {}\n{}       {}\n{}    {}\n{}           {}\n\n{}\n{}\n\n{}\n{}",
         text(language, "Context filling up", "上下文快满了"),
         session.name,
         text(language, "used", "已用"),
-        value.utilization_pct,
+        format_context_pct(value.utilization_pct),
         text(language, "risk", "风险"),
         i18n::risk_label(&value.risk_level, language),
         text(language, "estimated total", "估算总量"),
@@ -1394,12 +1456,64 @@ fn render_detail_section(
         DetailSection::Files => detail_files(session, app.language),
         DetailSection::Timeline => unreachable!(),
     };
+    let reason = inspect_reason(session);
     frame.render_widget(
-        Paragraph::new(text)
+        Paragraph::new(styled_detail_text(&text, reason))
             .scroll((app.scroll, 0))
             .wrap(Wrap { trim: false }),
         area,
     );
+}
+
+const DETAIL_HEADINGS: &[&str] = &[
+    "What's going on",
+    "现在的问题",
+    "What we saw",
+    "我们看到了什么",
+    "What to do",
+    "建议怎么做",
+    "Numbers",
+    "数字",
+    "How complete this is",
+    "信息全不全",
+];
+
+// Plain-text detail sections get heading/bullet styling without changing the copyable text.
+fn styled_detail_text(text: &str, reason: &str) -> Vec<Line<'static>> {
+    let mut after_problem_heading = false;
+    text.lines()
+        .map(|line| {
+            let trimmed = line.trim_start();
+            if DETAIL_HEADINGS.contains(&trimmed) {
+                after_problem_heading = matches!(trimmed, "What's going on" | "现在的问题");
+                return Line::styled(
+                    line.to_string(),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                );
+            }
+            if after_problem_heading && !trimmed.is_empty() {
+                after_problem_heading = false;
+                return Line::styled(
+                    line.to_string(),
+                    Style::default()
+                        .fg(reason_color(reason))
+                        .add_modifier(Modifier::BOLD),
+                );
+            }
+            if let Some(rest) = trimmed.strip_prefix("• ") {
+                return Line::from(vec![
+                    Span::styled("• ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(rest.to_string()),
+                ]);
+            }
+            if trimmed.starts_with("e ") && trimmed.contains(" · y ") {
+                return Line::styled(line.to_string(), Style::default().fg(Color::DarkGray));
+            }
+            Line::raw(line.to_string())
+        })
+        .collect()
 }
 
 fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, area: Rect) {
@@ -1412,36 +1526,61 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
                 .add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        Line::raw(format!(
-            "{}  {}",
+        sidebar_field(
             app.t("Source", "来源"),
-            display_session_source(session)
-        )),
-        Line::raw(format!(
-            "{}  {}",
+            display_session_source(session),
+            Style::default(),
+        ),
+        sidebar_field(
             app.t("Model", "模型"),
-            session.metrics.model_used
-        )),
-        Line::raw(format!("{}  {}", app.t("Health", "健康"), session.health)),
-        Line::raw(format!(
-            "{}  {:.0}% ({})",
+            session.metrics.model_used.clone(),
+            Style::default(),
+        ),
+        sidebar_field(
+            app.t("Health", "健康"),
+            session.health.to_string(),
+            Style::default()
+                .fg(health_color(session.health))
+                .add_modifier(Modifier::BOLD),
+        ),
+        sidebar_field(
             app.t("Context", "上下文"),
-            session.diagnostics.context_utilization.utilization_pct,
-            i18n::risk_label(
+            format!(
+                "{} ({})",
+                format_context_pct(session.diagnostics.context_utilization.utilization_pct),
+                i18n::risk_label(
+                    &session.diagnostics.context_utilization.risk_level,
+                    app.language,
+                )
+            ),
+            Style::default().fg(risk_color(
                 &session.diagnostics.context_utilization.risk_level,
-                app.language,
-            )
-        )),
-        Line::raw(format!(
-            "{}  {}",
+            )),
+        ),
+        sidebar_field(
             app.t("Spend", "花费"),
-            format_compact_cost(session.metrics.cost_estimated)
-        )),
-        Line::raw(format!(
-            "{}  {}",
+            format_compact_cost(session.metrics.cost_estimated),
+            Style::default().fg(cost_color(session.metrics.cost_estimated)),
+        ),
+        sidebar_field(
             app.t("Time", "耗时"),
-            format_duration(session.metrics.duration_sec)
-        )),
+            format_duration(session.metrics.duration_sec),
+            Style::default(),
+        ),
+        sidebar_field(
+            app.t("Tools", "工具"),
+            format!(
+                "{} / {} {}",
+                session.metrics.tool_calls_fail,
+                session.metrics.tool_calls_total,
+                app.t("failed", "失败")
+            ),
+            if session.metrics.tool_calls_fail > 0 {
+                Style::default().fg(Color::LightRed)
+            } else {
+                Style::default()
+            },
+        ),
         Line::raw(""),
         Line::styled(
             app.t("Data quality", "数据质量"),
@@ -1472,13 +1611,20 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
             app.t("Workspace", "工作区"),
             Style::default().fg(Color::Cyan),
         ),
-        Line::raw(session.cwd.clone()),
+        Line::styled(
+            if session.cwd.is_empty() {
+                resolve_project(session).root
+            } else {
+                session.cwd.clone()
+            },
+            Style::default().fg(Color::Gray),
+        ),
         Line::raw(""),
         Line::styled(
             app.t("Session file", "会话文件"),
             Style::default().fg(Color::Cyan),
         ),
-        Line::raw(session.path.clone()),
+        Line::styled(session.path.clone(), Style::default().fg(Color::Gray)),
     ];
     frame.render_widget(
         Paragraph::new(text)
@@ -1504,8 +1650,8 @@ fn render_explorer_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
         )
     } else if app.explorer_detail.is_some() {
         app.t(
-            "? Help  Esc Back  ←/→ Section  ↑/↓ Scroll  e Evidence  y Copy  L Language",
-            "? 帮助  Esc 返回  ←/→ 分区  ↑/↓ 滚动  e 证据  y 复制  L 切换语言",
+            "? Help  Esc Back  ←/→ Section  ↑/↓ Scroll  e Full report  y Copy  L Language",
+            "? 帮助  Esc 返回  ←/→ 分区  ↑/↓ 滚动  e 完整报告  y 复制  L 切换语言",
         )
         .to_string()
     } else {
@@ -1517,7 +1663,7 @@ fn render_explorer_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     };
     frame.render_widget(
         Paragraph::new(vec![
-            Line::raw(text),
+            key_hint_line(&text, app.mode == InputMode::Search),
             Line::styled(
                 short(
                     app.notice
@@ -1548,23 +1694,41 @@ fn render_explorer_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
     if app.explorer_overlay == ExplorerOverlay::None {
         return;
     }
+    let buffer = frame.buffer_mut();
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            if let Some(cell) = buffer.cell_mut((x, y)) {
+                cell.set_style(Style::default().fg(Color::DarkGray).bg(Color::Reset));
+            }
+        }
+    }
     let rect = centered_rect(
         area,
-        64.min(area.width.saturating_sub(4)),
+        76.min(area.width.saturating_sub(4)),
         match app.explorer_overlay {
-            ExplorerOverlay::ViewPicker => 20,
-            ExplorerOverlay::Filter => 17,
+            ExplorerOverlay::ViewPicker => 16,
+            ExplorerOverlay::Filter => 15,
             ExplorerOverlay::Command => 20,
             ExplorerOverlay::ProjectPicker | ExplorerOverlay::SourcePicker => 20,
-            ExplorerOverlay::Help => 18,
+            ExplorerOverlay::Help => 14,
             ExplorerOverlay::None => 0,
         }
         .min(area.height.saturating_sub(4)),
     );
-    frame.render_widget(Clear, rect);
+    // A double-width glyph starting one column left of the overlay would swallow its border.
+    let guard = Rect::new(
+        rect.x.saturating_sub(1),
+        rect.y,
+        rect.width + u16::from(rect.x > 0) + 1,
+        rect.height,
+    )
+    .intersection(area);
+    frame.render_widget(Clear, guard);
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_type(ratatui::widgets::BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan))
+        .padding(ratatui::widgets::Padding::horizontal(1));
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
     match app.explorer_overlay {
@@ -1712,18 +1876,73 @@ fn render_command_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn render_help_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let context = if app.explorer_detail.is_some() {
-        app.t("j/k Sessions · ←/→ Sections · ↑/↓ Scroll\ne Evidence (Summary) · y Copy summary · L Language", "j/k 会话 · ←/→ 分区 · ↑/↓ 滚动\ne 证据（摘要页） · y 复制摘要 · L 语言")
-    } else {
-        app.t(
-            "↑/↓ Select · Enter Open · l Language\nSpace Mark · d Compare · D Previous run",
-            "↑/↓ 选择 · Enter 打开 · l 语言\nSpace 标记 · d 对比 · D 同项目上次",
+    let heading = |text: &str| {
+        Line::styled(
+            text.to_string(),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         )
     };
-    frame.render_widget(
-        Paragraph::new(format!("{}\n\n{context}\n\n{}", app.t("Keys", "快捷键"), app.t("/ Search · f Filter · v Views\nCtrl+K Commands · R Time range\nr Reload · Ctrl+R Force reload\nEsc Back/close · q Quit", "/ 搜索 · f 筛选 · v 视图\nCtrl+K 命令 · R 时间范围\nr 刷新 · Ctrl+R 强制刷新\nEsc 返回/关闭 · q 退出"))).wrap(Wrap { trim: false }),
-        area,
-    );
+    let row = |pairs: &[(&str, &str)]| {
+        let mut spans = Vec::new();
+        for (key, label) in pairs {
+            spans.push(Span::styled(
+                format!("{:>8} ", key),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            spans.push(Span::raw(pad_display_width(label, 22)));
+        }
+        Line::from(spans)
+    };
+    let mut lines = vec![heading(app.t("Keys", "快捷键")), Line::raw("")];
+    if app.explorer_detail.is_some() {
+        lines.push(row(&[
+            ("j/k", app.t("Prev/next session", "上/下一个会话")),
+            ("←/→", app.t("Sections", "切换分区")),
+        ]));
+        lines.push(row(&[
+            ("↑/↓", app.t("Scroll", "滚动")),
+            ("e", app.t("Full report", "完整报告")),
+        ]));
+        lines.push(row(&[
+            ("y", app.t("Copy safe summary", "复制安全摘要")),
+            ("L", app.t("Language", "语言")),
+        ]));
+    } else {
+        lines.push(row(&[
+            ("↑/↓", app.t("Select", "选择")),
+            ("Enter", app.t("Open", "打开")),
+        ]));
+        lines.push(row(&[
+            ("Space", app.t("Mark to compare", "标记对比")),
+            ("d", app.t("Compare", "对比")),
+        ]));
+        lines.push(row(&[
+            ("D", app.t("Previous run", "同项目上次")),
+            ("l", app.t("Language", "语言")),
+        ]));
+    }
+    lines.push(Line::raw(""));
+    lines.push(row(&[
+        ("/", app.t("Search", "搜索")),
+        ("f", app.t("Filter", "筛选")),
+    ]));
+    lines.push(row(&[
+        ("v", app.t("Views", "视图")),
+        ("Ctrl+K", app.t("Commands", "命令")),
+    ]));
+    lines.push(row(&[
+        ("R", app.t("Time range", "时间范围")),
+        ("r", app.t("Reload", "刷新")),
+    ]));
+    lines.push(row(&[
+        ("Esc", app.t("Back / close", "返回/关闭")),
+        ("q", app.t("Quit", "退出")),
+    ]));
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
 // Deliberately exclude titles, paths, arguments and log excerpts from clipboard output.
@@ -1760,34 +1979,179 @@ fn copy_summary(summary: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn explorer_row(app: &App, session: &Session, marker: &str, width: u16) -> String {
-    let name_width = width.saturating_sub(24).clamp(18, 42) as usize;
-    let value = match app.explorer_view {
-        ExplorerView::Attention => format!(
-            "{} P{} {:>3}",
-            i18n::inspect_reason_label(inspect_reason(session), app.language),
-            attention_priority(session),
-            session.health
+const ROW_VALUE_WIDTH: usize = 12;
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct ProjectTotals {
+    label: String,
+    root: String,
+    count: usize,
+    cost: f64,
+}
+
+fn explorer_row_spans(
+    app: &App,
+    session: &Session,
+    marker: &str,
+    width: u16,
+    project_totals: Option<&std::collections::HashMap<String, ProjectTotals>>,
+) -> Vec<Span<'static>> {
+    let name_width = (width as usize)
+        .saturating_sub(ROW_VALUE_WIDTH + 12)
+        .max(10);
+    let muted = Style::default().fg(Color::DarkGray);
+    let (value, value_style) = match app.explorer_view {
+        ExplorerView::Attention => {
+            let reason = inspect_reason(session);
+            (
+                i18n::inspect_reason_label(reason, app.language).to_string(),
+                Style::default().fg(reason_color(reason)),
+            )
+        }
+        ExplorerView::Projects => {
+            let totals = project_totals
+                .and_then(|totals| totals.get(&resolve_project(session).id))
+                .cloned()
+                .unwrap_or_default();
+            let (count, cost) = (totals.count, totals.cost);
+            return vec![
+                Span::raw(format!("{marker} ")),
+                Span::styled(
+                    pad_display_width(&totals.label, name_width.saturating_sub(10)),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("{:>8}  ", format!("{count} {}", app.t("runs", "次"))),
+                    muted,
+                ),
+                Span::styled(
+                    pad_display_width(&format_compact_cost(cost), ROW_VALUE_WIDTH),
+                    Style::default().fg(cost_color(cost)),
+                ),
+                Span::styled(
+                    format!("{:>4}", session.health),
+                    Style::default()
+                        .fg(health_color(session.health))
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" "),
+            ];
+        }
+        ExplorerView::Context => {
+            let context = &session.diagnostics.context_utilization;
+            (
+                format_context_pct(context.utilization_pct),
+                Style::default().fg(risk_color(&context.risk_level)),
+            )
+        }
+        ExplorerView::Storage => (format_bytes(session_file_size(session)), muted),
+        ExplorerView::Cost => (
+            format_compact_cost(session.metrics.cost_estimated),
+            Style::default().fg(cost_color(session.metrics.cost_estimated)),
         ),
-        ExplorerView::Projects => project_name(session),
-        ExplorerView::Context => format!(
-            "{:>5.0}%",
-            session.diagnostics.context_utilization.utilization_pct
+        ExplorerView::Tools => (
+            format!(
+                "{} {}",
+                session.metrics.tool_calls_fail,
+                app.t("failed", "次失败")
+            ),
+            if session.metrics.tool_calls_fail > 0 {
+                Style::default().fg(Color::LightRed)
+            } else {
+                muted
+            },
         ),
-        ExplorerView::Storage => format_bytes(session_file_size(session)),
-        ExplorerView::Cost => format_compact_cost(session.metrics.cost_estimated),
-        ExplorerView::Tools => format!(
-            "{} {}",
-            session.metrics.tool_calls_fail,
-            app.t("failed", "次失败")
-        ),
-        ExplorerView::Recent | ExplorerView::All => display_session_source(session),
+        ExplorerView::Recent | ExplorerView::All => (display_session_source(session), muted),
     };
-    format!(
-        "{marker} {}  {:>10}",
-        pad_display_width(&short(&session.name, name_width), name_width),
-        value
-    )
+    vec![
+        Span::raw(format!("{marker} ")),
+        Span::raw(pad_display_width(&session.name, name_width)),
+        Span::raw("  "),
+        Span::styled(pad_display_width(&value, ROW_VALUE_WIDTH), value_style),
+        Span::styled(
+            format!("{:>4}", session.health),
+            Style::default()
+                .fg(health_color(session.health))
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+    ]
+}
+
+// Footer hints are "key label" pairs separated by two spaces; keys render bold cyan.
+fn key_hint_line(text: &str, raw: bool) -> Line<'static> {
+    if raw {
+        return Line::raw(text.to_string());
+    }
+    let mut spans = Vec::new();
+    for (index, hint) in text
+        .split("  ")
+        .filter(|hint| !hint.trim().is_empty())
+        .enumerate()
+    {
+        if index > 0 {
+            spans.push(Span::styled("  ·  ", Style::default().fg(Color::DarkGray)));
+        }
+        let hint = hint.trim();
+        match hint.split_once(' ') {
+            Some((key, label)) => {
+                spans.push(Span::styled(
+                    key.to_string(),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ));
+                spans.push(Span::styled(
+                    format!(" {label}"),
+                    Style::default().fg(Color::Gray),
+                ));
+            }
+            None => spans.push(Span::raw(hint.to_string())),
+        }
+    }
+    Line::from(spans)
+}
+
+fn sidebar_field(label: &str, value: String, style: Style) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            pad_display_width(label, 9),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::styled(value, style),
+    ])
+}
+
+fn preview_field(label: &str, value: String) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            pad_display_width(label, 9),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::raw(value),
+    ])
+}
+
+fn reason_color(reason: &str) -> Color {
+    match reason {
+        "critical" | "failures" => Color::LightRed,
+        "anomaly" | "loops" => Color::Yellow,
+        "cost" => Color::Magenta,
+        "latency" => Color::LightBlue,
+        _ => Color::DarkGray,
+    }
+}
+
+fn cost_color(cost: f64) -> Color {
+    if cost >= 50.0 {
+        Color::LightRed
+    } else if cost >= 10.0 {
+        Color::Yellow
+    } else if cost >= 1.0 {
+        Color::White
+    } else {
+        Color::DarkGray
+    }
 }
 
 fn explorer_list_title(app: &App) -> String {
@@ -1846,14 +2210,14 @@ fn detail_summary(session: &Session, language: Language) -> String {
         i18n::provenance_label(&session.metrics.provenance.cost, language)
     );
     format!(
-        "{}\n{}\n\n{}\n{}={}  {}={:.0}%  {}={}  {}={}\n{}\n\n{}\n{}\n\n{}\n{}\n\n{}\n{}",
+        "{}\n{}\n\n{}\n{}={}  {}={}  {}={}  {}={}\n{}\n\n{}\n{}\n\n{}\n{}\n\n{}\n{}",
         text(language, "What's going on", "现在的问题"),
         primary_finding(session, language),
         text(language, "Numbers", "数字"),
         text(language, "health", "健康"),
         session.health,
         text(language, "context", "上下文"),
-        session.diagnostics.context_utilization.utilization_pct,
+        format_context_pct(session.diagnostics.context_utilization.utilization_pct),
         text(language, "cost", "花费"),
         format_compact_cost(session.metrics.cost_estimated),
         text(language, "time", "耗时"),
@@ -2033,7 +2397,7 @@ fn detail_context(session: &Session, language: Language) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "{}\n\n{}       {}\n{}  {}\n{}         {}\n{}      {}\n{}    {}\n{}           {:.1}%\n{}                  {}\n\n{}\n{}\n\n{}\n{}\n\n{}",
+        "{}\n\n{}       {}\n{}  {}\n{}         {}\n{}      {}\n{}    {}\n{}           {}\n{}                  {}\n\n{}\n{}\n\n{}\n{}\n\n{}",
         text(language, "Context", "上下文"),
         text(language, "estimated total", "估算总量"),
         format_tokens(value.estimated_total as i64),
@@ -2046,7 +2410,7 @@ fn detail_context(session: &Session, language: Language) -> String {
         text(language, "room left", "还能用"),
         format_tokens(value.available_for_task as i64),
         text(language, "used", "已用"),
-        value.utilization_pct,
+        format_context_pct(value.utilization_pct),
         text(language, "risk", "风险"),
         i18n::risk_label(&value.risk_level, language),
         text(language, "What's taking space", "什么在占空间"),
@@ -2079,9 +2443,9 @@ fn health_explanation(session: &Session, language: Language) -> String {
         "warning" | "critical"
     ) {
         parts.push(format!(
-            "{} {:.0}%",
+            "{} {}",
             text(language, "context", "上下文"),
-            session.diagnostics.context_utilization.utilization_pct
+            format_context_pct(session.diagnostics.context_utilization.utilization_pct)
         ));
     }
     if session.diagnostics.loop_cost.loop_groups > 0 {
@@ -2200,9 +2564,9 @@ fn primary_finding(session: &Session, language: Language) -> String {
             session.metrics.tool_calls_fail
         ),
         "context" => format!(
-            "{} ({:.0}%)",
+            "{} ({})",
             text(language, "Context is nearly full", "上下文快满了"),
-            session.diagnostics.context_utilization.utilization_pct
+            format_context_pct(session.diagnostics.context_utilization.utilization_pct)
         ),
         "loops" => format!(
             "{}: {}",
@@ -2241,20 +2605,23 @@ fn primary_finding(session: &Session, language: Language) -> String {
 fn explorer_evidence(session: &Session, language: Language) -> Vec<String> {
     let mut evidence = Vec::new();
     let context = &session.diagnostics.context_utilization;
-    if context.utilization_pct > 0.0 {
-        evidence.push(format!(
-            "{} {:.1}% ({})",
-            text(language, "Context", "上下文"),
-            context.utilization_pct,
-            i18n::risk_label(&context.risk_level, language)
-        ));
-    }
     if session.metrics.tool_calls_fail > 0 {
+        let rate = session.metrics.tool_calls_fail as f64
+            / session.metrics.tool_calls_total.max(1) as f64
+            * 100.0;
         evidence.push(format!(
-            "{} / {} {}",
+            "{} / {} {} ({rate:.0}%)",
             session.metrics.tool_calls_fail,
             session.metrics.tool_calls_total,
             text(language, "tool calls failed", "次工具调用失败")
+        ));
+    }
+    if context.utilization_pct > 0.0 && context.risk_level != "good" {
+        evidence.push(format!(
+            "{} {} ({})",
+            text(language, "Context", "上下文"),
+            format_context_pct(context.utilization_pct),
+            i18n::risk_label(&context.risk_level, language)
         ));
     }
     if session.diagnostics.loop_cost.loop_groups > 0 {
@@ -2264,7 +2631,12 @@ fn explorer_evidence(session: &Session, language: Language) -> Vec<String> {
             text(language, "repeat loops", "组反复调用")
         ));
     }
-    for anomaly in session.anomalies.iter().take(3) {
+    for anomaly in session
+        .anomalies
+        .iter()
+        .filter(|anomaly| anomaly.kind != "tool_failures")
+        .take(3)
+    {
         evidence.push(anomaly.detail.clone());
     }
     if evidence.is_empty() {
@@ -2280,10 +2652,43 @@ fn explorer_evidence(session: &Session, language: Language) -> Vec<String> {
     evidence
 }
 
+// Context size is a rough character-based estimate, shown as a floor rather than a precise overflow.
+pub(super) fn format_context_pct(pct: f64) -> String {
+    if pct > 100.0 {
+        ">100%".to_string()
+    } else {
+        format!("{pct:.0}%")
+    }
+}
+
 fn explorer_recommendation(session: &Session, language: Language) -> String {
     let context = &session.diagnostics.context_utilization;
-    if !context.suggestion.trim().is_empty() {
-        return context.suggestion.clone();
+    match inspect_reason(session) {
+        "loops" => {
+            return text(
+                language,
+                "The agent repeated the same call; check the loop in What happened before rerunning.",
+                "Agent 反复做同一个调用；重跑前先在「发生了什么」里看清循环。",
+            )
+            .to_string();
+        }
+        "cost" => {
+            return text(
+                language,
+                "Check the Spend view to see which token type drove the cost.",
+                "去「花费」视图看看是哪类 token 推高了成本。",
+            )
+            .to_string();
+        }
+        "latency" => {
+            return text(
+                language,
+                "Look for the longest gaps in What happened to see where time went.",
+                "在「发生了什么」里找最长的空档，看时间花在哪。",
+            )
+            .to_string();
+        }
+        _ => {}
     }
     if session.metrics.tool_calls_fail > 0 {
         return text(
@@ -2292,6 +2697,9 @@ fn explorer_recommendation(session: &Session, language: Language) -> String {
             "再试之前，先看看失败的工具调用。",
         )
         .to_string();
+    }
+    if !context.suggestion.trim().is_empty() && context.risk_level != "good" {
+        return context.suggestion.clone();
     }
     text(
         language,
@@ -2339,22 +2747,28 @@ fn risk_color(risk: &str) -> Color {
 }
 
 fn overlay_row(selected: bool, label: &str, description: &str) -> Line<'static> {
-    let style = if selected {
-        Style::default()
-            .fg(Color::Cyan)
-            .add_modifier(Modifier::BOLD)
+    let (label_style, description_style) = if selected {
+        (
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Black).bg(Color::Cyan),
+        )
     } else {
-        Style::default()
+        (Style::default(), Style::default().fg(Color::DarkGray))
     };
-    Line::styled(
-        format!(
-            "{} {:<20}  {}",
-            if selected { "›" } else { " " },
-            label,
-            description
+    Line::from(vec![
+        Span::styled(
+            format!(
+                "{} {}",
+                if selected { "›" } else { " " },
+                pad_display_width(label, 20)
+            ),
+            label_style,
         ),
-        style,
-    )
+        Span::styled(format!("  {description} "), description_style),
+    ])
 }
 
 fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {

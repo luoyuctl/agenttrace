@@ -269,6 +269,7 @@ struct App {
     last_auto_refresh: Instant,
     compare_anchor: Option<String>,
     compare_open: bool,
+    initial_load: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -390,6 +391,7 @@ impl App {
             explorer_selected: 0,
             overlay_selected: 0,
             last_auto_refresh: Instant::now(),
+            initial_load: false,
             compare_anchor: None,
             compare_open: false,
         };
@@ -404,6 +406,7 @@ impl App {
         let mut app = Self::new(sessions, source_label, Some(reload_dir));
         app.language = saved_language();
         app.start_reload_with_cache(false, Some(cache));
+        app.initial_load = true;
         app
     }
 
@@ -1025,6 +1028,7 @@ impl App {
     }
 
     fn apply_loaded_sessions(&mut self, report: LoadReport, force: bool) {
+        let was_refresh = self.load_state.showing_cached && !std::mem::take(&mut self.initial_load);
         let previous_count = self.sessions.len();
         let selected = self.selected_session().cloned();
         self.load_state.discovered = report.discovered;
@@ -1076,12 +1080,11 @@ impl App {
                 "已重新加载；原选中会话已不存在",
             )
             .to_string()
-        } else if new_sessions > 0 && !force {
+        } else if new_sessions > 0 && !force && was_refresh {
             format!(
-                "{} {} {}",
+                "{} {}",
                 format_count(new_sessions as i64),
-                self.t("new sessions loaded;", "个新会话已加载；"),
-                self.t("press r to refresh now", "按 r 可立即刷新")
+                self.t("new sessions since last view", "个新会话（相比上次）")
             )
         } else if force {
             format!(

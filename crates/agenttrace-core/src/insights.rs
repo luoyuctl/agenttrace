@@ -140,15 +140,14 @@ pub fn session_capability(session: &Session) -> &'static str {
 }
 
 pub fn resolve_project(session: &Session) -> ProjectIdentity {
+    let decoded;
     let raw = if !session.cwd.trim().is_empty() {
         session.cwd.trim()
-    } else if session.path.contains("://") || !session.path.contains(['/', '\\']) {
-        ""
+    } else if let Some(path) = decode_agent_project_dir(&session.path) {
+        decoded = path;
+        decoded.as_str()
     } else {
-        Path::new(&session.path)
-            .parent()
-            .and_then(Path::to_str)
-            .unwrap_or("")
+        ""
     };
     if raw.is_empty() || raw.starts_with("history:") {
         return ProjectIdentity {
@@ -177,6 +176,44 @@ pub fn resolve_project(session: &Session) -> ProjectIdentity {
     }
 }
 
+// Claude Code and Cursor name project folders after the workspace path with separators
+// replaced by '-'; recover the real directory only when that path still exists.
+fn decode_agent_project_dir(session_path: &str) -> Option<String> {
+    let path = Path::new(session_path);
+    let dir = path.ancestors().find_map(|ancestor| {
+        let parent = ancestor.parent()?;
+        matches!(parent.file_name()?.to_str()?, "projects")
+            .then(|| ancestor.file_name()?.to_str())
+            .flatten()
+    })?;
+    let encoded = dir.trim_start_matches('-');
+    if encoded.is_empty() {
+        return None;
+    }
+    let mut current = PathBuf::from("/");
+    let mut pending = String::new();
+    for part in encoded.split('-') {
+        pending = if pending.is_empty() {
+            part.to_string()
+        } else {
+            format!("{pending}-{part}")
+        };
+        for candidate in [
+            pending.clone(),
+            pending.replace('-', "."),
+            pending.replace('-', "_"),
+        ] {
+            let next = current.join(&candidate);
+            if next.is_dir() {
+                current = next;
+                pending.clear();
+                break;
+            }
+        }
+    }
+    (pending.is_empty() && current != Path::new("/")).then(|| current.to_string_lossy().to_string())
+}
+
 pub fn project_name(session: &Session) -> String {
     resolve_project(session).display_name
 }
@@ -197,14 +234,43 @@ fn lexical_normalize(path: &Path) -> PathBuf {
     out
 }
 
+// Project views resolve thousands of sessions per frame; the filesystem walk is memoized per cwd.
 fn git_root(path: &Path) -> Option<PathBuf> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Option<PathBuf>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(hit) = cache.lock().ok().and_then(|map| map.get(path).cloned()) {
+        return hit;
+    }
+    let found = find_git_root(path);
+    if let Ok(mut map) = cache.lock() {
+        map.insert(path.to_path_buf(), found.clone());
+    }
+    found
+}
+
+fn find_git_root(path: &Path) -> Option<PathBuf> {
     let mut current = if path.is_dir() { path } else { path.parent()? };
     loop {
-        if current.join(".git").exists() {
+        let marker = current.join(".git");
+        if marker.is_dir() {
             return Some(current.to_path_buf());
+        }
+        if marker.is_file() {
+            return Some(worktree_main_root(&marker).unwrap_or_else(|| current.to_path_buf()));
         }
         current = current.parent()?;
     }
+}
+
+// Linked worktrees carry a `.git` file ("gitdir: <repo>/.git/worktrees/<name>"); group them
+// under the main checkout so every agent worktree counts as the same project.
+fn worktree_main_root(marker: &Path) -> Option<PathBuf> {
+    let content = std::fs::read_to_string(marker).ok()?;
+    let gitdir = PathBuf::from(content.strip_prefix("gitdir:")?.trim());
+    let git = gitdir.parent()?.parent()?;
+    (git.file_name()? == ".git").then(|| git.parent().map(Path::to_path_buf))?
 }
 
 pub fn filter_sessions(
@@ -351,4 +417,51 @@ fn contains(value: &str, filter: &str) -> bool {
         || value
             .to_ascii_lowercase()
             .contains(&filter.trim().to_ascii_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn session_at(cwd: &str, path: &str) -> Session {
+        Session {
+            name: "s".to_string(),
+            path: path.to_string(),
+            cwd: cwd.to_string(),
+            metrics: crate::Metrics::default(),
+            anomalies: Vec::new(),
+            health: 100,
+            tool_warnings: Vec::new(),
+            diagnostics: crate::Diagnostics::default(),
+        }
+    }
+
+    #[test]
+    fn projects_group_worktrees_and_decode_agent_dirs() {
+        let root = std::env::temp_dir().join(format!("agenttrace-project-{}", std::process::id()));
+        let repo = root.join("src").join("my-repo");
+        let worktree = root.join("worktrees").join("a1b2").join("my-repo");
+        fs::create_dir_all(repo.join(".git").join("worktrees").join("wt")).unwrap();
+        fs::create_dir_all(&worktree).unwrap();
+        fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", repo.join(".git/worktrees/wt").display()),
+        )
+        .unwrap();
+
+        let main = resolve_project(&session_at(&repo.to_string_lossy(), "/x.jsonl"));
+        let linked = resolve_project(&session_at(&worktree.to_string_lossy(), "/x.jsonl"));
+        assert_eq!(linked.id, main.id);
+        assert_eq!(linked.display_name, "my-repo");
+
+        let encoded = repo.to_string_lossy().replace('/', "-");
+        let transcript = root.join("projects").join(&encoded).join("session.jsonl");
+        let decoded = resolve_project(&session_at("", &transcript.to_string_lossy()));
+        assert_eq!(decoded.id, main.id);
+
+        let missing = resolve_project(&session_at("", "/nowhere/projects/-gone-dir/s.jsonl"));
+        assert_eq!(missing.display_name, "unknown");
+        let _ = fs::remove_dir_all(root);
+    }
 }
