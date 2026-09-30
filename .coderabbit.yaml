@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
+language: "zh-CN"
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+  path_filters:
+    - "!target/**"
+    - "!ci-artifacts/**"
+    - "!assets/**"
+    - "!Cargo.lock"
+    - "!testdata/**"
+  path_instructions:
+    - path: "crates/agenttrace-core/src/parser.rs"
+      instructions: >-
+        Parsers read untrusted, possibly huge agent logs. Flag anything that re-reads or
+        re-parses input, allocates per line without need, can panic on malformed JSON,
+        or double counts tokens/cost. New formats need a regression test in
+        crates/agenttrace-core/tests/discovery_contract.rs.
+    - path: "crates/agenttrace-core/src/session_cache.rs"
+      instructions: >-
+        Any change to cached fields or derived metrics must bump
+        SESSION_CACHE_SCHEMA_VERSION, otherwise users keep stale results.
+    - path: "crates/agenttrace-core/src/{reports,diagnostics,governance}.rs"
+      instructions: >-
+        Report output is a public contract checked by scripts/ci/check-output-contract.sh.
+        Reports must never include prompt text, tool arguments, or file contents beyond
+        what existing redaction allows.
+    - path: "crates/agenttrace-tui/src/**"
+      instructions: >-
+        Every user-visible string needs both English and Chinese text. Check CJK width
+        handling (unicode-width), narrow terminals (80x24), and that per-frame work does
+        not scan all sessions or touch the filesystem repeatedly.
+    - path: ".github/workflows/**"
+      instructions: >-
+        Third-party actions must be pinned to a full commit SHA. Keep permissions minimal.
+  tools:
+    clippy:
+      enabled: true
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+chat:
+  auto_reply: true
