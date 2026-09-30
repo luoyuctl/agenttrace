@@ -1,0 +1,20 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        informational: true
+    patch:
+      default:
+        target: auto
+        informational: true
+
+comment:
+  layout: "condensed_header, diff, flags, files"
+  require_changes: true
+
+ignore:
+  - "crates/**/tests/**"
+  - "crates/agenttrace-tui/src/tests.rs"
+  - "testdata/**"
