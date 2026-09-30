@@ -1,0 +1,48 @@
+[changelog]
+header = """
+# Changelog
+
+"""
+body = """
+{% if version -%}
+## {{ version }} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## Unreleased
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | split(pat="\n") | first | trim | upper_first }}\
+{% endfor %}
+{% endfor %}
+
+"""
+footer = ""
+trim = true
+postprocessors = []
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+topo_order = false
+sort_commits = "oldest"
+commit_preprocessors = [
+  { pattern = "\\(#([0-9]+)\\)", replace = "([#${1}](https://github.com/luoyuctl/agenttrace/pull/${1}))" },
+]
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->Added" },
+  { message = "^fix", group = "<!-- 1 -->Fixed" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^security|^sec", group = "<!-- 3 -->Security" },
+  { message = "^docs", group = "<!-- 5 -->Documentation" },
+  { message = "^(build|ci)", group = "<!-- 6 -->Build and CI" },
+  { message = "^chore\\(deps\\)", group = "<!-- 7 -->Dependencies" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^(chore|refactor|test|style)", group = "<!-- 8 -->Maintenance" },
+  { message = "^release:", skip = true },
+  { message = ".*", group = "<!-- 4 -->Changed" },
+]

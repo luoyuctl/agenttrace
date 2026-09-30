@@ -1,5 +1,78 @@
 # Changelog
 
+## v0.9.0 - 2026-09-29
+
+### Fixed
+
+- **parser:** Skip leading non-session lines in Oh My Pi JSONL ([#284](https://github.com/luoyuctl/agenttrace/pull/284))
+
+### Changed
+
+- Fix Codex cost double counting and tighten TUI triage ([#286](https://github.com/luoyuctl/agenttrace/pull/286))
+
+### Build and CI
+
+- **windows:** Link the MSVC CRT statically ([#285](https://github.com/luoyuctl/agenttrace/pull/285))
+
+## v0.8.1 - 2026-09-06
+
+### Changed
+
+- Improve TUI navigation, feedback and loading progress ([#283](https://github.com/luoyuctl/agenttrace/pull/283))
+
+### Documentation
+
+- Remove stale README run summary ([#281](https://github.com/luoyuctl/agenttrace/pull/281))
+
+## v0.8.0 - 2026-08-22
+
+### Changed
+
+- Authenticate GHCR and remove obsolete Pages surfaces
+- Improve pricing provenance and TUI session exploration ([#280](https://github.com/luoyuctl/agenttrace/pull/280))
+
+### Dependencies
+
+- **deps:** Bump the github-actions group with 2 updates ([#277](https://github.com/luoyuctl/agenttrace/pull/277))
+
+## v0.7.7 - 2026-07-25
+
+### Fixed
+
+- Fix release channel script permissions
+
+## v0.7.6 - 2026-07-25
+
+### Changed
+
+- Publish npm launcher under zack78 scope
+
+## v0.7.5 - 2026-07-20
+
+### Fixed
+
+- Configure npm auth before publishing
+
+## v0.7.3 - 2026-07-20
+
+### Fixed
+
+- Publish npm tarball as a file
+
+## v0.7.2 - 2026-07-20
+
+### Added
+
+- Publish CLI through npm brew and winget
+
+### Fixed
+
+- Decouple pages checks from release version
+
+### Maintenance
+
+- Derive release versions from tags
+
 ## v0.7.1 - 2026-07-20
 
 ### Changed

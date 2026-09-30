@@ -1,0 +1,63 @@
+name: Changelog
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to add (for example v0.9.1)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    name: Open changelog PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Render release entry
+        id: cliff
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff
+        with:
+          config: cliff.toml
+          args: --latest --strip header --tag ${{ env.TAG }}
+        env:
+          OUTPUT: release-entry.md
+
+      - name: Insert entry into CHANGELOG.md
+        run: |
+          if grep -q "^## ${TAG} " CHANGELOG.md; then
+            echo "CHANGELOG.md already has ${TAG}"
+            exit 0
+          fi
+          python3 - <<'PY'
+          entry = open("release-entry.md").read().strip("\n")
+          text = open("CHANGELOG.md").read()
+          head, sep, rest = text.partition("\n## ")
+          open("CHANGELOG.md", "w").write(head.rstrip("\n") + "\n\n" + entry + "\n" + (sep + rest if sep else "\n"))
+          PY
+          rm release-entry.md
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1
+        with:
+          branch: changelog/${{ env.TAG }}
+          commit-message: "docs(changelog): add ${{ env.TAG }}"
+          title: "docs(changelog): add ${{ env.TAG }}"
+          body: Generated from conventional commits by git-cliff after the ${{ env.TAG }} release.
+          labels: documentation
+          delete-branch: true
