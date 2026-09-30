@@ -12,6 +12,15 @@ fail() {
 [[ -x "$bin" ]] || fail "agenttrace binary is not executable: $bin"
 mkdir -p "$out_dir/determinism"
 
+generated_files=()
+for i in 1 2 3; do
+  generated_files+=(
+    "$out_dir/determinism/latest-$i.json"
+    "$out_dir/determinism/overview-$i.json"
+    "$out_dir/determinism/baseline-$i.json"
+  )
+done
+
 for i in 1 2 3; do
   "$bin" --demo --latest -f json >"$out_dir/determinism/latest-$i.json"
   "$bin" --demo --overview -f json >"$out_dir/determinism/overview-$i.json"
@@ -22,14 +31,14 @@ for i in 1 2 3; do
     >"$out_dir/determinism/baseline-$i.json"
 done
 
-for path in "$out_dir"/determinism/*.json; do
+for path in "${generated_files[@]}"; do
   node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$path" \
     || fail "invalid JSON: $path"
 done
 
 # generated_at is wall-clock time at second precision, so runs that straddle a
 # second boundary differ legitimately. Drop it before comparing.
-for path in "$out_dir"/determinism/*.json; do
+for path in "${generated_files[@]}"; do
   node -e '
     const fs = require("fs");
     const strip = (v) => {
