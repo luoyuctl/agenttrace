@@ -120,7 +120,6 @@ jobs:
       attestations: write
       contents: write
       id-token: write
-      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -209,19 +208,41 @@ jobs:
           path: channel-dist/winget
           if-no-files-found: error
 
-      - name: Submit WinGet manifest
-        env:
-          GH_TOKEN: ${{ github.token }}
-          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+  winget:
+    name: Submit WinGet manifest
+    needs: release
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      WINGETCREATE_VERSION: v1.12.13.0
+      WINGETCREATE_SHA256: 24042BD37915805615E6CF969AC57C6439124C3FE85823327F5F3FB24BD9FFEA
+    steps:
+      - name: Download WinGet manifests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: agenttrace-winget-${{ github.ref_name }}
+          path: winget
+
+      - name: Download pinned wingetcreate
+        shell: pwsh
         run: |
-          test -n "$WINGET_GITHUB_TOKEN" || {
-            echo "WINGET_GITHUB_TOKEN is required to submit the WinGet manifest." >&2
-            exit 1
+          $url = "https://github.com/microsoft/winget-create/releases/download/$env:WINGETCREATE_VERSION/wingetcreate.exe"
+          Invoke-WebRequest -Uri $url -OutFile wingetcreate.exe
+          $actual = (Get-FileHash wingetcreate.exe -Algorithm SHA256).Hash
+          if ($actual -ne $env:WINGETCREATE_SHA256) {
+            throw "wingetcreate.exe checksum mismatch: $actual"
           }
-          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker run --rm \
-            -e WINGET_GITHUB_TOKEN \
-            -v "$PWD/channel-dist/winget/manifests:/manifests:ro" \
-            ghcr.io/microsoft/winget-create:latest \
-            submit /manifests --token "$WINGET_GITHUB_TOKEN" --submit \
-              --prtitle "New version: Luoyuctl.AgentTrace $GITHUB_REF_NAME"
+
+      - name: Submit manifest
+        shell: pwsh
+        env:
+          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          if (-not $env:WINGET_CREATE_GITHUB_TOKEN) {
+            throw "WINGET_GITHUB_TOKEN is required to submit the WinGet manifest."
+          }
+          $manifest = Get-ChildItem -Path winget/manifests -Recurse -Filter "Luoyuctl.AgentTrace.yaml" | Select-Object -First 1
+          if (-not $manifest) { throw "WinGet version manifest not found" }
+          ./wingetcreate.exe submit $manifest.DirectoryName --prtitle "New version: Luoyuctl.AgentTrace $env:GITHUB_REF_NAME" --no-open
