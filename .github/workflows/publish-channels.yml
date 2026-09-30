@@ -1,34 +1,26 @@
-name: Publish package channels
+name: Publish Homebrew for a release
 
 # Manual recovery for an already published release: re-renders the Homebrew
-# Formula and WinGet manifests from that release's checksums without rebuilding
-# binaries or recreating the GitHub Release and npm package.
+# Formula from that release's checksums without rebuilding binaries or
+# recreating the GitHub Release and npm package. WinGet is submitted by hand
+# until the package is accepted into microsoft/winget-pkgs.
 on:
   workflow_dispatch:
     inputs:
       tag:
         description: Existing release tag (for example v0.9.0)
         required: true
-      homebrew:
-        description: Publish the Homebrew Formula
-        type: boolean
-        default: true
-      winget:
-        description: Submit the WinGet manifest
-        type: boolean
-        default: true
 
 permissions:
   contents: read
 
 jobs:
   publish:
-    name: Publish ${{ inputs.tag }} to package channels
+    name: Publish ${{ inputs.tag }} to Homebrew
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
-      packages: read
     env:
       TAG: ${{ inputs.tag }}
     steps:
@@ -43,11 +35,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern checksums.txt --dir dist
 
-      - name: Render Homebrew and WinGet manifests
+      - name: Render channel manifests
         run: scripts/release/render-channels.sh "${TAG#v}" dist/checksums.txt channel-dist
 
       - name: Publish Homebrew Formula
-        if: inputs.homebrew
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
@@ -64,20 +55,9 @@ jobs:
           git diff --cached --quiet || git commit -m "agenttrace ${TAG}"
           git push origin HEAD
 
-      - name: Submit WinGet manifest
-        if: inputs.winget
-        env:
-          GH_TOKEN: ${{ github.token }}
-          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
-        run: |
-          test -n "$WINGET_GITHUB_TOKEN" || {
-            echo "WINGET_GITHUB_TOKEN is required to submit the WinGet manifest." >&2
-            exit 1
-          }
-          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker run --rm \
-            -e WINGET_GITHUB_TOKEN \
-            -v "$PWD/channel-dist/winget/manifests:/manifests:ro" \
-            ghcr.io/microsoft/winget-create:latest \
-            submit /manifests --token "$WINGET_GITHUB_TOKEN" --submit \
-              --prtitle "New version: Luoyuctl.AgentTrace $TAG"
+      - name: Upload WinGet manifests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: agenttrace-winget-${{ inputs.tag }}
+          path: channel-dist/winget
+          if-no-files-found: error

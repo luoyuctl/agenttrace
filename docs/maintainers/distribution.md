@@ -36,9 +36,10 @@ The source tree deliberately uses non-release version placeholders. A release ta
 If a release published the GitHub Release and npm package but a later channel
 step failed (for example an expired `HOMEBREW_TAP_TOKEN`), do not re-run the
 release job: it would try to recreate the existing release and npm version.
-Fix the secret, then run the **Publish package channels** workflow for the same
-tag. It re-renders the Homebrew Formula and WinGet manifests from that release's
-`checksums.txt` and publishes only the channels you select.
+Fix the secret, then run the **Publish Homebrew for a release** workflow for the
+same tag. It re-renders the Homebrew Formula from that release's `checksums.txt`,
+pushes it to the tap, and uploads the rendered WinGet manifests as an artifact
+for manual submission.
 
 ```bash
 gh workflow run publish-channels.yml -f tag=v0.9.0
