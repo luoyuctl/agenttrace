@@ -1,0 +1,83 @@
+name: Publish package channels
+
+# Manual recovery for an already published release: re-renders the Homebrew
+# Formula and WinGet manifests from that release's checksums without rebuilding
+# binaries or recreating the GitHub Release and npm package.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (for example v0.9.0)
+        required: true
+      homebrew:
+        description: Publish the Homebrew Formula
+        type: boolean
+        default: true
+      winget:
+        description: Submit the WinGet manifest
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.tag }} to package channels
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Download release checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern checksums.txt --dir dist
+
+      - name: Render Homebrew and WinGet manifests
+        run: scripts/release/render-channels.sh "${TAG#v}" dist/checksums.txt channel-dist
+
+      - name: Publish Homebrew Formula
+        if: inputs.homebrew
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          test -n "$HOMEBREW_TAP_TOKEN" || {
+            echo "HOMEBREW_TAP_TOKEN is required to update luoyuctl/homebrew-tap." >&2
+            exit 1
+          }
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/luoyuctl/homebrew-tap.git" homebrew-tap
+          install -Dm644 channel-dist/homebrew/Formula/agenttrace.rb homebrew-tap/Formula/agenttrace.rb
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/agenttrace.rb
+          git diff --cached --quiet || git commit -m "agenttrace ${TAG}"
+          git push origin HEAD
+
+      - name: Submit WinGet manifest
+        if: inputs.winget
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          test -n "$WINGET_GITHUB_TOKEN" || {
+            echo "WINGET_GITHUB_TOKEN is required to submit the WinGet manifest." >&2
+            exit 1
+          }
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker run --rm \
+            -e WINGET_GITHUB_TOKEN \
+            -v "$PWD/channel-dist/winget/manifests:/manifests:ro" \
+            ghcr.io/microsoft/winget-create:latest \
+            submit /manifests --token "$WINGET_GITHUB_TOKEN" --submit \
+              --prtitle "New version: Luoyuctl.AgentTrace $TAG"
