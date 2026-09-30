@@ -27,6 +27,25 @@ for path in "$out_dir"/determinism/*.json; do
     || fail "invalid JSON: $path"
 done
 
+# generated_at is wall-clock time at second precision, so runs that straddle a
+# second boundary differ legitimately. Drop it before comparing.
+for path in "$out_dir"/determinism/*.json; do
+  node -e '
+    const fs = require("fs");
+    const strip = (v) => {
+      if (Array.isArray(v)) return v.map(strip);
+      if (v && typeof v === "object") {
+        return Object.fromEntries(
+          Object.entries(v).filter(([k]) => k !== "generated_at").map(([k, x]) => [k, strip(x)]),
+        );
+      }
+      return v;
+    };
+    const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    fs.writeFileSync(process.argv[1], JSON.stringify(strip(data), null, 2) + "\n");
+  ' "$path" || fail "could not normalize: $path"
+done
+
 cmp -s "$out_dir/determinism/latest-1.json" "$out_dir/determinism/latest-2.json" \
   || fail "--demo --latest -f json changed between run 1 and 2"
 cmp -s "$out_dir/determinism/latest-1.json" "$out_dir/determinism/latest-3.json" \
