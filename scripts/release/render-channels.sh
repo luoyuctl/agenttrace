@@ -86,6 +86,7 @@ end
 FORMULA
 
 cat >"$winget_dir/Luoyuctl.AgentTrace.yaml" <<VERSION
+# yaml-language-server: \$schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
 PackageIdentifier: Luoyuctl.AgentTrace
 PackageVersion: $version
 DefaultLocale: en-US
@@ -94,6 +95,7 @@ ManifestVersion: 1.10.0
 VERSION
 
 cat >"$winget_dir/Luoyuctl.AgentTrace.locale.en-US.yaml" <<LOCALE
+# yaml-language-server: \$schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
 PackageIdentifier: Luoyuctl.AgentTrace
 PackageVersion: $version
 PackageLocale: en-US
@@ -118,6 +120,7 @@ ManifestVersion: 1.10.0
 LOCALE
 
 cat >"$winget_dir/Luoyuctl.AgentTrace.installer.yaml" <<INSTALLER
+# yaml-language-server: \$schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
 PackageIdentifier: Luoyuctl.AgentTrace
 PackageVersion: $version
 InstallerType: portable
@@ -127,11 +130,9 @@ Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/$repo/releases/download/v$version/agenttrace-windows-amd64.exe
     InstallerSha256: $windows_amd64
-    PortableCommandAlias: agenttrace
   - Architecture: arm64
     InstallerUrl: https://github.com/$repo/releases/download/v$version/agenttrace-windows-arm64.exe
     InstallerSha256: $windows_arm64
-    PortableCommandAlias: agenttrace
 ManifestType: installer
 ManifestVersion: 1.10.0
 INSTALLER
