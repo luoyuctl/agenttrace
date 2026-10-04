@@ -1413,7 +1413,7 @@ fn audit_text(audit: &CostAudit, language: Language) -> String {
             coverage.unpriced_or_unknown_sessions
         ),
         String::new(),
-        format!("{}", text(language, "tui.provider_model_rows")),
+        text(language, "tui.provider_model_rows").to_string(),
     ];
     if audit.by_provider_model.is_empty() {
         lines.push(format!("- {}", text(language, "tui.none")));
@@ -1902,7 +1902,31 @@ pub(super) fn detail_summary_text(session: &Session, language: Language) -> Stri
             format_count(metrics.tool_results as i64)
         ),
     ]);
+    lines.extend(subagent_lines(session, language));
     lines.join("\n")
+}
+
+/// Subagent rollup (for parents) or spawning session (for subagents), if any.
+fn subagent_lines(session: &Session, language: Language) -> Vec<String> {
+    let metrics = &session.metrics;
+    let mut lines = Vec::new();
+    if metrics.subagent_count > 0 {
+        lines.push(format!(
+            "{}: {}  {}  {}",
+            text(language, "tui.subagents"),
+            format_count(metrics.subagent_count as i64),
+            format_compact_cost(metrics.subagent_cost),
+            format_tokens(metrics.subagent_tokens)
+        ));
+    }
+    if !metrics.parent_session.is_empty() {
+        lines.push(format!(
+            "{}: {}",
+            text(language, "tui.subagent_parent"),
+            short_path(&metrics.parent_session, 58)
+        ));
+    }
+    lines
 }
 
 pub(super) fn detail_diagnosis_text(session: &Session, language: Language) -> String {
@@ -2080,11 +2104,14 @@ pub(super) fn detail_native_text(session: &Session, language: Language) -> Strin
             text(language, "tui.cost"),
             format_compact_cost(metrics.cost_estimated)
         ),
+    ];
+    lines.extend(subagent_lines(session, language));
+    lines.extend([
         String::new(),
         text(language, "tui.next_action_2").to_string(),
         "-----------".to_string(),
         format!("- {}", selected_next_action(session, language)),
-    ];
+    ]);
     lines.extend(signal_lines(session, language));
     lines.push(String::new());
     lines.extend(anomaly_lines(session, 4, language));

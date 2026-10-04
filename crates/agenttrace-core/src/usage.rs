@@ -191,7 +191,7 @@ pub fn usage_blocks(sessions: &[Session], now: DateTime<Utc>, tz: UsageTz) -> Ve
     }
     let mut blocks: Vec<Acc> = Vec::new();
     for (point, index) in points {
-        let open_new = blocks.last().map_or(true, |block| {
+        let open_new = blocks.last().is_none_or(|block| {
             point.ts >= block.start + BLOCK_SECS || point.ts - block.last >= BLOCK_SECS
         });
         if open_new {

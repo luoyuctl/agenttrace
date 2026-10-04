@@ -12,6 +12,7 @@ mod reports;
 mod search;
 mod session_cache;
 mod sqlite_sessions;
+mod subagents;
 mod usage;
 mod waste;
 
@@ -77,6 +78,7 @@ pub use session_cache::{
     load_session_cache, save_session_cache, session_cache_path, store_session, SessionCache,
 };
 pub use sqlite_sessions::{load_sqlite_backed_sessions, skip_sqlite_backed_file_dir};
+pub use subagents::attribute_subagents;
 pub use usage::{
     usage_blocks, usage_by_period, usage_tz_label, UsageBlock, UsageBucket, UsagePeriod, UsageTz,
 };
@@ -304,9 +306,31 @@ pub struct Metrics {
     pub duration_sec: f64,
     pub cost_estimated: f64,
     pub provenance: MetricProvenance,
+    /// Subagent transcripts attributed to this session (not included in the totals above).
+    #[serde(skip_serializing_if = "is_zero_usize")]
+    pub subagent_count: usize,
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub subagent_cost: f64,
+    #[serde(skip_serializing_if = "is_zero_i64")]
+    pub subagent_tokens: i64,
+    /// Path of the parent session when this session is a subagent transcript.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub parent_session: String,
     /// Timestamped per-turn usage, used for calendar and 5-hour block rollups.
     #[serde(skip)]
     pub usage_points: Vec<UsagePoint>,
+}
+
+fn is_zero_usize(value: &usize) -> bool {
+    *value == 0
+}
+
+fn is_zero_f64(value: &f64) -> bool {
+    *value == 0.0
+}
+
+fn is_zero_i64(value: &i64) -> bool {
+    *value == 0
 }
 
 /// Tokens and estimated cost reported by one timestamped usage record.

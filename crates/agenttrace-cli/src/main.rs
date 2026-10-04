@@ -1168,10 +1168,10 @@ fn render_session_list(sessions: &[Session], format: &str, limit: usize) -> Stri
         return serde_json::to_string_pretty(&sessions).expect("sessions serialize");
     }
     let mut lines =
-        vec!["SESSION\tHEALTH\tDATA\tSOURCE\tMODEL\tCOST\tTOKENS\tFAIL\tANOMALIES".to_string()];
+        vec!["SESSION\tHEALTH\tDATA\tSOURCE\tMODEL\tCOST\tTOKENS\tFAIL\tANOMALIES\tSUBAGENTS\tSUBAGENT_COST".to_string()];
     lines.extend(sessions.into_iter().map(|session| {
         format!(
-            "{}\t{}\t{}\t{}\t{}\t{:.4}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{:.4}\t{}\t{}\t{}\t{}\t{:.4}",
             session.name,
             session.health,
             session_capability(session),
@@ -1180,7 +1180,9 @@ fn render_session_list(sessions: &[Session], format: &str, limit: usize) -> Stri
             session.metrics.cost_estimated,
             total_tokens(session),
             session.metrics.tool_calls_fail,
-            session.anomalies.len()
+            session.anomalies.len(),
+            session.metrics.subagent_count,
+            session.metrics.subagent_cost
         )
     }));
     lines.join("\n")

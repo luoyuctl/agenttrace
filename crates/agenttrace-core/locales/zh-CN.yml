@@ -856,6 +856,8 @@ tui:
   session: "会话"
   session_at_a_glance: "会话概况"
   session_file: "会话文件"
+  subagents: "子代理"
+  subagent_parent: "父会话"
   session_overview: "会话概况"
   session_summary: "会话摘要"
   sessions: "个会话"

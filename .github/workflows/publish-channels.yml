@@ -23,10 +23,11 @@ jobs:
     env:
       TAG: ${{ inputs.tag }}
     steps:
-      - name: Checkout release tag
+      # Use the dispatching branch's release scripts: older tags may predate them.
+      # Only the checksums come from the selected release.
+      - name: Checkout publishing scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: refs/tags/${{ inputs.tag }}
           persist-credentials: false
 
       - name: Download release checksums
@@ -41,15 +42,6 @@ jobs:
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          test -n "$HOMEBREW_TAP_TOKEN" || {
-            echo "HOMEBREW_TAP_TOKEN is required to update luoyuctl/homebrew-tap." >&2
-            exit 1
-          }
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/luoyuctl/homebrew-tap.git" homebrew-tap
-          install -Dm644 channel-dist/homebrew/Formula/agenttrace.rb homebrew-tap/Formula/agenttrace.rb
-          cd homebrew-tap
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/agenttrace.rb
-          git diff --cached --quiet || git commit -m "agenttrace ${TAG}"
-          git push origin HEAD
+          scripts/release/publish-homebrew.sh \
+            "$TAG" \
+            channel-dist/homebrew/Formula/agenttrace.rb

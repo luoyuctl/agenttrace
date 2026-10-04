@@ -100,7 +100,7 @@ impl Pacer {
         if slower && median > current * PACER_DOWN_LOAD {
             self.tier += 1;
         } else if self.tier > 0
-            && !since_change.is_some_and(|elapsed| elapsed < PACER_UP_COOLDOWN)
+            && since_change.is_none_or(|elapsed| elapsed >= PACER_UP_COOLDOWN)
             && FPS_TIERS[self.tier] < self.cap
             && median
                 < Self::budget(FPS_TIERS[self.tier - 1].min(self.cap)).as_secs_f64() * PACER_UP_LOAD

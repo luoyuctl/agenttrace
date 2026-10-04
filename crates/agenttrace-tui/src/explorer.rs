@@ -3062,7 +3062,7 @@ mod interaction_tests {
         app.input = "beta".into();
         assert_eq!(app.filter_choices().len(), 1);
         app.activate_explorer_overlay().unwrap();
-        assert_eq!(app.project_id_filter, "/beta/same");
+        assert_eq!(app.project_id_filter, resolve_project(&sessions[1]).id);
         assert_eq!(app.filtered.len(), 1);
         app.explorer_detail = Some(DetailSection::Summary);
         app.scroll = 7;
