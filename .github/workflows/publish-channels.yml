@@ -23,10 +23,11 @@ jobs:
     env:
       TAG: ${{ inputs.tag }}
     steps:
-      - name: Checkout release tag
+      # Use the dispatching branch's release scripts: older tags may predate them.
+      # Only the checksums come from the selected release.
+      - name: Checkout publishing scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: refs/tags/${{ inputs.tag }}
           persist-credentials: false
 
       - name: Download release checksums
