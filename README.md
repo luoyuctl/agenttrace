@@ -124,6 +124,11 @@ Reports, help, and errors follow `--lang en|zh` (default `en`; the TUI also
 remembers the language you toggle with `L`). Machine-readable fields such as
 JSON keys, codes, and the `--sessions` TSV header always stay English.
 
+The TUI animates transitions at up to 120 FPS and steps down to 60 or 30 FPS
+when the terminal can't keep up. `AGENTTRACE_FPS=60` lowers the cap,
+`AGENTTRACE_FPS=off` (or `AGENTTRACE_REDUCED_MOTION=1`) turns motion off, and
+`AGENTTRACE_SHOW_FPS=1` shows the live frame rate in the corner.
+
 ```bash
 agenttrace --overview --lang zh
 ```

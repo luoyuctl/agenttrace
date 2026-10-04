@@ -73,18 +73,67 @@ fn run_with_app(app: App) -> anyhow::Result<()> {
 }
 
 fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
+    app.motion = Motion::from_env();
     let mut dirty = true;
+    let mut next_frame: Option<Instant> = None;
+    let mut last_draw: Option<Instant> = None;
     loop {
         dirty |= app.poll_pending_load();
         dirty |= app.poll_governance_delivery();
         dirty |= app.poll_auto_refresh()?;
         dirty |= app.expire_notice();
-        dirty |= app.pending_load.is_some();
-        if dirty {
-            terminal.draw(|frame| render_explorer(frame, &mut app))?;
-            dirty = false;
+        let now = Instant::now();
+        if !app.motion.enabled() {
+            dirty |= app.pending_load.is_some();
         }
-        let timeout = event_poll_timeout(&app);
+        dirty |= next_frame.is_some_and(|deadline| now >= deadline);
+        // Input bursts never draw faster than the motion frame cap.
+        let throttled = app.motion.enabled()
+            && last_draw.is_some_and(|last| now.duration_since(last) < app.motion.frame_interval());
+        if dirty && !throttled {
+            // Synchronized output: the terminal swaps whole frames, so fast
+            // animation frames never show half-painted rows (tearing).
+            let synced = app.motion.enabled();
+            if synced {
+                crossterm::execute!(
+                    std::io::stdout(),
+                    crossterm::terminal::BeginSynchronizedUpdate
+                )?;
+            }
+            let started = Instant::now();
+            terminal.draw(|frame| render_explorer(frame, &mut app))?;
+            if synced {
+                crossterm::execute!(
+                    std::io::stdout(),
+                    crossterm::terminal::EndSynchronizedUpdate
+                )?;
+            }
+            app.motion.record_frame(started, started.elapsed());
+            dirty = false;
+            last_draw = Some(now);
+            let interval = app.motion.frame_interval();
+            next_frame = app.motion.next_frame_delay(Instant::now()).map(|delay| {
+                // Schedule from the previous deadline, not from when we woke up:
+                // OS timers overshoot by ~1ms, which would otherwise cap 120 FPS
+                // near 105. Fall back to `now` after a stall so we don't burst.
+                match next_frame {
+                    Some(deadline) if delay == interval && deadline + interval > now => {
+                        deadline + interval
+                    }
+                    _ => now + delay,
+                }
+            });
+        } else if dirty {
+            let catch_up = last_draw.map(|last| last + app.motion.frame_interval());
+            next_frame = match (next_frame, catch_up) {
+                (Some(left), Some(right)) => Some(left.min(right)),
+                (left, right) => left.or(right),
+            };
+        }
+        let mut timeout = event_poll_timeout(&app);
+        if let Some(deadline) = next_frame {
+            timeout = timeout.min(deadline.saturating_duration_since(Instant::now()));
+        }
         if event::poll(timeout)? {
             if app.handle_explorer_event(event::read()?)? {
                 break;
@@ -245,7 +294,15 @@ struct App {
     compare_anchor: Option<String>,
     compare_open: bool,
     initial_load: bool,
+    load_generation: u64,
+    filter_generation: u64,
+    indices_cache: std::cell::RefCell<Option<IndicesCache>>,
+    totals_cache: std::cell::Cell<Option<(u64, VisibleTotals)>>,
+    motion: Motion,
 }
+
+/// Explorer row order keyed by (filter generation, view).
+type IndicesCache = ((u64, ExplorerView), Vec<usize>);
 
 #[derive(Debug, Clone, Default)]
 struct OverviewDerived {
@@ -369,6 +426,11 @@ impl App {
             initial_load: false,
             compare_anchor: None,
             compare_open: false,
+            load_generation: 0,
+            filter_generation: 0,
+            indices_cache: std::cell::RefCell::new(None),
+            totals_cache: std::cell::Cell::new(None),
+            motion: Motion::disabled(),
         };
         app.refresh_filtered();
         app
@@ -942,6 +1004,7 @@ impl App {
         self.load_state.skipped = report.skipped;
         self.load_state.cache_hits = report.cache_hits;
         self.sessions = report.sessions;
+        self.load_generation = self.load_generation.wrapping_add(1);
         self.sessions
             .sort_by(|left, right| compare_sessions(left, right, SortKey::Recent, true));
         let selected_index = selected.as_ref().and_then(|selected| {
@@ -1222,6 +1285,7 @@ impl App {
     }
 
     fn refresh_filtered(&mut self) {
+        self.filter_generation = self.filter_generation.wrapping_add(1);
         let query = self.query.trim().to_ascii_lowercase();
         let now = chrono::Utc::now();
         self.filtered = self
@@ -1610,6 +1674,8 @@ mod explorer;
 mod filters;
 #[path = "i18n.rs"]
 mod i18n;
+#[path = "motion.rs"]
+mod motion;
 #[cfg(test)]
 #[path = "presentation.rs"]
 mod presentation;
@@ -1621,6 +1687,7 @@ use filters::*;
 #[cfg(test)]
 use i18n::localized_anomaly;
 use i18n::{localized_level, localized_step_kind, localized_step_status, UiText};
+use motion::{Motion, Scene};
 #[cfg(test)]
 use presentation::*;
 #[cfg(not(test))]

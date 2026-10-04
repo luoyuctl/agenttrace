@@ -40,7 +40,39 @@ impl ExplorerLayout {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct VisibleTotals {
+    sessions: usize,
+    tokens: i64,
+    cost: f64,
+    attention: usize,
+}
+
 impl App {
+    pub(super) fn visible_totals(&self) -> VisibleTotals {
+        if let Some((generation, totals)) = self.totals_cache.get() {
+            if generation == self.filter_generation {
+                return totals;
+            }
+        }
+        let visible = self.visible_sessions();
+        let totals = VisibleTotals {
+            sessions: visible.len(),
+            tokens: total_tokens_all(&visible),
+            cost: visible
+                .iter()
+                .map(|session| session.metrics.cost_estimated)
+                .sum(),
+            attention: visible
+                .iter()
+                .filter(|session| needs_attention(session))
+                .count(),
+        };
+        self.totals_cache
+            .set(Some((self.filter_generation, totals)));
+        totals
+    }
+
     pub(super) fn expire_notice(&mut self) -> bool {
         if self
             .notice
@@ -559,7 +591,21 @@ impl App {
         totals
     }
 
+    /// Memoized per (filter generation, view): rendering asks for this several
+    /// times per frame and sorting thousands of sessions would blow the frame budget.
     pub(super) fn explorer_indices(&self) -> Vec<usize> {
+        let key = (self.filter_generation, self.explorer_view);
+        if let Some((cached_key, indices)) = self.indices_cache.borrow().as_ref() {
+            if *cached_key == key {
+                return indices.clone();
+            }
+        }
+        let indices = self.compute_explorer_indices();
+        *self.indices_cache.borrow_mut() = Some((key, indices.clone()));
+        indices
+    }
+
+    fn compute_explorer_indices(&self) -> Vec<usize> {
         let mut indices = self.filtered.clone();
         if self.explorer_view == ExplorerView::Storage {
             let mut paths = std::collections::HashSet::new();
@@ -649,8 +695,26 @@ pub(super) fn render_explorer(frame: &mut Frame<'_>, app: &mut App) {
         Constraint::Length(3),
     ])
     .split(area);
+    let loading = app.pending_load.is_some() && !app.load_state.showing_cached;
+    let scene = Scene {
+        view: app.explorer_view,
+        detail: app.explorer_detail,
+        compare: app.compare_open,
+        expanded: app.raw_report_expanded && app.explorer_detail.is_some(),
+        loading,
+        overlay: app.explorer_overlay,
+        selected: app.explorer_selected,
+        generation: app.load_generation,
+        notice: app
+            .notice
+            .as_ref()
+            .map(|(message, _)| motion::notice_key(message)),
+        notice_expiry: app.notice.as_ref().and_then(|(_, expiry)| *expiry),
+    };
+    let ambient = app.pending_load.is_some() || app.governance_delivery_pending();
+    app.motion.begin_frame(scene, ambient, Instant::now());
     render_explorer_header(frame, app, rows[0]);
-    if app.pending_load.is_some() && !app.load_state.showing_cached {
+    if loading {
         shared::render_loading_status(frame, app, rows[1]);
     } else if app.compare_open {
         render_compare(frame, app, rows[1]);
@@ -659,8 +723,14 @@ pub(super) fn render_explorer(frame: &mut Frame<'_>, app: &mut App) {
     } else {
         render_explorer_master(frame, app, rows[1]);
     }
+    app.motion.apply_content(frame.buffer_mut(), rows[1]);
     render_explorer_footer(frame, app, rows[2]);
+    app.motion.apply_notice(frame.buffer_mut());
+    if app.explorer_overlay == ExplorerOverlay::None {
+        app.motion.apply_reveal(frame.buffer_mut(), area);
+    }
     render_explorer_overlay(frame, app, area);
+    app.motion.render_fps(frame.buffer_mut(), area);
 }
 
 fn render_compare(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -731,13 +801,17 @@ fn render_explorer_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Style::default().fg(Color::Yellow),
     );
     if area.width < 140 {
-        let visible = app.visible_sessions();
+        let totals = app.visible_totals();
         let summary = format!(
             " · {} · {} {} · {}",
             range_label(app.range_filter, app.language),
-            visible.len(),
+            rolled_count(app, "header.sessions", totals.sessions as f64),
             app.t("tui.sessions"),
-            format_compact_cost(visible.iter().map(|item| item.metrics.cost_estimated).sum())
+            format_compact_cost(app.motion.counter(
+                "header.cost",
+                totals.cost,
+                motion::COUNTER_DURATION,
+            ))
         );
         let used = 13 + unicode_width::UnicodeWidthStr::width(title);
         frame.render_widget(
@@ -786,26 +860,98 @@ fn render_explorer_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn range_summary(app: &App) -> String {
-    let visible = app.visible_sessions();
-    let tokens = total_tokens_all(&visible);
-    let cost: f64 = visible
-        .iter()
-        .map(|session| session.metrics.cost_estimated)
-        .sum();
-    let attention = visible
-        .iter()
-        .filter(|session| needs_attention(session))
-        .count();
+    let VisibleTotals {
+        sessions,
+        tokens,
+        cost,
+        attention,
+    } = app.visible_totals();
     format!(
         "{} · {} {} · {} · {} · {} {}",
         range_label(app.range_filter, app.language),
-        visible.len(),
+        rolled_count(app, "header.sessions", sessions as f64),
         app.t("tui.sessions"),
-        format_tokens(tokens),
-        format_compact_cost(cost),
-        attention,
+        format_tokens(rolled_count(app, "header.tokens", tokens as f64)),
+        format_compact_cost(
+            app.motion
+                .counter("header.cost", cost, motion::COUNTER_DURATION)
+        ),
+        rolled_count(app, "header.attention", attention as f64),
         app.t("tui.need_attention")
     )
+}
+
+fn rolled_count(app: &App, key: &'static str, target: f64) -> i64 {
+    app.motion
+        .counter(key, target, motion::COUNTER_DURATION)
+        .round() as i64
+}
+
+/// Daily visible cost for the last `days` days, oldest first.
+fn cost_trend(app: &App, days: usize) -> Vec<f64> {
+    let today = chrono::Local::now().date_naive();
+    let key = (app.load_generation, app.filter_generation);
+    if let Some(cache) = app.motion.trend_cache.borrow().as_ref() {
+        if cache.generation == key.0 ^ key.1.rotate_left(32) && cache.day == today {
+            return cache.buckets.clone();
+        }
+    }
+    let mut buckets = vec![0.0; days];
+    for session in app.visible_sessions() {
+        let Ok(start) = chrono::DateTime::parse_from_rfc3339(&session.metrics.session_start) else {
+            continue;
+        };
+        let day = start.with_timezone(&chrono::Local).date_naive();
+        let age = (today - day).num_days();
+        if (0..days as i64).contains(&age) {
+            buckets[days - 1 - age as usize] += session.metrics.cost_estimated.max(0.0);
+        }
+    }
+    *app.motion.trend_cache.borrow_mut() = Some(motion::TrendCache {
+        generation: key.0 ^ key.1.rotate_left(32),
+        day: today,
+        buckets: buckets.clone(),
+    });
+    buckets
+}
+
+const SPARK_LEVELS: [&str; 8] = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+
+fn cost_trend_line(app: &App, width: u16) -> Line<'static> {
+    const DAYS: usize = 14;
+    let label = app.t("tui.cost_trend_14d");
+    let needed = unicode_width::UnicodeWidthStr::width(label) + DAYS + 12;
+    if (width as usize) < needed {
+        return Line::raw("");
+    }
+    let buckets = cost_trend(app, DAYS);
+    let max = buckets.iter().copied().fold(0.0_f64, f64::max);
+    // An all-flat sparkline only adds noise; keep the old blank spacer instead.
+    if max <= 0.0 {
+        return Line::raw("");
+    }
+    let mut spans = vec![Span::styled(
+        format!("{label} "),
+        Style::default().fg(Color::DarkGray),
+    )];
+    for (index, value) in buckets.iter().enumerate() {
+        let level = if max > 0.0 { value / max } else { 0.0 } * app.motion.spark_growth(index);
+        if *value <= 0.0 || level <= 0.0 {
+            spans.push(Span::styled("▁", Style::default().fg(Color::DarkGray)));
+            continue;
+        }
+        let step = ((level * 7.0).round() as usize).min(7);
+        let mut style = Style::default().fg(Color::Cyan);
+        if index == DAYS - 1 {
+            style = style.add_modifier(Modifier::BOLD);
+        }
+        spans.push(Span::styled(SPARK_LEVELS[step], style));
+    }
+    spans.push(Span::styled(
+        format!(" {}", format_compact_cost(buckets[DAYS - 1])),
+        Style::default().fg(Color::Gray),
+    ));
+    Line::from(spans)
 }
 
 fn render_explorer_master(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -834,12 +980,12 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let start = app.explorer_selected.saturating_sub(visible / 2);
     let mut lines = vec![Line::styled(
         short(
-            &explorer_list_title(app),
+            &explorer_list_title(app, &indices),
             area.width.saturating_sub(2) as usize,
         ),
         Style::default().add_modifier(Modifier::BOLD),
     )];
-    lines.push(Line::raw(""));
+    lines.push(cost_trend_line(app, area.width.saturating_sub(2)));
     let project_totals =
         (app.explorer_view == ExplorerView::Projects).then(|| app.project_totals());
     for (position, index) in indices.iter().enumerate().skip(start).take(visible) {
@@ -863,6 +1009,17 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Style::default()
         };
         let row = explorer_row_spans(app, session, marker, area.width, project_totals.as_ref());
+        if selected {
+            let y = area.y + lines.len() as u16;
+            if y < area.bottom() {
+                app.motion.selected_row.set(Some(Rect::new(
+                    area.x,
+                    y,
+                    area.width.saturating_sub(1),
+                    1,
+                )));
+            }
+        }
         lines.push(if selected {
             Line::styled(
                 row.into_iter()
@@ -938,7 +1095,7 @@ fn render_explorer_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let mut lines = vec![
         Line::styled(app.t("tui.why_look_here"), Style::default().fg(Color::Cyan)),
         Line::styled(
-            short(&session.name, 56),
+            short(&session.name, inner.width as usize),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
@@ -946,31 +1103,48 @@ fn render_explorer_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
         preview_field(app.t("tui.project"), project_name(session)),
         preview_field(app.t("tui.model"), metrics.model_used.clone()),
         Line::raw(""),
-        Line::from(vec![
+    ];
+    lines.extend(metric_rows(
+        vec![
             metric_span(
                 app.t("tui.health_3"),
-                session.health.to_string(),
+                (app.motion
+                    .counter(
+                        "preview.health",
+                        f64::from(session.health),
+                        motion::PREVIEW_COUNTER_DURATION,
+                    )
+                    .round() as i64)
+                    .to_string(),
                 health_color(session.health),
             ),
-            Span::raw("     "),
             metric_span(
                 app.t("tui.context_2"),
-                format_context_pct(context.utilization_pct),
+                format_context_pct(app.motion.counter(
+                    "preview.context",
+                    context.utilization_pct,
+                    motion::PREVIEW_COUNTER_DURATION,
+                )),
                 risk_color(&context.risk_level),
             ),
-            Span::raw("     "),
             metric_span(
                 app.t("tui.cost_4"),
-                format_compact_cost(metrics.cost_estimated),
+                format_compact_cost(app.motion.counter(
+                    "preview.cost",
+                    metrics.cost_estimated,
+                    motion::PREVIEW_COUNTER_DURATION,
+                )),
                 Color::White,
             ),
-            Span::raw("     "),
             metric_span(
                 app.t("tui.time_2"),
                 format_duration(metrics.duration_sec),
                 Color::White,
             ),
-        ]),
+        ],
+        inner.width,
+    ));
+    lines.extend([
         Line::raw(""),
         Line::styled(
             app.t("tui.what_s_going_on"),
@@ -979,7 +1153,7 @@ fn render_explorer_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Line::raw(primary_finding(session, app.language)),
         Line::raw(""),
         Line::styled(app.t("tui.what_we_saw"), Style::default().fg(Color::Cyan)),
-    ];
+    ]);
     for evidence in explorer_evidence(session, app.language).into_iter().take(5) {
         lines.push(Line::raw(format!("• {evidence}")));
     }
@@ -1012,19 +1186,16 @@ fn project_preview(app: &App, session: &Session) -> String {
         sessions.iter().map(|item| item.health as f64).sum::<f64>() / sessions.len() as f64
     };
     format!(
-        "{}\n{}\n\n{}  {}\n{}  {}\n{}  {}\n{}  {:.0}\n{}  {}\n\n{}",
+        "{}\n{}\n\n{}\n\n{}",
         app.t("tui.project_summary"),
         project,
-        app.t("tui.sessions_2"),
-        sessions.len(),
-        app.t("tui.estimated_spend"),
-        format_compact_cost(cost),
-        app.t("tui.tokens_2"),
-        format_tokens(tokens),
-        app.t("tui.average_health"),
-        average,
-        app.t("tui.need_attention_2"),
-        attention,
+        kv_block(&[
+            (app.t("tui.sessions_2"), sessions.len().to_string()),
+            (app.t("tui.estimated_spend"), format_compact_cost(cost)),
+            (app.t("tui.tokens_2"), format_tokens(tokens)),
+            (app.t("tui.average_health"), format!("{average:.0}")),
+            (app.t("tui.need_attention_2"), attention.to_string()),
+        ]),
         app.t("tui.press_s_to_show_only_this_project",)
     )
 }
@@ -1040,23 +1211,39 @@ fn context_preview(session: &Session, language: Language) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "{}\n{}\n\n{}         {}\n{}                {}\n{}     {}\n{}        {}\n{}       {}\n{}    {}\n{}           {}\n\n{}\n{}\n\n{}\n{}",
+        "{}\n{}\n\n{}\n\n{}\n{}\n\n{}\n{}",
         text(language, "tui.context_filling_up"),
         session.name,
-        text(language, "tui.used"),
-        format_context_pct(value.utilization_pct),
-        text(language, "tui.risk"),
-        i18n::risk_label(&value.risk_level, language),
-        text(language, "tui.estimated_total"),
-        format_tokens(value.estimated_total as i64),
-        text(language, "tui.conversation"),
-        format_tokens(value.conversation_history as i64),
-        text(language, "tui.system_prompt"),
-        format_tokens(value.system_prompt as i64),
-        text(language, "tui.tool_definitions"),
-        format_tokens(value.tool_definitions as i64),
-        text(language, "tui.room_left"),
-        format_tokens(value.available_for_task as i64),
+        kv_block(&[
+            (
+                text(language, "tui.used"),
+                format_context_pct(value.utilization_pct)
+            ),
+            (
+                text(language, "tui.risk"),
+                i18n::risk_label(&value.risk_level, language).to_string()
+            ),
+            (
+                text(language, "tui.estimated_total"),
+                format_tokens(value.estimated_total as i64)
+            ),
+            (
+                text(language, "tui.conversation"),
+                format_tokens(value.conversation_history as i64)
+            ),
+            (
+                text(language, "tui.system_prompt"),
+                format_tokens(value.system_prompt as i64)
+            ),
+            (
+                text(language, "tui.tool_definitions"),
+                format_tokens(value.tool_definitions as i64)
+            ),
+            (
+                text(language, "tui.room_left"),
+                format_tokens(value.available_for_task as i64)
+            ),
+        ]),
         text(language, "tui.what_s_taking_space"),
         if params.is_empty() {
             text(language, "tui.no_oversized_tool_arguments_showed_up")
@@ -1064,8 +1251,7 @@ fn context_preview(session: &Session, language: Language) -> String {
             &params
         },
         text(language, "tui.did_it_compact"),
-        text(
-            language, "tui.we_didn_t_see_a_compaction_event")
+        text(language, "tui.we_didn_t_see_a_compaction_event")
     )
 }
 
@@ -1074,16 +1260,16 @@ fn storage_preview(session: &Session, language: Language) -> String {
     let size = metadata.as_ref().map(|value| value.len()).unwrap_or(0);
     let modified = metadata
         .and_then(|value| value.modified().ok())
-        .map(|value| format!("{value:?}"))
+        .map(format_modified)
         .unwrap_or_else(|| text(language, "tui.unknown").to_string());
     format!(
-        "{}\n{}\n\n{}  {}\n{}  {}\n\n{}\n{}\n\n{}\n{}\n\n{}\n{}",
+        "{}\n{}\n\n{}\n\n{}\n{}\n\n{}\n{}\n\n{}\n{}",
         text(language, "tui.on_this_machine"),
         session.name,
-        text(language, "tui.size"),
-        format_bytes(size),
-        text(language, "tui.last_changed"),
-        modified,
+        kv_block(&[
+            (text(language, "tui.size"), format_bytes(size)),
+            (text(language, "tui.last_changed"), modified),
+        ]),
         text(language, "tui.session_file"),
         session.path,
         text(language, "tui.workspace"),
@@ -1108,17 +1294,18 @@ fn cost_preview(session: &Session, language: Language) -> String {
         .component_cost_usd
         .as_ref()
         .map(|cost| {
-            format!(
-                "{} {}  {} {}  {} {}  {} {}",
-                text(language, "tui.in"),
-                format_compact_cost(cost.input),
-                text(language, "tui.out"),
-                format_compact_cost(cost.output),
-                text(language, "tui.cache_write"),
-                format_compact_cost(cost.cache_write),
-                text(language, "tui.cache_read"),
-                format_compact_cost(cost.cache_read)
-            )
+            kv_grid(&[
+                (text(language, "tui.in"), format_compact_cost(cost.input)),
+                (text(language, "tui.out"), format_compact_cost(cost.output)),
+                (
+                    text(language, "tui.cache_write"),
+                    format_compact_cost(cost.cache_write),
+                ),
+                (
+                    text(language, "tui.cache_read"),
+                    format_compact_cost(cost.cache_read),
+                ),
+            ])
         })
         .unwrap_or_else(|| unavailable.to_string());
     let rates = audit
@@ -1148,92 +1335,82 @@ fn cost_preview(session: &Session, language: Language) -> String {
             .map(format_compact_cost)
             .unwrap_or_else(|| format_compact_cost(audit.stored_estimated_cost_usd)),
         String::new(),
-        format!(
-            "{}       {}",
-            text(language, "tui.input_tokens"),
-            format_tokens(audit.tokens.input)
-        ),
-        format!(
-            "{}      {}",
-            text(language, "tui.output_tokens"),
-            format_tokens(audit.tokens.output)
-        ),
-        format!(
-            "{}        {}",
-            text(language, "tui.cache_write_2"),
-            format_tokens(audit.tokens.cache_write)
-        ),
-        format!(
-            "{}         {}",
-            text(language, "tui.cache_read_2"),
-            format_tokens(audit.tokens.cache_read)
-        ),
-        format!(
-            "{}     {}",
-            text(language, "tui.total_counted"),
-            format_tokens(audit.tokens.total)
-        ),
+        kv_block(&[
+            (
+                text(language, "tui.input_tokens"),
+                format_tokens(audit.tokens.input),
+            ),
+            (
+                text(language, "tui.output_tokens"),
+                format_tokens(audit.tokens.output),
+            ),
+            (
+                text(language, "tui.cache_write_2"),
+                format_tokens(audit.tokens.cache_write),
+            ),
+            (
+                text(language, "tui.cache_read_2"),
+                format_tokens(audit.tokens.cache_read),
+            ),
+            (
+                text(language, "tui.total_counted"),
+                format_tokens(audit.tokens.total),
+            ),
+        ]),
         String::new(),
         text(language, "tui.price_sources").to_string(),
-        format!(
-            "{}  {}",
-            text(language, "tui.current_rates"),
-            audit.pricing_source
-        ),
-        format!(
-            "{}  {}",
-            text(language, "tui.stored_estimate"),
-            audit.stored_pricing_source
-        ),
-        format!(
-            "{}  {}",
-            text(language, "tui.price_status"),
-            i18n::pricing_status_label(&audit.pricing_status, language)
-        ),
-        format!(
-            "{}  {}",
-            text(language, "tui.how_complete_the_data_is"),
-            i18n::capability_label(audit.capability, language)
-        ),
-        format!(
-            "{}  {} / {}",
-            text(language, "tui.source_model"),
-            audit.provider,
-            audit.model
-        ),
+        kv_block(&[
+            (
+                text(language, "tui.current_rates"),
+                audit.pricing_source.clone(),
+            ),
+            (
+                text(language, "tui.stored_estimate"),
+                audit.stored_pricing_source.clone(),
+            ),
+            (
+                text(language, "tui.price_status"),
+                i18n::pricing_status_label(&audit.pricing_status, language).to_string(),
+            ),
+            (
+                text(language, "tui.how_complete_the_data_is"),
+                i18n::capability_label(audit.capability, language).to_string(),
+            ),
+            (
+                text(language, "tui.source_model"),
+                format!("{} / {}", audit.provider, audit.model),
+            ),
+        ]),
         String::new(),
         text(language, "tui.split_by_token_type").to_string(),
         component_costs,
         rates,
-        format!(
-            "{}  {}",
-            text(language, "tui.note"),
-            text(
-                language,
-                match audit.pricing_status.as_str() {
-                    "catalog_estimate" => "tui.pricing_note.catalog_estimate",
-                    "fallback_estimate" => "tui.pricing_note.fallback_estimate",
-                    "aggregate_estimate" => "tui.pricing_note.aggregate_estimate",
-                    _ => "tui.pricing_note.unknown",
-                }
-            )
-        ),
-        format!(
-            "{}  {}",
-            text(language, "tui.historical_stored_estimate"),
-            format_compact_cost(audit.stored_estimated_cost_usd)
-        ),
-        format!(
-            "{}  {}",
-            text(language, "tui.current_rate_estimate"),
-            current_cost
-        ),
-        format!("{}  {}", text(language, "tui.difference"), difference),
-        format!(
-            "{}  {}",
-            text(language, "tui.why_they_differ"),
-            audit.pricing_note.clone()
-        ),
+        String::new(),
+        kv_block(&[
+            (
+                text(language, "tui.note"),
+                text(
+                    language,
+                    match audit.pricing_status.as_str() {
+                        "catalog_estimate" => "tui.pricing_note.catalog_estimate",
+                        "fallback_estimate" => "tui.pricing_note.fallback_estimate",
+                        "aggregate_estimate" => "tui.pricing_note.aggregate_estimate",
+                        _ => "tui.pricing_note.unknown",
+                    },
+                )
+                .to_string(),
+            ),
+            (
+                text(language, "tui.historical_stored_estimate"),
+                format_compact_cost(audit.stored_estimated_cost_usd),
+            ),
+            (text(language, "tui.current_rate_estimate"), current_cost),
+            (text(language, "tui.difference"), difference),
+            (
+                text(language, "tui.why_they_differ"),
+                audit.pricing_note.clone(),
+            ),
+        ]),
         String::new(),
         text(language, "tui.this_is_a_local_estimate_from_token").to_string(),
     ]
@@ -1275,17 +1452,27 @@ fn tools_preview(session: &Session, language: Language) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "{}\n{}\n\n{}       {}\n{}   {}\n{}      {}\n{} {}\n\n{}\n{}\n\n{}\n{}",
+        "{}\n{}\n\n{}\n\n{}\n{}\n\n{}\n{}",
         text(language, "tui.tool_trouble"),
         session.name,
-        text(language, "tui.calls"),
-        session.metrics.tool_calls_total,
-        text(language, "tui.succeeded"),
-        session.metrics.tool_calls_ok,
-        text(language, "tui.failed"),
-        session.metrics.tool_calls_fail,
-        text(language, "tui.repeat_loops"),
-        session.diagnostics.loop_cost.loop_groups,
+        kv_block(&[
+            (
+                text(language, "tui.calls"),
+                session.metrics.tool_calls_total.to_string()
+            ),
+            (
+                text(language, "tui.succeeded"),
+                session.metrics.tool_calls_ok.to_string()
+            ),
+            (
+                text(language, "tui.failed"),
+                session.metrics.tool_calls_fail.to_string()
+            ),
+            (
+                text(language, "tui.repeat_loops"),
+                session.diagnostics.loop_cost.loop_groups.to_string()
+            ),
+        ]),
         text(language, "tui.most_used_tools"),
         if usage.is_empty() {
             text(language, "tui.no_tool_calls_showed_up")
@@ -1305,7 +1492,7 @@ fn render_explorer_detail(frame: &mut Frame<'_>, app: &App, section: DetailSecti
     let Some(session) = app.explorer_session() else {
         return;
     };
-    let header_height = if area.height < 24 { 3 } else { 5 };
+    let header_height = if area.height < 24 { 3 } else { 4 };
     let rows =
         Layout::vertical([Constraint::Length(header_height), Constraint::Min(4)]).split(area);
     let tabs = DETAIL_SECTIONS
@@ -1552,13 +1739,18 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
     ];
     frame.render_widget(
         Paragraph::new(text)
-            .block(left_rule())
+            .block(left_rule().padding(ratatui::widgets::Padding::left(2)))
             .wrap(Wrap { trim: false }),
         area,
     );
 }
 
 fn render_explorer_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    if app.notice.is_some() && area.height >= 3 {
+        app.motion
+            .notice_row
+            .set(Some(Rect::new(area.x, area.y + 2, area.width, 1)));
+    }
     let text = if app.compare_open {
         app.t("tui.scroll_esc_back_space_clear_comparison_help")
             .to_string()
@@ -1576,7 +1768,7 @@ fn render_explorer_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     };
     frame.render_widget(
         Paragraph::new(vec![
-            key_hint_line(&text, app.mode == InputMode::Search),
+            key_hint_line(&text, app.mode == InputMode::Search, area.width),
             Line::styled(
                 short(
                     app.notice
@@ -1608,26 +1800,33 @@ fn render_explorer_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
         return;
     }
     let buffer = frame.buffer_mut();
+    let partial = app.motion.backdrop_partial();
     for y in area.top()..area.bottom() {
         for x in area.left()..area.right() {
             if let Some(cell) = buffer.cell_mut((x, y)) {
-                cell.set_style(Style::default().fg(Color::DarkGray).bg(Color::Reset));
+                if partial {
+                    cell.modifier.insert(Modifier::DIM);
+                } else {
+                    cell.set_style(Style::default().fg(Color::DarkGray).bg(Color::Reset));
+                }
             }
         }
     }
     let rect = centered_rect(
         area,
         76.min(area.width.saturating_sub(4)),
+        // Content rows + 2 border rows, so overlays never carry empty tails.
         match app.explorer_overlay {
-            ExplorerOverlay::ViewPicker => 16,
-            ExplorerOverlay::Filter => 15,
-            ExplorerOverlay::Command => 20,
+            ExplorerOverlay::ViewPicker => VIEW_CHOICES.len() as u16 + 6,
+            ExplorerOverlay::Filter => 13,
+            ExplorerOverlay::Command => app.command_choices().len().max(1) as u16 + 6,
             ExplorerOverlay::ProjectPicker | ExplorerOverlay::SourcePicker => 20,
-            ExplorerOverlay::Help => 14,
+            ExplorerOverlay::Help => 12,
             ExplorerOverlay::None => 0,
         }
         .min(area.height.saturating_sub(4)),
     );
+    let rect = app.motion.overlay_rect(rect);
     // A double-width glyph starting one column left of the overlay would swallow its border.
     let guard = Rect::new(
         rect.x.saturating_sub(1),
@@ -1667,6 +1866,7 @@ fn render_explorer_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
         }
         ExplorerOverlay::None => {}
     }
+    app.motion.apply_overlay(frame.buffer_mut(), rect);
 }
 
 fn render_view_picker(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -1765,8 +1965,20 @@ fn render_command_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
         ),
         Line::raw(""),
     ];
-    for (index, (label, _)) in app.command_choices().iter().enumerate() {
-        lines.push(overlay_row(index == app.overlay_selected, label, ""));
+    let choices = app.command_choices();
+    for (index, (label, _)) in choices.iter().enumerate() {
+        lines.push(overlay_row_width(
+            index == app.overlay_selected,
+            label,
+            "",
+            area.width.saturating_sub(4) as usize,
+        ));
+    }
+    if choices.is_empty() {
+        lines.push(Line::styled(
+            app.t("tui.no_matches"),
+            Style::default().fg(Color::DarkGray),
+        ));
     }
     lines.push(Line::raw(""));
     lines.push(Line::styled(
@@ -1915,16 +2127,14 @@ fn explorer_row_spans(
                 .cloned()
                 .unwrap_or_default();
             let (count, cost) = (totals.count, totals.cost);
+            let runs = format!("{count} {}", app.t("tui.runs"));
             return vec![
                 Span::raw(format!("{marker} ")),
                 Span::styled(
                     pad_display_width(&totals.label, name_width.saturating_sub(10)),
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    format!("{:>8}  ", format!("{count} {}", app.t("tui.runs"))),
-                    muted,
-                ),
+                Span::styled(format!("{}  ", pad_left_display_width(&runs, 8)), muted),
                 Span::styled(
                     pad_display_width(&format_compact_cost(cost), ROW_VALUE_WIDTH),
                     Style::default().fg(cost_color(cost)),
@@ -1980,20 +2190,27 @@ fn explorer_row_spans(
 }
 
 // Footer hints are "key label" pairs separated by two spaces; keys render bold cyan.
-fn key_hint_line(text: &str, raw: bool) -> Line<'static> {
+fn key_hint_line(text: &str, raw: bool, width: u16) -> Line<'static> {
     if raw {
         return Line::raw(text.to_string());
     }
     let mut spans = Vec::new();
+    let mut used = 0;
     for (index, hint) in text
         .split("  ")
         .filter(|hint| !hint.trim().is_empty())
         .enumerate()
     {
+        let hint = hint.trim();
+        let separator = if index > 0 { 5 } else { 0 };
+        let hint_width = unicode_width::UnicodeWidthStr::width(hint);
+        if used + separator + hint_width > width as usize {
+            break;
+        }
+        used += separator + hint_width;
         if index > 0 {
             spans.push(Span::styled("  ·  ", Style::default().fg(Color::DarkGray)));
         }
-        let hint = hint.trim();
         match hint.split_once(' ') {
             Some((key, label)) => {
                 spans.push(Span::styled(
@@ -2011,6 +2228,59 @@ fn key_hint_line(text: &str, raw: bool) -> Line<'static> {
         }
     }
     Line::from(spans)
+}
+
+/// Aligns `label  value` rows on the widest label's display width, so blocks
+/// line up in every language (CJK labels are twice as wide per character).
+fn kv_block(rows: &[(&str, String)]) -> String {
+    let width = rows
+        .iter()
+        .map(|(label, _)| unicode_width::UnicodeWidthStr::width(*label))
+        .max()
+        .unwrap_or(0);
+    rows.iter()
+        .map(|(label, value)| format!("{}  {value}", pad_display_width(label, width)))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Two `label value` pairs per line; both columns align across lines.
+fn kv_grid(rows: &[(&str, String)]) -> String {
+    let label_width = rows
+        .iter()
+        .map(|(label, _)| unicode_width::UnicodeWidthStr::width(*label))
+        .max()
+        .unwrap_or(0);
+    let cell_width = label_width
+        + 2
+        + rows
+            .iter()
+            .map(|(_, value)| unicode_width::UnicodeWidthStr::width(value.as_str()))
+            .max()
+            .unwrap_or(0);
+    rows.chunks(2)
+        .map(|pair| {
+            pair.iter()
+                .map(|(label, value)| {
+                    pad_display_width(
+                        &format!("{}  {value}", pad_display_width(label, label_width)),
+                        cell_width,
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("    ")
+                .trim_end()
+                .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Human-readable local time for file metadata.
+fn format_modified(time: std::time::SystemTime) -> String {
+    chrono::DateTime::<chrono::Local>::from(time)
+        .format("%Y-%m-%d %H:%M")
+        .to_string()
 }
 
 fn sidebar_field(label: &str, value: String, style: Style) -> Line<'static> {
@@ -2055,9 +2325,8 @@ fn cost_color(cost: f64) -> Color {
     }
 }
 
-fn explorer_list_title(app: &App) -> String {
+fn explorer_list_title(app: &App, indices: &[usize]) -> String {
     if app.explorer_view == ExplorerView::Attention {
-        let indices = app.explorer_indices();
         let urgent = indices
             .iter()
             .filter(|index| attention_priority(&app.sessions[**index]) == 1)
@@ -2085,7 +2354,7 @@ fn explorer_list_title(app: &App) -> String {
     format!(
         "{} ({})",
         i18n::explorer_list_title(app.explorer_view, app.language),
-        app.explorer_indices().len()
+        indices.len()
     )
 }
 
@@ -2244,7 +2513,14 @@ fn render_timeline_table(frame: &mut Frame<'_>, app: &App, session: &Session, ar
         Table::new(rows, constraints)
             .header(header)
             .column_spacing(2)
-            .block(Block::default().title(title).borders(Borders::BOTTOM)),
+            .block(
+                Block::default().title(Line::styled(
+                    title,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )),
+            ),
         area,
     );
 }
@@ -2292,22 +2568,38 @@ pub(super) fn explorer_detail_context(session: &Session, language: Language) -> 
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "{}\n\n{}       {}\n{}  {}\n{}         {}\n{}      {}\n{}    {}\n{}           {}\n{}                  {}\n\n{}\n{}\n\n{}\n{}\n\n{}",
+        "{}\n\n{}\n\n{}\n{}\n\n{}\n{}\n\n{}",
         text(language, "tui.context_2"),
-        text(language, "tui.estimated_total"),
-        format_tokens(value.estimated_total as i64),
-        text(language, "tui.conversation_history"),
-        format_tokens(value.conversation_history as i64),
-        text(language, "tui.system_prompt"),
-        format_tokens(value.system_prompt as i64),
-        text(language, "tui.tool_definitions"),
-        format_tokens(value.tool_definitions as i64),
-        text(language, "tui.room_left"),
-        format_tokens(value.available_for_task as i64),
-        text(language, "tui.used"),
-        format_context_pct(value.utilization_pct),
-        text(language, "tui.risk"),
-        i18n::risk_label(&value.risk_level, language),
+        kv_block(&[
+            (
+                text(language, "tui.estimated_total"),
+                format_tokens(value.estimated_total as i64)
+            ),
+            (
+                text(language, "tui.conversation_history"),
+                format_tokens(value.conversation_history as i64)
+            ),
+            (
+                text(language, "tui.system_prompt"),
+                format_tokens(value.system_prompt as i64)
+            ),
+            (
+                text(language, "tui.tool_definitions"),
+                format_tokens(value.tool_definitions as i64)
+            ),
+            (
+                text(language, "tui.room_left"),
+                format_tokens(value.available_for_task as i64)
+            ),
+            (
+                text(language, "tui.used"),
+                format_context_pct(value.utilization_pct)
+            ),
+            (
+                text(language, "tui.risk"),
+                i18n::risk_label(&value.risk_level, language).to_string()
+            ),
+        ]),
         text(language, "tui.what_s_taking_space"),
         if params.is_empty() {
             text(language, "tui.none_observed").to_string()
@@ -2315,9 +2607,7 @@ pub(super) fn explorer_detail_context(session: &Session, language: Language) -> 
             params
         },
         text(language, "tui.did_it_compact"),
-        text(
-            language, "tui.we_didn_t_see_a_compaction_event",
-        ),
+        text(language, "tui.we_didn_t_see_a_compaction_event",),
         value.suggestion_for(language)
     )
 }
@@ -2371,7 +2661,7 @@ fn detail_files(session: &Session, language: Language) -> String {
     let metadata = fs::metadata(&session.path).ok();
     let modified = metadata
         .and_then(|value| value.modified().ok())
-        .map(|value| format!("{value:?}"))
+        .map(format_modified)
         .unwrap_or_else(|| text(language, "tui.unknown").to_string());
     let mut files = session.metrics.file_usage.iter().collect::<Vec<_>>();
     files.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
@@ -2391,14 +2681,14 @@ fn detail_files(session: &Session, language: Language) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "{}\n\n{}\n{}\n\n{}  {}\n{}  {}\n\n{}\n{}\n\n{}\n{}\n\n{}",
+        "{}\n\n{}\n{}\n\n{}\n\n{}\n{}\n\n{}\n{}\n\n{}",
         text(language, "tui.session_file"),
         session.path,
         session.cwd,
-        text(language, "tui.size"),
-        format_bytes(size),
-        text(language, "tui.last_changed"),
-        modified,
+        kv_block(&[
+            (text(language, "tui.size"), format_bytes(size)),
+            (text(language, "tui.last_changed"), modified),
+        ]),
         text(language, "tui.files_it_touched"),
         if accessed.is_empty() {
             text(language, "tui.none_observed").to_string()
@@ -2554,6 +2844,39 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
+/// Lays metric chips out in one row when they fit, otherwise in a grid whose
+/// columns share a width so values never wrap mid-chip.
+fn metric_rows(metrics: Vec<Span<'static>>, width: u16) -> Vec<Line<'static>> {
+    const GAP: usize = 5;
+    let widths = metrics.iter().map(Span::width).collect::<Vec<_>>();
+    let single = widths.iter().sum::<usize>() + GAP * widths.len().saturating_sub(1);
+    if single <= width as usize {
+        let mut spans = Vec::new();
+        for (index, span) in metrics.into_iter().enumerate() {
+            if index > 0 {
+                spans.push(Span::raw(" ".repeat(GAP)));
+            }
+            spans.push(span);
+        }
+        return vec![Line::from(spans)];
+    }
+    let column = widths.iter().copied().max().unwrap_or(0) + GAP;
+    let per_row = (width as usize / column.max(1)).clamp(1, metrics.len().max(1));
+    metrics
+        .chunks(per_row)
+        .map(|chunk| {
+            let mut spans = Vec::new();
+            for (index, span) in chunk.iter().enumerate() {
+                spans.push(span.clone());
+                if index + 1 < chunk.len() {
+                    spans.push(Span::raw(" ".repeat(column - span.width())));
+                }
+            }
+            Line::from(spans)
+        })
+        .collect()
+}
+
 fn metric_span(label: &str, value: String, color: Color) -> Span<'static> {
     Span::styled(
         format!("{label} {value}"),
@@ -2570,6 +2893,15 @@ fn risk_color(risk: &str) -> Color {
 }
 
 fn overlay_row(selected: bool, label: &str, description: &str) -> Line<'static> {
+    overlay_row_width(selected, label, description, 20)
+}
+
+fn overlay_row_width(
+    selected: bool,
+    label: &str,
+    description: &str,
+    label_width: usize,
+) -> Line<'static> {
     let (label_style, description_style) = if selected {
         (
             Style::default()
@@ -2586,7 +2918,7 @@ fn overlay_row(selected: bool, label: &str, description: &str) -> Line<'static> 
             format!(
                 "{} {}",
                 if selected { "›" } else { " " },
-                pad_display_width(label, 20)
+                pad_display_width(label, label_width)
             ),
             label_style,
         ),

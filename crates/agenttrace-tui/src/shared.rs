@@ -35,18 +35,25 @@ pub(super) fn source_counts(sessions: &[Session]) -> Vec<(String, usize)> {
 }
 
 pub(super) fn render_loading_status(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(app.t("tui.loading"));
+    let title = if app.motion.enabled() {
+        format!("{} {}", app.motion.spinner(), app.t("tui.loading"))
+    } else {
+        app.t("tui.loading").to_string()
+    };
+    let block = Block::default().borders(Borders::ALL).title(title);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let rows = Layout::vertical([Constraint::Length(2), Constraint::Min(1)]).split(inner);
     let state = &app.load_state;
-    let ratio = if state.discovered == 0 {
+    let target = if state.discovered == 0 {
         0.0
     } else {
         state.processed.min(state.discovered) as f64 / state.discovered as f64
     };
+    let ratio = app
+        .motion
+        .counter("loading.ratio", target, motion::PREVIEW_COUNTER_DURATION)
+        .clamp(0.0, 1.0);
     let label = if state.discovered == 0 {
         app.t("tui.discovering_sessions").to_string()
     } else if state.processed >= state.discovered {
@@ -57,20 +64,40 @@ pub(super) fn render_loading_status(frame: &mut Frame<'_>, app: &App, area: Rect
             "{}/{} · {:.0}%",
             state.processed,
             state.discovered,
-            ratio * 100.0
+            target * 100.0
         )
     };
     frame.render_widget(
         ratatui::widgets::Gauge::default()
             .ratio(ratio)
             .label(label)
+            .use_unicode(true)
             .gauge_style(Style::default().fg(Color::Cyan)),
         rows[0],
     );
+    render_gauge_shimmer(frame, app, rows[0], ratio);
     frame.render_widget(
         Paragraph::new(loading_status_lines(app)).wrap(Wrap { trim: true }),
         rows[1],
     );
+}
+
+/// A bright band sweeps across the filled part of the gauge while loading.
+fn render_gauge_shimmer(frame: &mut Frame<'_>, app: &App, area: Rect, ratio: f64) {
+    let filled = (f64::from(area.width) * ratio).floor() as u16;
+    let Some(head) = app.motion.shimmer(filled.max(1)) else {
+        return;
+    };
+    let buf = frame.buffer_mut();
+    for y in area.top()..area.bottom().min(buf.area.bottom()) {
+        for offset in 0..filled {
+            let distance = (i32::from(offset) - i32::from(head) + 4).abs();
+            let cell = &mut buf[(area.x + offset, y)];
+            if cell.symbol() == "█" && distance <= 1 {
+                cell.fg = Color::White;
+            }
+        }
+    }
 }
 
 pub(super) fn loading_status_lines(app: &App) -> Vec<Line<'static>> {
@@ -109,9 +136,12 @@ pub(super) fn loading_status_lines(app: &App) -> Vec<Line<'static>> {
 
 pub(super) fn load_summary_line(app: &App) -> String {
     if app.pending_load.is_some() && !app.sessions.is_empty() {
-        let frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-        let frame =
-            frames[(app.last_auto_refresh.elapsed().as_millis() / 120) as usize % frames.len()];
+        let frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let frame = if app.motion.enabled() {
+            app.motion.spinner()
+        } else {
+            frames[(app.last_auto_refresh.elapsed().as_millis() / 120) as usize % frames.len()]
+        };
         return format!(
             "{frame} {} {}/{}",
             app.t("tui.refreshing"),
@@ -257,6 +287,10 @@ pub(super) fn driver_model(session: &Session) -> String {
 }
 
 pub(super) fn format_compact_cost(cost: f64) -> String {
+    // "$0.0000" reads as noise in tight columns; a true zero needs no precision.
+    if cost == 0.0 || !cost.is_finite() {
+        return "$0".to_string();
+    }
     format_cost(cost)
 }
 

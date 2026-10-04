@@ -405,6 +405,13 @@ pub(super) fn pad_display_width(value: &str, width: usize) -> String {
     out
 }
 
+/// Right-aligns `value` within `width` display columns (CJK-aware).
+pub(super) fn pad_left_display_width(value: &str, width: usize) -> String {
+    let out = short(value, width);
+    let padding = width.saturating_sub(unicode_width::UnicodeWidthStr::width(out.as_str()));
+    format!("{}{out}", " ".repeat(padding))
+}
+
 pub(super) fn terminal_safe_report(text: &str) -> String {
     text.chars()
         .map(|ch| match ch {

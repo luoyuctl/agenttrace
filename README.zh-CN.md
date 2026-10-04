@@ -53,6 +53,10 @@ AI 编程 Agent 越来越像一套小型构建系统：会调用工具、重试�
 agenttrace
 ```
 
+TUI 的转场动效最高 120 FPS，终端跟不上时会自动降到 60 或 30 FPS。
+`AGENTTRACE_FPS=60` 可调低上限，`AGENTTRACE_FPS=off`（或 `AGENTTRACE_REDUCED_MOTION=1`）
+关闭动效，`AGENTTRACE_SHOW_FPS=1` 在角落显示实时帧率。
+
 可通过 `AGENTTRACE_PRICING_FILE=pricing-overrides.json` 提供模型别名和每百万 Token
 价格覆盖：
 
