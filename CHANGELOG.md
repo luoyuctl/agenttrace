@@ -18,6 +18,37 @@
 
 - Split jobs, cache, cross-OS tests, MSRV 1.85, actionlint, idempotent release ([#303](https://github.com/luoyuctl/agenttrace/pull/303))
 
+## v0.9.1 - 2026-10-04
+
+### Added
+
+- **i18n:** Localize reports, governance, doctor, search and CLI ([#299](https://github.com/luoyuctl/agenttrace/pull/299))
+
+### Fixed
+
+- **diagnostics:** Separate unmatched tool calls from explicit timeouts ([#296](https://github.com/luoyuctl/agenttrace/pull/296))
+
+### Documentation
+
+- Add coverage and OpenSSF Scorecard badges ([#290](https://github.com/luoyuctl/agenttrace/pull/290))
+
+### Build and CI
+
+- Add CodeRabbit review config and Codecov coverage ([#287](https://github.com/luoyuctl/agenttrace/pull/287))
+- Add cargo-deny and OpenSSF Scorecard; patch rustls advisory ([#288](https://github.com/luoyuctl/agenttrace/pull/288))
+- Generate CHANGELOG entries with git-cliff after each release ([#289](https://github.com/luoyuctl/agenttrace/pull/289))
+- Add manual workflow to republish Homebrew and WinGet for an existing release ([#291](https://github.com/luoyuctl/agenttrace/pull/291))
+- **release:** Submit WinGet with pinned wingetcreate.exe on Windows ([#292](https://github.com/luoyuctl/agenttrace/pull/292))
+- Switch CodeRabbit reviews and summaries to English ([#293](https://github.com/luoyuctl/agenttrace/pull/293))
+- Ignore generated_at in deterministic output check ([#294](https://github.com/luoyuctl/agenttrace/pull/294))
+- **release:** Render WinGet manifests that pass winget-pkgs validation ([#295](https://github.com/luoyuctl/agenttrace/pull/295))
+
+### Maintenance
+
+- **coderabbit:** Assertive profile + request-changes workflow ([#300](https://github.com/luoyuctl/agenttrace/pull/300))
+- **i18n:** Unify en/zh strings on rust-i18n locale files ([#297](https://github.com/luoyuctl/agenttrace/pull/297))
+- **i18n:** Key core messages and localize live TUI gaps ([#298](https://github.com/luoyuctl/agenttrace/pull/298))
+
 ## v0.9.0 - 2026-09-29
 
 ### Fixed
