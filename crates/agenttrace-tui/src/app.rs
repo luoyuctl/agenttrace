@@ -73,7 +73,8 @@ fn run_with_app(app: App) -> anyhow::Result<()> {
 }
 
 fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
-    app.motion = Motion::from_env();
+    // Tests construct `App` directly and keep motion off for deterministic frames.
+    app.motion = Motion::adaptive();
     let mut dirty = true;
     let mut next_frame: Option<Instant> = None;
     let mut last_draw: Option<Instant> = None;

@@ -187,9 +187,6 @@ struct ViewTransition {
 pub(super) struct Motion {
     enabled: bool,
     pacer: Pacer,
-    show_fps: bool,
-    presented: std::collections::VecDeque<Instant>,
-    last_cost: Duration,
     epoch: Instant,
     now: Instant,
     scene: Option<Scene>,
@@ -222,9 +219,6 @@ impl Motion {
         Self {
             enabled: fps.is_some(),
             pacer: Pacer::new(fps.unwrap_or(MAX_FPS)),
-            show_fps: false,
-            presented: std::collections::VecDeque::new(),
-            last_cost: Duration::ZERO,
             epoch: now,
             now,
             scene: None,
@@ -248,23 +242,9 @@ impl Motion {
         Self::new(None)
     }
 
-    /// `AGENTTRACE_FPS` caps the frame rate (1-120, default 120; `0`/`off`
-    /// disables motion); below the cap the pacer adapts automatically.
-    /// `AGENTTRACE_REDUCED_MOTION=1` also disables motion, and
-    /// `AGENTTRACE_SHOW_FPS=1` prints the live frame rate in the top-right corner.
-    #[cfg(not(test))]
-    pub(super) fn from_env() -> Self {
-        if env_flag("AGENTTRACE_REDUCED_MOTION") {
-            return Self::disabled();
-        }
-        let mut motion = Self::new(parse_fps(std::env::var("AGENTTRACE_FPS").ok().as_deref()));
-        motion.show_fps = env_flag("AGENTTRACE_SHOW_FPS");
-        motion
-    }
-
-    #[cfg(test)]
-    pub(super) fn from_env() -> Self {
-        Self::disabled()
+    /// Motion for the live terminal: up to 120 FPS, adapted by the pacer.
+    pub(super) fn adaptive() -> Self {
+        Self::new(Some(MAX_FPS))
     }
 
     pub(super) fn enabled(&self) -> bool {
@@ -275,52 +255,11 @@ impl Motion {
         Pacer::budget(self.pacer.fps())
     }
 
-    pub(super) fn target_fps(&self) -> u32 {
-        self.pacer.fps()
-    }
-
     /// Feeds the pacer with how long the last frame took to render and write.
     pub(super) fn record_frame(&mut self, started: Instant, cost: Duration) {
-        self.last_cost = cost;
-        if !self.enabled {
-            return;
+        if self.enabled {
+            self.pacer.record(cost, started);
         }
-        self.pacer.record(cost, started);
-        self.presented.push_back(started);
-        while self
-            .presented
-            .front()
-            .is_some_and(|first| started.saturating_duration_since(*first) > Duration::from_secs(1))
-        {
-            self.presented.pop_front();
-        }
-    }
-
-    /// Frames actually presented during the last second, while animating.
-    pub(super) fn measured_fps(&self) -> usize {
-        let Some(last) = self.presented.back() else {
-            return 0;
-        };
-        if self.now.saturating_duration_since(*last) > Duration::from_millis(250) {
-            return 0;
-        }
-        self.presented.len()
-    }
-
-    /// Optional corner readout: presented fps / target fps · last frame cost.
-    pub(super) fn render_fps(&self, buf: &mut Buffer, area: Rect) {
-        if !self.show_fps || area.width < 24 {
-            return;
-        }
-        let label = format!(
-            " {}/{} fps · {:.1}ms ",
-            self.measured_fps(),
-            self.target_fps(),
-            self.last_cost.as_secs_f64() * 1000.0
-        );
-        let width = unicode_width::UnicodeWidthStr::width(label.as_str()) as u16;
-        let x = area.right().saturating_sub(width);
-        buf.set_string(x, area.top(), label, Style::default().fg(Color::DarkGray));
     }
 
     /// Diffs the new scene against the previous frame and starts transitions.
@@ -551,28 +490,6 @@ impl Motion {
     }
 }
 
-#[cfg(not(test))]
-fn env_flag(name: &str) -> bool {
-    std::env::var(name).is_ok_and(|value| !matches!(value.trim(), "" | "0" | "false" | "off"))
-}
-
-pub(super) fn parse_fps(value: Option<&str>) -> Option<u32> {
-    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Some(MAX_FPS);
-    };
-    if matches!(
-        value.to_ascii_lowercase().as_str(),
-        "0" | "off" | "false" | "none"
-    ) {
-        return None;
-    }
-    Some(
-        value
-            .parse::<u32>()
-            .map_or(MAX_FPS, |fps| fps.clamp(1, MAX_FPS)),
-    )
-}
-
 fn interpolate(counter: &Counter, now: Instant) -> f64 {
     let eased = ease_out_cubic(counter.tween.progress(now));
     counter.from + (counter.to - counter.from) * eased
@@ -758,14 +675,10 @@ mod motion_tests {
     }
 
     #[test]
-    fn fps_is_capped_at_120_and_can_be_disabled() {
-        assert_eq!(parse_fps(None), Some(120));
-        assert_eq!(parse_fps(Some("240")), Some(120));
-        assert_eq!(parse_fps(Some("60")), Some(60));
-        assert_eq!(parse_fps(Some("off")), None);
-        assert_eq!(parse_fps(Some("0")), None);
+    fn fps_is_capped_at_120() {
         let motion = Motion::new(Some(500));
         assert!(motion.frame_interval() >= Duration::from_secs_f64(1.0 / 120.0));
+        assert_eq!(Motion::adaptive().frame_interval(), motion.frame_interval());
     }
 
     #[test]
@@ -836,7 +749,7 @@ mod motion_tests {
         for _ in 0..PACER_WINDOW {
             capped.record(Duration::from_micros(100), start + PACER_COOLDOWN * 3);
         }
-        assert_eq!(capped.fps(), 60, "never exceeds AGENTTRACE_FPS");
+        assert_eq!(capped.fps(), 60, "never exceeds the cap");
     }
 
     #[test]

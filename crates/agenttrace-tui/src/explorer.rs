@@ -731,7 +731,6 @@ pub(super) fn render_explorer(frame: &mut Frame<'_>, app: &mut App) {
         app.motion.apply_reveal(frame.buffer_mut(), area);
     }
     render_explorer_overlay(frame, app, area);
-    app.motion.render_fps(frame.buffer_mut(), area);
 }
 
 fn render_compare(frame: &mut Frame<'_>, app: &App, area: Rect) {
