@@ -455,10 +455,13 @@ mod tests {
         assert_eq!(linked.id, main.id);
         assert_eq!(linked.display_name, "my-repo");
 
-        let encoded = repo.to_string_lossy().replace('/', "-");
-        let transcript = root.join("projects").join(&encoded).join("session.jsonl");
-        let decoded = resolve_project(&session_at("", &transcript.to_string_lossy()));
-        assert_eq!(decoded.id, main.id);
+        // Agent project-dir encoding is defined for '/'-separated absolute paths.
+        if cfg!(unix) {
+            let encoded = repo.to_string_lossy().replace('/', "-");
+            let transcript = root.join("projects").join(&encoded).join("session.jsonl");
+            let decoded = resolve_project(&session_at("", &transcript.to_string_lossy()));
+            assert_eq!(decoded.id, main.id);
+        }
 
         let missing = resolve_project(&session_at("", "/nowhere/projects/-gone-dir/s.jsonl"));
         assert_eq!(missing.display_name, "unknown");
