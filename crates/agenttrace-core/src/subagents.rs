@@ -17,9 +17,10 @@ fn parent_transcript_path(path: &str) -> Option<String> {
         return None;
     }
     let session_dir = subagents_dir.parent()?;
-    let session_id = session_dir.file_name()?.to_str()?;
-    let parent = session_dir.parent()?.join(format!("{session_id}.jsonl"));
-    Some(parent.to_string_lossy().into_owned())
+    session_dir.file_name()?;
+    // Append to the original string rather than `join`, so the separator style
+    // matches the parent's own path on every platform.
+    Some(format!("{}.jsonl", session_dir.to_string_lossy()))
 }
 
 /// Rolls subagent cost and tokens up into their parent session.
@@ -89,6 +90,11 @@ mod tests {
             Some("/p/proj/abc.jsonl")
         );
         assert_eq!(parent_transcript_path("/p/proj/abc.jsonl"), None);
+        #[cfg(windows)]
+        assert_eq!(
+            parent_transcript_path(r"C:\p\abc\subagents\agent-a1.jsonl").as_deref(),
+            Some(r"C:\p\abc.jsonl")
+        );
         assert_eq!(
             parent_transcript_path("/p/proj/abc/other/agent-a1.jsonl"),
             None
