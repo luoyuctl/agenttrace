@@ -284,7 +284,7 @@ pub fn load_sessions_with_progress_from_cache_mode(
     }
     crate::subagents::attribute_subagents(&mut sessions);
     sessions.retain(|session| {
-        options.since.map_or(true, |since| {
+        options.since.is_none_or(|since| {
             DateTime::parse_from_rfc3339(&session.metrics.session_start)
                 .ok()
                 .is_some_and(|time| time.with_timezone(&Utc) >= since)

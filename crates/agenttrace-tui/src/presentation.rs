@@ -1413,7 +1413,7 @@ fn audit_text(audit: &CostAudit, language: Language) -> String {
             coverage.unpriced_or_unknown_sessions
         ),
         String::new(),
-        format!("{}", text(language, "tui.provider_model_rows")),
+        text(language, "tui.provider_model_rows").to_string(),
     ];
     if audit.by_provider_model.is_empty() {
         lines.push(format!("- {}", text(language, "tui.none")));

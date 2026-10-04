@@ -226,7 +226,7 @@ fn lexical_normalize(path: &Path) -> PathBuf {
             Component::ParentDir => {
                 out.pop();
             }
-            Component::RootDir => out.push(Path::new("/")),
+            Component::RootDir => out.push(component.as_os_str()),
             Component::Prefix(prefix) => out.push(prefix.as_os_str()),
             Component::Normal(value) => out.push(value),
         }
@@ -293,7 +293,7 @@ pub fn filter_sessions(
         .collect()
 }
 pub fn session_matches_time_range(session: &Session, range: TimeRange, now: DateTime<Utc>) -> bool {
-    range.since(now).map_or(true, |since| {
+    range.since(now).is_none_or(|since| {
         parse_ts(&session.metrics.session_start).is_some_and(|time| time >= since)
     })
 }
@@ -455,10 +455,13 @@ mod tests {
         assert_eq!(linked.id, main.id);
         assert_eq!(linked.display_name, "my-repo");
 
-        let encoded = repo.to_string_lossy().replace('/', "-");
-        let transcript = root.join("projects").join(&encoded).join("session.jsonl");
-        let decoded = resolve_project(&session_at("", &transcript.to_string_lossy()));
-        assert_eq!(decoded.id, main.id);
+        // Agent project-dir encoding is defined for '/'-separated absolute paths.
+        if cfg!(unix) {
+            let encoded = repo.to_string_lossy().replace('/', "-");
+            let transcript = root.join("projects").join(&encoded).join("session.jsonl");
+            let decoded = resolve_project(&session_at("", &transcript.to_string_lossy()));
+            assert_eq!(decoded.id, main.id);
+        }
 
         let missing = resolve_project(&session_at("", "/nowhere/projects/-gone-dir/s.jsonl"));
         assert_eq!(missing.display_name, "unknown");

@@ -1386,10 +1386,10 @@ impl App {
                 || resolve_project(session).id == self.project_id_filter)
             && session_matches_time_range(session, self.range_filter, now)
             && matches_cost_filter(session, self.cost_filter)
-            && self.failure_filter.map_or(true, |(op, value)| {
+            && self.failure_filter.is_none_or(|(op, value)| {
                 compare_i32(session.metrics.tool_calls_fail as i32, op, value)
             })
-            && self.context_filter.map_or(true, |(op, value)| {
+            && self.context_filter.is_none_or(|(op, value)| {
                 compare_f64(
                     session.diagnostics.context_utilization.utilization_pct,
                     op,

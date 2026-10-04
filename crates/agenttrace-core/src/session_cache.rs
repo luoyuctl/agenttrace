@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 21;
+pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 22;
 const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 6;
 
 #[derive(Debug, Clone, Default)]
@@ -319,7 +319,7 @@ pub fn load_cached_sessions_from_cache(
         .collect::<BTreeSet<_>>();
     let sessions = paths
         .into_iter()
-        .filter(|path| dir.map_or(true, |dir| path.starts_with(dir)))
+        .filter(|path| dir.is_none_or(|dir| path.starts_with(dir)))
         .filter_map(|path| cached_session(&path, cache))
         .collect();
     if cache.is_dirty() {

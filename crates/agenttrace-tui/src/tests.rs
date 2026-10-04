@@ -701,7 +701,13 @@ fn project_view_filters_by_canonical_id_and_keeps_same_names_separate() {
         .expect("left project");
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE))
         .expect("filter project");
-    assert_eq!(app.project_id_filter, "/tmp/alpha/project");
+    let left_id = app
+        .sessions
+        .iter()
+        .find(|session| session.name == "left")
+        .map(|session| resolve_project(session).id)
+        .expect("left session");
+    assert_eq!(app.project_id_filter, left_id);
     assert_eq!(app.filtered.len(), 1);
     assert_eq!(app.sessions[app.filtered[0]].name, "left");
     assert_eq!(app.status, "project filter: project");
@@ -1614,7 +1620,7 @@ fn ctrl_r_force_reload_clears_session_cache_before_loading() {
     fs::write(
             &cache_path,
             format!(
-                r#"{{"schema_version":21,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
+                r#"{{"schema_version":22,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
                 session_path_json,
                 file_mod_time_nanos_for_test(&metadata),
                 metadata.len()
