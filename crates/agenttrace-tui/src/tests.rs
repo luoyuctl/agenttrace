@@ -701,7 +701,13 @@ fn project_view_filters_by_canonical_id_and_keeps_same_names_separate() {
         .expect("left project");
     app.handle_normal_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE))
         .expect("filter project");
-    assert_eq!(app.project_id_filter, "/tmp/alpha/project");
+    let left_id = app
+        .sessions
+        .iter()
+        .find(|session| session.name == "left")
+        .map(|session| resolve_project(session).id)
+        .expect("left session");
+    assert_eq!(app.project_id_filter, left_id);
     assert_eq!(app.filtered.len(), 1);
     assert_eq!(app.sessions[app.filtered[0]].name, "left");
     assert_eq!(app.status, "project filter: project");

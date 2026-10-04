@@ -244,7 +244,7 @@ fn filter_since(sessions: Vec<Session>, since: Option<DateTime<Utc>>) -> Vec<Ses
     sessions
         .into_iter()
         .filter(|session| {
-            since.map_or(true, |since| {
+            since.is_none_or(|since| {
                 DateTime::parse_from_rfc3339(&session.metrics.session_start)
                     .ok()
                     .is_some_and(|time| time.with_timezone(&Utc) >= since)
