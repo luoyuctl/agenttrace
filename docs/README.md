@@ -6,6 +6,7 @@ Use this index to find the document that matches your role and task.
 
 - [CI integration](guides/ci-integration.md) — generate reports and enforce local session-health gates in CI.
 - [Governance reports](guides/governance-reports.md) — interpret cost, recommendation, MCP, context, and delivery-evidence reports.
+- [Usage over time](guides/usage-over-time.md) — daily/weekly/monthly rollups and 5-hour blocks with burn rate.
 - [Cursor import](guides/cursor-import.md) — export the supported Cursor workspace data shape.
 - [Codex plugin](guides/codex-plugin.md) — use AgentTrace through its Codex plugin and skill.
 

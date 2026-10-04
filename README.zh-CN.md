@@ -131,20 +131,6 @@ JSON 字段名、代码值和 `--sessions` 的 TSV 表头等机读内容始终�
 agenttrace --overview --lang zh
 ```
 
-### 按时间统计用量
-
-```bash
-# 按天 / ISO 周 / 月汇总。每条用量按自身时间戳归入周期，跨零点的会话会被拆开。
-# 默认使用本机时区。
-agenttrace --daily --range 30d
-agenttrace --weekly --tz utc -f json
-agenttrace --monthly --tz +08:00
-
-# 5 小时窗口：消耗速率与窗口结束预测。基于本地日志估算，
-# 服务商限流在服务端计算，可能与此不同。
-agenttrace --blocks --token-limit 50000000 --cost-limit 100
-```
-
 ## 你会得到什么
 
 | 需求 | agenttrace 提供 |
@@ -163,6 +149,7 @@ agenttrace --blocks --token-limit 50000000 --cost-limit 100
 - 文档导航：[docs/README.md](docs/README.md)
 - CI 集成：[docs/guides/ci-integration.md](docs/guides/ci-integration.md)
 - 治理报告：[docs/guides/governance-reports.md](docs/guides/governance-reports.md)
+- 按时间统计用量（按日/周/月、5 小时窗口）：[docs/guides/usage-over-time.md](docs/guides/usage-over-time.md)
 - Cursor 导入：[docs/guides/cursor-import.md](docs/guides/cursor-import.md)
 - Parser 指南：[docs/guides/parser-guide.md](docs/guides/parser-guide.md)
 - 发布维护指南：[docs/maintainers/distribution.md](docs/maintainers/distribution.md)

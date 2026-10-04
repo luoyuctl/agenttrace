@@ -151,20 +151,6 @@ agenttrace --context-trends --range 30d -f json
 agenttrace --delivery-evidence --range 30d -f json
 ```
 
-### Usage over time
-
-```bash
-# Spend by day / ISO week / month. Usage records are bucketed by their own
-# timestamp, so a session that crosses midnight is split. Default tz is local.
-agenttrace --daily --range 30d
-agenttrace --weekly --tz utc -f json
-agenttrace --monthly --tz +08:00
-
-# 5-hour blocks with burn rate and end-of-block projection. Estimated from
-# local logs; provider rate limits are enforced server-side and may differ.
-agenttrace --blocks --token-limit 50000000 --cost-limit 100
-```
-
 `pricing-overrides.json` accepts `aliases` plus per-million-token `prices`:
 
 ```json
@@ -198,6 +184,7 @@ a commit reached `main`.
 - Documentation index: [docs/README.md](docs/README.md)
 - CI setup: [docs/guides/ci-integration.md](docs/guides/ci-integration.md)
 - Governance reports: [docs/guides/governance-reports.md](docs/guides/governance-reports.md)
+- Usage over time (daily/weekly/monthly, 5-hour blocks): [docs/guides/usage-over-time.md](docs/guides/usage-over-time.md)
 - Cursor import: [docs/guides/cursor-import.md](docs/guides/cursor-import.md)
 - Parser guide: [docs/guides/parser-guide.md](docs/guides/parser-guide.md)
 - Maintainer distribution guide: [docs/maintainers/distribution.md](docs/maintainers/distribution.md)
