@@ -730,20 +730,22 @@ fn result_reports_timeout(event: &Event) -> bool {
     if !failed {
         return false;
     }
-    // A bare "timeout" is only trusted as the whole error value; as a substring it
+    // When the result names its error, only that error describes the failure; other
+    // fields (for example earlier command output) may mention timeouts incidentally.
+    let reported = match error {
+        Some(serde_json::Value::String(text)) => text.clone(),
+        Some(value) => value.to_string(),
+        None => event.content.clone(),
+    };
+    // A bare "timeout" is only trusted as the whole error text; as a substring it
     // also matches messages like "invalid timeout setting".
-    let is_bare_timeout = |text: &str| text.trim().eq_ignore_ascii_case("timeout");
-    if is_bare_timeout(&event.content)
-        || error
-            .and_then(|value| value.as_str())
-            .is_some_and(is_bare_timeout)
-    {
+    if reported.trim().eq_ignore_ascii_case("timeout") {
         return true;
     }
-    let content = event.content.to_ascii_lowercase();
+    let reported = reported.to_ascii_lowercase();
     TIMEOUT_MARKERS
         .iter()
-        .any(|marker| content.contains(marker))
+        .any(|marker| reported.contains(marker))
 }
 
 fn tool_latencies(events: &[Event]) -> Vec<ToolLatency> {
@@ -1055,6 +1057,13 @@ mod tests {
             result("b", "2026-01-01T00:00:03Z", r#"{"error":"timeout"}"#, false),
             call("c", "2026-01-01T00:00:04Z"),
             result("c", "2026-01-01T00:00:05Z", "timeout", true),
+            call("d", "2026-01-01T00:00:06Z"),
+            result(
+                "d",
+                "2026-01-01T00:00:07Z",
+                r#"{"error":"invalid option","output":"previous command timed out"}"#,
+                false,
+            ),
         ]);
         assert_eq!(latency[0].timeouts, 2);
     }
