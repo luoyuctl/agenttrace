@@ -1433,6 +1433,11 @@ fn is_qwen_code_event(obj: &Map<String, Value>) -> bool {
     ) {
         return false;
     }
+    // Newer Claude Code transcripts carry both `session_id` and `sessionId`;
+    // Qwen Code only ever writes the snake_case key.
+    if obj.contains_key("sessionId") {
+        return false;
+    }
     if obj.contains_key("session_id") {
         return true;
     }
