@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.10.0 - 2026-10-04
+
+### Added
+
+- **install:** Checksum-verified installers, PATH setup, agenttrace update; drop WinGet ([#301](https://github.com/luoyuctl/agenttrace/pull/301))
+- **tui:** Adaptive 120 FPS motion and aligned layouts ([#302](https://github.com/luoyuctl/agenttrace/pull/302))
+- Attribute Claude Code subagent cost and tokens to the parent session ([#305](https://github.com/luoyuctl/agenttrace/pull/305))
+- **cli:** --daily/--weekly/--monthly with --tz, and 5-hour --blocks ([#306](https://github.com/luoyuctl/agenttrace/pull/306))
+
+### Fixed
+
+- **parser:** Stop classifying Claude Code transcripts with session_id as Qwen Code ([#304](https://github.com/luoyuctl/agenttrace/pull/304))
+- Usage report and update edge cases from post-0.9.0 review ([#307](https://github.com/luoyuctl/agenttrace/pull/307))
+
+### Build and CI
+
+- Split jobs, cache, cross-OS tests, MSRV 1.85, actionlint, idempotent release ([#303](https://github.com/luoyuctl/agenttrace/pull/303))
+
 ## v0.9.0 - 2026-09-29
 
 ### Fixed
