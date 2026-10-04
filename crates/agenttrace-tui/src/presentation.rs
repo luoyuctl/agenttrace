@@ -1143,11 +1143,11 @@ fn action_center_text(governance: &GovernanceSnapshot, language: Language) -> St
             "[{} {}] {}",
             item.priority,
             localized_level(&item.severity, language),
-            recommendation_title(item, language)
+            item.title.clone()
         ));
         lines.push(format!(
             "  {} | {}={}",
-            recommendation_action(item, language),
+            item.action.clone(),
             UiText::EstimatedSavings.get(language),
             format_compact_cost(item.estimated_savings_usd)
         ));
@@ -1246,7 +1246,7 @@ fn efficiency_text(governance: &GovernanceSnapshot, language: Language) -> Strin
                 item.tool_calls,
                 item.failed_calls,
                 item.invoked_sessions,
-                mcp_recommendation(item, language)
+                item.recommendation.clone()
             ));
         }
     }
@@ -1259,43 +1259,6 @@ fn efficiency_text(governance: &GovernanceSnapshot, language: Language) -> Strin
         .to_string(),
     );
     lines.join("\n")
-}
-
-pub(super) fn recommendation_title(item: &Recommendation, language: Language) -> String {
-    if language == Language::En {
-        return item.title.clone();
-    }
-    match item.id.as_str() {
-        "retry-loop" => "停止重复重试".to_string(),
-        "tool-failures" => "减少失败的工具调用".to_string(),
-        "context-pressure" => "换一个更聚焦的新会话".to_string(),
-        "slow-tool" => "给慢工具设定时间上限".to_string(),
-        _ => item.title.clone(),
-    }
-}
-
-pub(super) fn recommendation_action(item: &Recommendation, language: Language) -> String {
-    if language == Language::En {
-        return item.action.clone();
-    }
-    match item.id.as_str() {
-        "retry-loop" => "同一错误连续两次后先停下来检查，再决定是否重试。".to_string(),
-        "tool-failures" => "先看失败原因，换一种做法，不要原样重试。".to_string(),
-        "context-pressure" => "只带着当前目标、相关文件和报错，重新开一个短会话。".to_string(),
-        "slow-tool" => "设置超时，并把能并行的任务一起执行。".to_string(),
-        _ => item.action.clone(),
-    }
-}
-
-fn mcp_recommendation(item: &agenttrace_core::McpGovernanceItem, language: Language) -> String {
-    if language == Language::En {
-        return item.recommendation.clone();
-    }
-    if item.failed_calls > 0 {
-        "先检查失败调用，再考虑调整服务设置。".to_string()
-    } else {
-        "已观察到较多调用；日志无法判断服务是否一直处于加载状态。".to_string()
-    }
 }
 
 fn delivery_methodology(language: Language) -> &'static str {

@@ -1,3 +1,4 @@
+use crate::i18n::{tr, Language, Message};
 use crate::{
     pricing, project_name, resolve_project, round4, session_capability, total_tokens, Session,
 };
@@ -207,6 +208,10 @@ pub struct SessionDeliveryEvidence {
 }
 
 pub fn cost_audit(sessions: &[Session]) -> CostAudit {
+    cost_audit_with_language(sessions, Language::En)
+}
+
+pub fn cost_audit_with_language(sessions: &[Session], language: Language) -> CostAudit {
     #[derive(Default)]
     struct Aggregate {
         sessions: usize,
@@ -261,32 +266,26 @@ pub fn cost_audit(sessions: &[Session]) -> CostAudit {
             let pricing_source = current
                 .as_ref()
                 .map(|(source, _, _)| source.clone())
-                .unwrap_or_else(|| "unavailable: multiple models".to_string());
+                .unwrap_or_else(|| tr(language, "gov.pricing.multiple_models").to_string());
             let (pricing_status, pricing_note) = if model == "multiple" {
-                (
-                    "aggregate_estimate",
-                    "SQLite aggregated multiple model IDs; no single-model exact price applies",
-                )
+                ("aggregate_estimate", tr(language, "gov.pricing.aggregate"))
             } else if row.unknown > 0 {
-                ("unpriced_or_unknown", "model name is missing or generic")
+                (
+                    "unpriced_or_unknown",
+                    tr(language, "gov.pricing.unknown_model"),
+                )
             } else if row.fallback > 0 {
-                (
-                    "fallback_estimate",
-                    "no exact catalog match; built-in fallback rate used",
-                )
+                ("fallback_estimate", tr(language, "gov.pricing.fallback"))
             } else {
-                (
-                    "catalog_estimate",
-                    "exact normalized model match in pricing catalog",
-                )
+                ("catalog_estimate", tr(language, "gov.pricing.catalog"))
             };
             let pricing_note = if current
                 .as_ref()
                 .is_some_and(|(_, _, components)| (components.total - row.cost).abs() > 0.0001)
             {
-                format!(
-                    "{pricing_note}; current rates recalculate a different total than the stored estimate"
-                )
+                Message::new("gov.pricing.recalculated")
+                    .arg("note", pricing_note)
+                    .render_or(language, "")
             } else {
                 pricing_note.to_string()
             };
@@ -346,6 +345,10 @@ pub fn cost_audit(sessions: &[Session]) -> CostAudit {
 }
 
 pub fn session_cost_audit(session: &Session) -> SessionCostAudit {
+    session_cost_audit_with_language(session, Language::En)
+}
+
+pub fn session_cost_audit_with_language(session: &Session, language: Language) -> SessionCostAudit {
     let model = normalized_model(&session.metrics.model_used);
     let tokens = TokenBreakdown {
         input: session.metrics.tokens_input,
@@ -356,39 +359,30 @@ pub fn session_cost_audit(session: &Session) -> SessionCostAudit {
     };
     let current = current_cost_estimate(&model, &tokens);
     let (pricing_status, pricing_note) = if model == "multiple" {
-        (
-            "aggregate_estimate",
-            "SQLite aggregated multiple model IDs; no single-model exact price applies",
-        )
+        ("aggregate_estimate", tr(language, "gov.pricing.aggregate"))
     } else if matches!(model.as_str(), "default" | "unknown") {
         (
             "unpriced_or_unknown",
-            "model name is missing or generic; cost is not a catalog match",
+            tr(language, "gov.pricing.unknown_model_session"),
         )
     } else if pricing::has_specific_price(&model) {
-        (
-            "catalog_estimate",
-            "exact normalized model match in pricing catalog",
-        )
+        ("catalog_estimate", tr(language, "gov.pricing.catalog"))
     } else {
-        (
-            "fallback_estimate",
-            "no exact catalog match; built-in fallback rate used",
-        )
+        ("fallback_estimate", tr(language, "gov.pricing.fallback"))
     };
     let pricing_note = if current.as_ref().is_some_and(|(_, _, components)| {
         (components.total - session.metrics.cost_estimated).abs() > 0.0001
     }) {
-        format!(
-            "{pricing_note}; current rates recalculate a different total than the stored estimate"
-        )
+        Message::new("gov.pricing.recalculated")
+            .arg("note", pricing_note)
+            .render_or(language, "")
     } else {
         pricing_note.to_string()
     };
     let pricing_source = current
         .as_ref()
         .map(|(source, _, _)| source.clone())
-        .unwrap_or_else(|| "unavailable: multiple models".to_string());
+        .unwrap_or_else(|| tr(language, "gov.pricing.multiple_models").to_string());
     let (rates_per_million_usd, component_cost_usd, estimated_cost_usd) = current
         .map(|(_, rates, components)| {
             let total = components.total;
@@ -398,7 +392,7 @@ pub fn session_cost_audit(session: &Session) -> SessionCostAudit {
     SessionCostAudit {
         pricing_source,
         stored_pricing_source: if session.metrics.provenance.pricing_source.is_empty() {
-            "not recorded".to_string()
+            tr(language, "gov.pricing.not_recorded").to_string()
         } else {
             session.metrics.provenance.pricing_source.clone()
         },
@@ -416,6 +410,13 @@ pub fn session_cost_audit(session: &Session) -> SessionCostAudit {
 }
 
 pub fn recommendations(sessions: &[Session]) -> Vec<Recommendation> {
+    recommendations_with_language(sessions, Language::En)
+}
+
+pub fn recommendations_with_language(
+    sessions: &[Session],
+    language: Language,
+) -> Vec<Recommendation> {
     let mut items = Vec::new();
     for session in sessions {
         let loop_cost = session.diagnostics.loop_cost.total_loop_cost;
@@ -424,12 +425,14 @@ pub fn recommendations(sessions: &[Session]) -> Vec<Recommendation> {
                 "retry-loop",
                 severity_from_cost(loop_cost),
                 "retry_loop",
-                "Bound repeated tool retries",
-                format!(
-                    "{} repeated tool events or loop group(s) were detected.",
-                    session.diagnostics.loop_cost.retry_events
-                        + session.diagnostics.loop_cost.loop_groups
-                ),
+                tr(language, "gov.rec.retry_loop.title"),
+                Message::new("gov.rec.retry_loop.rationale")
+                    .arg(
+                        "count",
+                        session.diagnostics.loop_cost.retry_events
+                            + session.diagnostics.loop_cost.loop_groups,
+                    )
+                    .render_or(language, ""),
                 vec![
                     format!("session={}", session.name),
                     format!("loop_cost=${loop_cost:.4}"),
@@ -437,23 +440,30 @@ pub fn recommendations(sessions: &[Session]) -> Vec<Recommendation> {
                 loop_cost,
                 0,
                 "medium",
-                "Stop after two unchanged failures; inspect the failure boundary before retrying.",
+                tr(language, "gov.rec.retry_loop.action"),
                 "agenttrace --diagnostics --inspect 1 -f json",
             ));
         }
         if session.metrics.tool_calls_fail > 0 {
             items.push(recommendation(
                 "tool-failures",
-                if session.metrics.tool_calls_fail >= 3 { "high" } else { "medium" },
+                if session.metrics.tool_calls_fail >= 3 {
+                    "high"
+                } else {
+                    "medium"
+                },
                 "tool_failure",
-                "Reduce failing tool calls",
-                "Tool failures increase wall time and often precede repeated work.".to_string(),
-                vec![format!("session={}", session.name), format!("failed_calls={}", session.metrics.tool_calls_fail)],
+                tr(language, "gov.rec.tool_failures.title"),
+                tr(language, "gov.rec.tool_failures.rationale").to_string(),
+                vec![
+                    format!("session={}", session.name),
+                    format!("failed_calls={}", session.metrics.tool_calls_fail),
+                ],
                 session.metrics.cost_estimated * session.metrics.tool_calls_fail as f64
                     / session.metrics.tool_calls_total.max(1) as f64,
                 0,
                 "high",
-                "Inspect arguments and results, then change the approach instead of retrying unchanged calls.",
+                tr(language, "gov.rec.tool_failures.action"),
                 "agenttrace --sessions --sort failures --limit 20",
             ));
         }
@@ -463,13 +473,16 @@ pub fn recommendations(sessions: &[Session]) -> Vec<Recommendation> {
                 "context-pressure",
                 &context.risk_level,
                 "context",
-                "Start a narrower follow-up session",
-                "Conversation and tool context leave little room for the active task.".to_string(),
-                vec![format!("session={}", session.name), format!("utilization={:.1}%", context.utilization_pct)],
+                tr(language, "gov.rec.context_pressure.title"),
+                tr(language, "gov.rec.context_pressure.rationale").to_string(),
+                vec![
+                    format!("session={}", session.name),
+                    format!("utilization={:.1}%", context.utilization_pct),
+                ],
                 session.metrics.cost_estimated * 0.2,
                 (context.conversation_history / 5) as i64,
                 "medium",
-                "Carry only the current goal, relevant files, and failing output into a fresh session.",
+                tr(language, "gov.rec.context_pressure.action"),
                 "agenttrace --context-trends --project <project> -f json",
             ));
         }
@@ -483,8 +496,8 @@ pub fn recommendations(sessions: &[Session]) -> Vec<Recommendation> {
                 "slow-tool",
                 if slow.timeouts > 0 { "high" } else { "medium" },
                 "latency",
-                "Bound slow tool execution",
-                "A tool exceeded the latency threshold or reported a timeout.".to_string(),
+                tr(language, "gov.rec.slow_tool.title"),
+                tr(language, "gov.rec.slow_tool.rationale").to_string(),
                 vec![
                     format!("session={}", session.name),
                     format!(
@@ -495,7 +508,7 @@ pub fn recommendations(sessions: &[Session]) -> Vec<Recommendation> {
                 session.metrics.cost_estimated * 0.1,
                 0,
                 "high",
-                "Set a timeout and batch independent work instead of serial retries.",
+                tr(language, "gov.rec.slow_tool.action"),
                 "agenttrace --diagnostics --inspect 1 -f json",
             ));
         }
@@ -520,6 +533,10 @@ pub fn recommendations(sessions: &[Session]) -> Vec<Recommendation> {
 }
 
 pub fn mcp_governance(sessions: &[Session]) -> McpGovernance {
+    mcp_governance_with_language(sessions, Language::En)
+}
+
+pub fn mcp_governance_with_language(sessions: &[Session], language: Language) -> McpGovernance {
     #[derive(Default)]
     struct Aggregate {
         invoked: BTreeSet<String>,
@@ -543,32 +560,39 @@ pub fn mcp_governance(sessions: &[Session]) -> McpGovernance {
             }
         }
     }
-    let items = rows.into_iter().map(|(server, row)| {
-        let invoked_sessions = row.invoked.len();
-        let recommendation = if row.failed > 0 {
-            "investigate failed calls before changing server scope"
-        } else {
-            "observed usage is material; loading coverage cannot be inferred from invocation-only logs"
-        };
-        McpGovernanceItem {
-            server,
-            loaded_sessions: None,
-            invoked_sessions,
-            tool_calls: row.calls,
-            failed_calls: row.failed,
-            coverage_pct: None,
-            estimated_schema_tokens: None,
-            recommendation: recommendation.to_string(),
-            confidence: "low: loaded-session counts and schema tokens are unavailable because these logs expose invocations, not complete MCP inventories".to_string(),
-        }
-    }).collect();
+    let items = rows
+        .into_iter()
+        .map(|(server, row)| {
+            let invoked_sessions = row.invoked.len();
+            let recommendation = if row.failed > 0 {
+                tr(language, "gov.mcp.investigate_failures")
+            } else {
+                tr(language, "gov.mcp.material_usage")
+            };
+            McpGovernanceItem {
+                server,
+                loaded_sessions: None,
+                invoked_sessions,
+                tool_calls: row.calls,
+                failed_calls: row.failed,
+                coverage_pct: None,
+                estimated_schema_tokens: None,
+                recommendation: recommendation.to_string(),
+                confidence: tr(language, "gov.mcp.confidence").to_string(),
+            }
+        })
+        .collect();
     McpGovernance {
         items,
-        methodology: "MCP server names are inferred from tool-name prefixes. Invocation coverage is reported only among observed calls; loaded-server inventory and schema-token cost are intentionally left unmeasured.".to_string(),
+        methodology: tr(language, "gov.mcp.methodology").to_string(),
     }
 }
 
 pub fn context_trends(sessions: &[Session]) -> ContextTrend {
+    context_trends_with_language(sessions, Language::En)
+}
+
+pub fn context_trends_with_language(sessions: &[Session], language: Language) -> ContextTrend {
     let mut totals = ContextAggregate::default();
     let mut projects: BTreeMap<String, ContextAggregate> = BTreeMap::new();
     for session in sessions {
@@ -608,21 +632,39 @@ pub fn context_trends(sessions: &[Session]) -> ContextTrend {
             .then_with(|| left.project.cmp(&right.project))
     });
     ContextTrend {
-        methodology: "Cross-session aggregate. Repeated reads are file surface occurrences, and cache effectiveness uses cache-read / (input + cache-read).".to_string(),
+        methodology: tr(language, "gov.context.methodology").to_string(),
         totals: totals_view,
         projects,
     }
 }
 
 pub fn delivery_evidence(sessions: &[Session]) -> DeliveryEvidence {
-    delivery_evidence_inner(sessions, false)
+    delivery_evidence_inner(sessions, false, Language::En)
+}
+
+pub fn delivery_evidence_with_language(
+    sessions: &[Session],
+    language: Language,
+) -> DeliveryEvidence {
+    delivery_evidence_inner(sessions, false, language)
 }
 
 pub fn delivery_evidence_with_git(sessions: &[Session]) -> DeliveryEvidence {
-    delivery_evidence_inner(sessions, true)
+    delivery_evidence_inner(sessions, true, Language::En)
 }
 
-fn delivery_evidence_inner(sessions: &[Session], inspect_git: bool) -> DeliveryEvidence {
+pub fn delivery_evidence_with_git_and_language(
+    sessions: &[Session],
+    language: Language,
+) -> DeliveryEvidence {
+    delivery_evidence_inner(sessions, true, language)
+}
+
+fn delivery_evidence_inner(
+    sessions: &[Session],
+    inspect_git: bool,
+    language: Language,
+) -> DeliveryEvidence {
     let commits = if inspect_git {
         git_commits_by_root(sessions)
     } else {
@@ -640,28 +682,27 @@ fn delivery_evidence_inner(sessions: &[Session], inspect_git: bool) -> DeliveryE
         let (level, mut evidence, confidence) = if !matching_commits.is_empty() {
             (
                 "strong",
-                vec![format!(
-                    "{} local Git commit(s) overlap the session time window",
-                    matching_commits.len()
-                )],
+                vec![Message::new("gov.delivery.commits_overlap")
+                    .arg("count", matching_commits.len())
+                    .render_or(language, "")],
                 "medium",
             )
         } else if authority.get("external_publish").copied().unwrap_or(0) > 0 {
             (
                 "medium",
-                vec!["observed external publish command category".to_string()],
+                vec![tr(language, "gov.delivery.external_publish").to_string()],
                 "medium",
             )
         } else if authority.get("git_write").copied().unwrap_or(0) > 0 {
             (
                 "medium",
-                vec!["observed git write command category".to_string()],
+                vec![tr(language, "gov.delivery.git_write").to_string()],
                 "medium",
             )
         } else if authority.get("write_files").copied().unwrap_or(0) > 0 {
             (
                 "weak",
-                vec!["observed file write/edit command category".to_string()],
+                vec![tr(language, "gov.delivery.write_files").to_string()],
                 "medium",
             )
         } else if authority.get("network_access").copied().unwrap_or(0) > 0
@@ -669,18 +710,18 @@ fn delivery_evidence_inner(sessions: &[Session], inspect_git: bool) -> DeliveryE
         {
             (
                 "non_code",
-                vec!["tool activity observed without code-delivery evidence".to_string()],
+                vec![tr(language, "gov.delivery.non_code").to_string()],
                 "low",
             )
         } else {
             (
                 "none",
-                vec!["no write, Git, publish, or tool evidence observed".to_string()],
+                vec![tr(language, "gov.delivery.none").to_string()],
                 "low",
             )
         };
         if inspect_git && matching_commits.is_empty() && !project.root.is_empty() {
-            evidence.push("no overlapping local commit found; this does not rule out uncommitted, remote, non-code, or later-delivered work".to_string());
+            evidence.push(tr(language, "gov.delivery.no_overlap").to_string());
         }
         match level {
             "strong" => summary.strong += 1,
@@ -694,7 +735,9 @@ fn delivery_evidence_inner(sessions: &[Session], inspect_git: bool) -> DeliveryE
             project: project.display_name,
             level: level.to_string(),
             evidence,
-            confidence: format!("{confidence}: time-window heuristic; Git commits are correlated, not attributable proof of main-merge or business value"),
+            confidence: Message::new("gov.delivery.confidence")
+                .arg("confidence", confidence)
+                .render_or(language, ""),
         });
     }
     records.sort_by(|left, right| {
@@ -704,10 +747,11 @@ fn delivery_evidence_inner(sessions: &[Session], inspect_git: bool) -> DeliveryE
     });
     DeliveryEvidence {
         methodology: if inspect_git {
-            "Read-only local Git heuristic: commit timestamps are matched to session start/end with a 2-minute lead and 5-minute tail. It does not prove authorship, merge-to-main, or business value."
+            tr(language, "gov.delivery.methodology_git")
         } else {
-            "Lightweight heuristic based on observed tool authority only. Run --delivery-evidence for read-only local Git timestamp correlation."
-        }.to_string(),
+            tr(language, "gov.delivery.methodology_light")
+        }
+        .to_string(),
         summary,
         sessions: records,
     }

@@ -2,14 +2,15 @@
 
 use agenttrace_core::{
     attention_priority, attention_rank, average_health, canonical_sessions, clear_session_cache,
-    compute_overview, compute_overview_iter, context_trends, cost_audit, data_health,
-    delivery_evidence_with_git, format_cost, format_tokens, inspect_first, inspect_reason,
-    load_cached_sessions_from_cache, load_session_cache, load_sessions_with_progress,
-    load_sessions_with_progress_from_cache_mode, mcp_governance, needs_attention, project_name,
-    recommendations, resolve_project, session_capability, session_cost_audit,
-    session_matches_time_range, total_tokens, ContextTrend, CostAudit, DataHealth,
-    DeliveryEvidence, Language, LoadOptions, LoadProgress, LoadReport, McpGovernance, Overview,
-    Recommendation, Session, SessionCache, TimeRange,
+    compute_overview, compute_overview_iter, context_trends_with_language,
+    cost_audit_with_language, data_health, delivery_evidence_with_git_and_language, format_cost,
+    format_tokens, inspect_first, inspect_reason, load_cached_sessions_from_cache,
+    load_session_cache, load_sessions_with_progress, load_sessions_with_progress_from_cache_mode,
+    mcp_governance_with_language, needs_attention, project_name, recommendations_with_language,
+    resolve_project, session_capability, session_cost_audit, session_matches_time_range,
+    total_tokens, ContextTrend, CostAudit, DataHealth, DeliveryEvidence, Language, LoadOptions,
+    LoadProgress, LoadReport, McpGovernance, Overview, Recommendation, Session, SessionCache,
+    TimeRange,
 };
 #[cfg(test)]
 use agenttrace_core::{
@@ -565,6 +566,7 @@ impl App {
 
     fn toggle_language(&mut self) {
         self.language = self.language.toggle();
+        self.governance_dirty = true;
         if let Err(error) = save_language(self.language) {
             self.status = format!("{}: {error}", UiText::LanguageSaveFailed.get(self.language));
             return;
@@ -1395,19 +1397,20 @@ impl App {
             GovernancePanel::ActionCenter => {
                 let snapshot = self.governance.as_mut().expect("governance initialized");
                 if snapshot.audit.is_none() {
-                    snapshot.audit = Some(cost_audit(&sessions));
+                    snapshot.audit = Some(cost_audit_with_language(&sessions, self.language));
                 }
                 if snapshot.recommendations.is_none() {
-                    snapshot.recommendations = Some(recommendations(&sessions));
+                    snapshot.recommendations =
+                        Some(recommendations_with_language(&sessions, self.language));
                 }
             }
             GovernancePanel::Efficiency => {
                 let snapshot = self.governance.as_mut().expect("governance initialized");
                 if snapshot.mcp.is_none() {
-                    snapshot.mcp = Some(mcp_governance(&sessions));
+                    snapshot.mcp = Some(mcp_governance_with_language(&sessions, self.language));
                 }
                 if snapshot.context.is_none() {
-                    snapshot.context = Some(context_trends(&sessions));
+                    snapshot.context = Some(context_trends_with_language(&sessions, self.language));
                 }
             }
             GovernancePanel::Delivery => {
@@ -1416,8 +1419,9 @@ impl App {
                     .as_mut()
                     .expect("governance initialized")
                     .delivery_pending = Some(rx);
+                let language = self.language;
                 thread::spawn(move || {
-                    let _ = tx.send(delivery_evidence_with_git(&sessions));
+                    let _ = tx.send(delivery_evidence_with_git_and_language(&sessions, language));
                 });
             }
         }

@@ -1,3 +1,4 @@
+use crate::i18n::{tr, Language, Message};
 use crate::reports::{json_float, json_string};
 use crate::{
     canonical_sessions, format_cost, format_tokens, highest_authority_for_metrics, round4,
@@ -108,9 +109,22 @@ fn write_string_array_json(out: &mut String, values: &[String], base_indent: usi
 }
 
 pub fn report_search_text(results: &[SearchResult], query: &str) -> String {
-    let mut out = format!("Search results: {:?} ({})\n", query, results.len());
+    report_search_text_with_language(results, query, Language::En)
+}
+
+pub fn report_search_text_with_language(
+    results: &[SearchResult],
+    query: &str,
+    language: Language,
+) -> String {
+    let mut out = Message::new("search.header")
+        .arg("query", format!("{query:?}"))
+        .arg("count", results.len())
+        .render_or(language, "");
+    out.push('\n');
     if results.is_empty() {
-        out.push_str("No matching session metadata found.\n");
+        out.push_str(tr(language, "search.no_match"));
+        out.push('\n');
         return out;
     }
     for result in results {

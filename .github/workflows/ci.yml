@@ -62,6 +62,11 @@ jobs:
           AGENTTRACE_CI_OUT=ci-artifacts \
             scripts/ci/check-report-semantics.sh
 
+      - name: i18n catalog and coverage
+        run: |
+          AGENTTRACE_BIN=target/release/agenttrace \
+            scripts/ci/check-i18n.sh
+
       - name: Release surface drift
         run: scripts/ci/check-release-surfaces.sh
 

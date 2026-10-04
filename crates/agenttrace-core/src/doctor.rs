@@ -1,3 +1,4 @@
+use crate::i18n::{tr, Language, Message};
 use crate::{
     cached_session, find_session_files, known_session_dirs, load_session_cache,
     load_sqlite_backed_sessions, parse_file, skip_sqlite_backed_file_dir, Session, VERSION,
@@ -52,11 +53,20 @@ pub fn render_doctor_report(
     demo: bool,
     format: &str,
 ) -> anyhow::Result<String> {
+    render_doctor_report_with_language(dir, demo, format, Language::En)
+}
+
+pub fn render_doctor_report_with_language(
+    dir: Option<&Path>,
+    demo: bool,
+    format: &str,
+    language: Language,
+) -> anyhow::Result<String> {
     let report = build_doctor_report(dir, demo);
     if format == "json" {
         Ok(serde_json::to_string_pretty(&report)? + "\n")
     } else {
-        Ok(doctor_report_text(&report))
+        Ok(doctor_report_text(&report, dir, demo, language))
     }
 }
 
@@ -228,57 +238,84 @@ fn doctor_sqlite_directories(sessions: &[Session]) -> Vec<DoctorDirReport> {
     dirs
 }
 
-fn doctor_recommendations(report: &DoctorReport, dir: Option<&Path>, demo: bool) -> Vec<String> {
+fn doctor_recommendation_keys(
+    report: &DoctorReport,
+    dir: Option<&Path>,
+    demo: bool,
+) -> Vec<&'static str> {
     if report.sessions == 0 {
         if dir.is_some() {
-            return vec!["No sessions found in this directory. Check `-d <dir>` or point it at a session JSON/JSONL directory.".to_string()];
+            return vec!["doctor.rec.none_in_dir"];
         }
-        return vec![
-            "No sessions found. Run `agenttrace --demo` to try the TUI immediately.".to_string(),
-        ];
+        return vec!["doctor.rec.none"];
     }
-    let mut recommendations = vec![
-        "Ready: run `agenttrace` for the TUI or `agenttrace --overview -f json` for automation."
-            .to_string(),
-    ];
+    let mut keys = vec!["doctor.rec.ready"];
     if demo {
-        recommendations.push(
-            "Demo sessions use a temporary directory, so cache reuse is not expected in this mode."
-                .to_string(),
-        );
-        return recommendations;
+        keys.push("doctor.rec.demo_cache");
+        return keys;
     }
     if report.cached_valid == 0 {
-        recommendations.push("No reusable parsed session entries for this scan. Cached directory listings may still speed discovery; the next TUI startup should reuse parsed sessions incrementally.".to_string());
+        keys.push("doctor.rec.no_reusable");
     }
-    recommendations
+    keys
 }
 
-fn doctor_report_text(report: &DoctorReport) -> String {
+fn doctor_recommendations(report: &DoctorReport, dir: Option<&Path>, demo: bool) -> Vec<String> {
+    doctor_recommendation_keys(report, dir, demo)
+        .into_iter()
+        .map(|key| tr(Language::En, key).to_string())
+        .collect()
+}
+
+fn doctor_report_text(
+    report: &DoctorReport,
+    dir: Option<&Path>,
+    demo: bool,
+    language: Language,
+) -> String {
+    let t = |key| tr(language, key);
+    let mode = match report.mode.as_str() {
+        "demo sessions" => t("doctor.mode.demo"),
+        "custom directory" => t("doctor.mode.custom"),
+        "auto-discovery" => t("doctor.mode.auto"),
+        other => other,
+    };
     let mut out = String::new();
-    out.push_str("AGENTTRACE Doctor\n");
-    out.push_str(&format!("Version: {}\n", report.version));
-    out.push_str(&format!("Mode: {}\n", report.mode));
-    out.push_str(&format!("Session files: {}\n", report.sessions));
-    out.push_str(&format!("Cache: {}\n", report.cache_path));
+    out.push_str(&format!("{}\n", t("doctor.title")));
+    out.push_str(&format!("{}: {}\n", t("doctor.version"), report.version));
+    out.push_str(&format!("{}: {}\n", t("doctor.mode_label"), mode));
     out.push_str(&format!(
-        "  {} parsed session cache entries, {} reusable for this scan, {} cached directory listings\n",
-        report.cache_entries, report.cached_valid, report.cache_dirs
+        "{}: {}\n",
+        t("doctor.session_files"),
+        report.sessions
     ));
-    out.push_str("\nProviders:\n");
+    out.push_str(&format!("{}: {}\n", t("doctor.cache"), report.cache_path));
+    out.push_str(&format!(
+        "  {}\n",
+        Message::new("doctor.cache_summary")
+            .arg("entries", report.cache_entries)
+            .arg("reusable", report.cached_valid)
+            .arg("dirs", report.cache_dirs)
+            .render_or(language, "")
+    ));
+    out.push_str(&format!("\n{}:\n", t("doctor.providers")));
     for dir in &report.directories {
-        let status = if dir.exists { "found" } else { "missing" };
+        let status = if dir.exists {
+            t("doctor.found")
+        } else {
+            t("doctor.missing")
+        };
         out.push_str(&format!(
             "  {:20} {:7} found={:<5} parsed={:<5} failed={:<5} cache={:<5} {}\n",
             dir.name, status, dir.files, dir.parsed, dir.failed, dir.cache_hits, dir.path
         ));
         for sample in &dir.failure_samples {
-            out.push_str(&format!("    failed: {sample}\n"));
+            out.push_str(&format!("    {}: {sample}\n", t("doctor.failed")));
         }
     }
-    out.push_str("\nRecommendations:\n");
-    for rec in &report.recommendations {
-        out.push_str(&format!("  - {rec}\n"));
+    out.push_str(&format!("\n{}:\n", t("doctor.recommendations")));
+    for key in doctor_recommendation_keys(report, dir, demo) {
+        out.push_str(&format!("  - {}\n", t(key)));
     }
     out
 }

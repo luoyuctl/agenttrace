@@ -35,6 +35,14 @@ target/release/agenttrace --demo --doctor
 target/release/agenttrace --demo --overview -f json
 ```
 
+## Translations
+
+All user-visible text lives in `crates/agenttrace-core/locales/en.yml` and
+`zh-CN.yml`. Add a key to both files (keep the same `%{placeholders}`) and look it
+up with `tr(language, "area.key")` or `Message::new("area.key").arg(...)`. Do not
+inline English/Chinese pairs in code; `scripts/ci/check-i18n.sh` rejects them and
+checks that both catalogs stay in sync.
+
 ## Parser Contributions
 
 Parser PRs are very welcome. Please read [docs/guides/parser-guide.md](docs/guides/parser-guide.md) first.

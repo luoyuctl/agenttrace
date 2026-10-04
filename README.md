@@ -99,6 +99,14 @@ iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.p
 agenttrace
 ```
 
+Reports, help, and errors follow `--lang en|zh` (default `en`; the TUI also
+remembers the language you toggle with `L`). Machine-readable fields such as
+JSON keys, codes, and the `--sessions` TSV header always stay English.
+
+```bash
+agenttrace --overview --lang zh
+```
+
 ### Governance reports
 
 ```bash

@@ -36,9 +36,14 @@ reviews:
         what existing redaction allows.
     - path: "crates/agenttrace-tui/src/**"
       instructions: >-
-        Every user-visible string needs both English and Chinese text. Check CJK width
+        Every user-visible string must come from crates/agenttrace-core/locales/{en,zh-CN}.yml
+        via a key (scripts/ci/check-i18n.sh enforces parity); no inline en/zh pairs. Check CJK width
         handling (unicode-width), narrow terminals (80x24), and that per-frame work does
         not scan all sessions or touch the filesystem repeatedly.
+    - path: "crates/agenttrace-core/locales/*.yml"
+      instructions: >-
+        en.yml and zh-CN.yml must define the same keys with the same %{placeholders}.
+        Chinese copy should be plain, natural Simplified Chinese, not word-for-word.
     - path: ".github/workflows/**"
       instructions: >-
         Third-party actions must be pinned to a full commit SHA. Keep permissions minimal.

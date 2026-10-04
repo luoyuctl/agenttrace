@@ -104,6 +104,13 @@ iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.p
 agenttrace
 ```
 
+报告、帮助和错误信息跟随 `--lang en|zh`（默认 `en`；TUI 里按 `L` 切换的语言会被记住）。
+JSON 字段名、代码值和 `--sessions` 的 TSV 表头等机读内容始终保持英文。
+
+```bash
+agenttrace --overview --lang zh
+```
+
 ## 你会得到什么
 
 | 需求 | agenttrace 提供 |

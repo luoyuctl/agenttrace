@@ -1,8 +1,7 @@
-use crate::i18n::tr;
+use crate::i18n::{tr, Message};
 use crate::{
-    average_health, canonical_sessions, classify_tool_authority, context_trends, cost_audit,
-    delivery_evidence, fmt_duration, format_cost, format_count, format_tokens,
-    highest_authority_for_metrics, is_high_authority_category, mcp_governance, recommendations,
+    average_health, canonical_sessions, classify_tool_authority, fmt_duration, format_cost,
+    format_count, format_tokens, highest_authority_for_metrics, is_high_authority_category,
     report_scope, round4, sorted_keys, sorted_set, total_tokens, Anomaly, GroupOverview, Overview,
     Session, ToolCall, VERSION,
 };
@@ -410,6 +409,20 @@ pub fn report_overview_json_with_health(
     sessions: &[Session],
     data_health: Option<&crate::DataHealth>,
 ) -> String {
+    report_overview_json_with_health_and_language(
+        overview,
+        sessions,
+        data_health,
+        ReportLanguage::En,
+    )
+}
+
+fn report_overview_json_with_health_and_language(
+    overview: &Overview,
+    sessions: &[Session],
+    data_health: Option<&crate::DataHealth>,
+    language: ReportLanguage,
+) -> String {
     let ordered = canonical_sessions(sessions);
     let summary = overview_summary(overview, &ordered);
     let agents = group_items(&overview.by_agent, true);
@@ -431,7 +444,7 @@ pub fn report_overview_json_with_health(
                 "health": session.health,
                 "anomalies": session.anomalies.len(),
                 "highest_tool_authority": highest_authority_for_metrics(&session.metrics),
-                "possible_cost_driver": possible_cost_driver_note_strict(session),
+                "possible_cost_driver": possible_cost_driver_note_strict(session, language),
             })
         })
         .map(strip_nulls)
@@ -457,7 +470,7 @@ pub fn report_overview_json_with_health(
         "by_model": models,
         "by_project": projects,
         "recent_sessions": recent_sessions,
-        "incident_timelines": incident_timelines(&ordered),
+        "incident_timelines": incident_timelines(&ordered, language),
         "anomalies": anomalies,
         "data_health": data_health,
     });
@@ -474,16 +487,18 @@ pub fn report_overview_json_with_context(
     data_health: Option<&crate::DataHealth>,
     range: crate::TimeRange,
     includes_preserved_history: bool,
+    language: ReportLanguage,
 ) -> String {
-    let base = report_overview_json_with_health(overview, sessions, data_health);
+    let base =
+        report_overview_json_with_health_and_language(overview, sessions, data_health, language);
     let mut payload: Value = serde_json::from_str(&base).expect("overview JSON is valid");
     let context = json!({
         "scope": report_scope(sessions, range, includes_preserved_history),
-        "cost_audit": cost_audit(sessions),
-        "recommendations": recommendations(sessions),
-        "mcp_governance": mcp_governance(sessions),
-        "context_trends": context_trends(sessions),
-        "delivery_evidence": delivery_evidence(sessions),
+        "cost_audit": crate::cost_audit_with_language(sessions, language),
+        "recommendations": crate::recommendations_with_language(sessions, language),
+        "mcp_governance": crate::mcp_governance_with_language(sessions, language),
+        "context_trends": crate::context_trends_with_language(sessions, language),
+        "delivery_evidence": crate::delivery_evidence_with_language(sessions, language),
     });
     if let (Value::Object(payload), Value::Object(context)) = (&mut payload, context) {
         payload.extend(context);
@@ -497,31 +512,45 @@ pub fn report_overview_text_with_context(
     data_health: &crate::DataHealth,
     range: crate::TimeRange,
     includes_preserved_history: bool,
+    language: ReportLanguage,
 ) -> String {
     let scope = report_scope(sessions, range, includes_preserved_history);
-    let audit = cost_audit(sessions);
-    let mut out = report_overview_text(overview, sessions);
-    out.push_str("\n── Scope and confidence ──\n");
+    let audit = crate::cost_audit_with_language(sessions, language);
+    let mut out = report_overview_text_with_language(overview, sessions, language);
     out.push_str(&format!(
-        "  Range: {} | sessions: {} | {} to {}\n",
-        scope.range, scope.sessions_in_scope, scope.earliest_session_at, scope.latest_session_at
+        "\n── {l_overview_scope_and_confidence} ──\n",
+        l_overview_scope_and_confidence = tr(language, "report.overview.scope_and_confidence")
     ));
     out.push_str(&format!(
-        "  Parse: {}/{} parsed, {} skipped, {} cache hits | confidence: {}\n",
+        "  {l_overview_range}: {} | {l_overview_sessions_lower}: {} | {} to {}\n",
+        scope.range,
+        scope.sessions_in_scope,
+        scope.earliest_session_at,
+        scope.latest_session_at,
+        l_overview_range = tr(language, "report.overview.range"),
+        l_overview_sessions_lower = tr(language, "report.overview.sessions_lower")
+    ));
+    out.push_str(&format!(
+        "  {l_overview_parse}: {}/{} {l_overview_parsed}, {} {l_overview_skipped}, {} {l_overview_cache_hits} | {l_overview_confidence_lower}: {}\n",
         data_health.parsed,
         data_health.discovered,
         data_health.skipped,
         data_health.cache_hits,
         data_health.confidence
-    ));
+    , l_overview_parse = tr(language, "report.overview.parse"), l_overview_parsed = tr(language, "report.overview.parsed"), l_overview_skipped = tr(language, "report.overview.skipped"), l_overview_cache_hits = tr(language, "report.overview.cache_hits"), l_overview_confidence_lower = tr(language, "report.overview.confidence_lower")));
     out.push_str(&format!(
-        "  Pricing: {} | exact={} fallback={} unknown={}\n",
+        "  {l_overview_pricing}: {} | exact={} fallback={} unknown={}\n",
         audit.pricing_source,
         audit.pricing_coverage.priced_sessions,
         audit.pricing_coverage.fallback_priced_sessions,
-        audit.pricing_coverage.unpriced_or_unknown_sessions
+        audit.pricing_coverage.unpriced_or_unknown_sessions,
+        l_overview_pricing = tr(language, "report.overview.pricing")
     ));
-    render_recommendations_text(&mut out, &recommendations(sessions));
+    render_recommendations_text(
+        &mut out,
+        &crate::recommendations_with_language(sessions, language),
+        language,
+    );
     out
 }
 
@@ -531,13 +560,18 @@ pub fn report_overview_markdown_with_context(
     data_health: &crate::DataHealth,
     range: crate::TimeRange,
     includes_preserved_history: bool,
+    language: ReportLanguage,
 ) -> String {
     let scope = report_scope(sessions, range, includes_preserved_history);
-    let audit = cost_audit(sessions);
-    let mut out = report_overview_markdown(overview, sessions);
-    out.push_str("\n## Scope and confidence\n\n| Field | Value |\n|---|---|\n");
-    out.push_str(&format!("| Range | {} |\n| Session window | {} → {} |\n| Parse coverage | {}/{} parsed; {} skipped; {} cache hits |\n| Confidence | {} |\n| Pricing | {} |\n| Pricing coverage | exact: {}; fallback: {}; unknown: {} |\n", scope.range, scope.earliest_session_at, scope.latest_session_at, data_health.parsed, data_health.discovered, data_health.skipped, data_health.cache_hits, data_health.confidence, markdown_cell(&audit.pricing_source), audit.pricing_coverage.priced_sessions, audit.pricing_coverage.fallback_priced_sessions, audit.pricing_coverage.unpriced_or_unknown_sessions));
-    render_recommendations_markdown(&mut out, &recommendations(sessions));
+    let audit = crate::cost_audit_with_language(sessions, language);
+    let mut out = report_overview_markdown_with_language(overview, sessions, language);
+    out.push_str(&format!("\n## {l_overview_scope_and_confidence}\n\n| {l_overview_field} | {l_overview_value} |\n|---|---|\n", l_overview_scope_and_confidence = tr(language, "report.overview.scope_and_confidence"), l_overview_field = tr(language, "report.overview.field"), l_overview_value = tr(language, "report.overview.value")));
+    out.push_str(&format!("| {l_overview_range} | {} |\n| {l_overview_session_window} | {} → {} |\n| {l_overview_parse_coverage} | {}/{} {l_overview_parsed}; {} {l_overview_skipped}; {} {l_overview_cache_hits} |\n| {l_overview_confidence} | {} |\n| {l_overview_pricing} | {} |\n| {l_overview_pricing_coverage} | exact: {}; fallback: {}; unknown: {} |\n", scope.range, scope.earliest_session_at, scope.latest_session_at, data_health.parsed, data_health.discovered, data_health.skipped, data_health.cache_hits, data_health.confidence, markdown_cell(&audit.pricing_source), audit.pricing_coverage.priced_sessions, audit.pricing_coverage.fallback_priced_sessions, audit.pricing_coverage.unpriced_or_unknown_sessions, l_overview_range = tr(language, "report.overview.range"), l_overview_session_window = tr(language, "report.overview.session_window"), l_overview_parse_coverage = tr(language, "report.overview.parse_coverage"), l_overview_parsed = tr(language, "report.overview.parsed"), l_overview_skipped = tr(language, "report.overview.skipped"), l_overview_cache_hits = tr(language, "report.overview.cache_hits"), l_overview_confidence = tr(language, "report.overview.confidence"), l_overview_pricing = tr(language, "report.overview.pricing"), l_overview_pricing_coverage = tr(language, "report.overview.pricing_coverage")));
+    render_recommendations_markdown(
+        &mut out,
+        &crate::recommendations_with_language(sessions, language),
+        language,
+    );
     out
 }
 
@@ -547,17 +581,21 @@ pub fn report_overview_html_with_context(
     data_health: &crate::DataHealth,
     range: crate::TimeRange,
     includes_preserved_history: bool,
+    language: ReportLanguage,
 ) -> String {
     let scope = report_scope(sessions, range, includes_preserved_history);
-    let audit = cost_audit(sessions);
-    let recommendations = recommendations(sessions);
-    let mut appendix = String::from("<section><h2>Scope and confidence</h2><table><tbody>");
-    appendix.push_str(&format!("<tr><th>Range</th><td>{}</td></tr><tr><th>Session window</th><td>{} → {}</td></tr><tr><th>Parse coverage</th><td>{}/{} parsed; {} skipped; {} cache hits</td></tr><tr><th>Confidence</th><td>{}</td></tr><tr><th>Pricing</th><td>{}</td></tr>", html_escape(&scope.range), html_escape(&scope.earliest_session_at), html_escape(&scope.latest_session_at), data_health.parsed, data_health.discovered, data_health.skipped, data_health.cache_hits, html_escape(&data_health.confidence), html_escape(&audit.pricing_source)));
+    let audit = crate::cost_audit_with_language(sessions, language);
+    let recommendations = crate::recommendations_with_language(sessions, language);
+    let mut appendix = format!(
+        "<section><h2>{l_overview_scope_and_confidence}</h2><table><tbody>",
+        l_overview_scope_and_confidence = tr(language, "report.overview.scope_and_confidence")
+    );
+    appendix.push_str(&format!("<tr><th>{l_overview_range}</th><td>{}</td></tr><tr><th>{l_overview_session_window}</th><td>{} → {}</td></tr><tr><th>{l_overview_parse_coverage}</th><td>{}/{} {l_overview_parsed}; {} {l_overview_skipped}; {} {l_overview_cache_hits}</td></tr><tr><th>{l_overview_confidence}</th><td>{}</td></tr><tr><th>{l_overview_pricing}</th><td>{}</td></tr>", html_escape(&scope.range), html_escape(&scope.earliest_session_at), html_escape(&scope.latest_session_at), data_health.parsed, data_health.discovered, data_health.skipped, data_health.cache_hits, html_escape(&data_health.confidence), html_escape(&audit.pricing_source), l_overview_range = tr(language, "report.overview.range"), l_overview_session_window = tr(language, "report.overview.session_window"), l_overview_parse_coverage = tr(language, "report.overview.parse_coverage"), l_overview_parsed = tr(language, "report.overview.parsed"), l_overview_skipped = tr(language, "report.overview.skipped"), l_overview_cache_hits = tr(language, "report.overview.cache_hits"), l_overview_confidence = tr(language, "report.overview.confidence"), l_overview_pricing = tr(language, "report.overview.pricing")));
     appendix.push_str("</tbody></table></section>");
-    appendix.push_str("<section><h2>Prioritized recommendations</h2><table><thead><tr><th>Priority</th><th>Finding</th><th>Impact</th><th>Action</th></tr></thead><tbody>");
+    appendix.push_str(&format!("<section><h2>{l_overview_prioritized_recommendations}</h2><table><thead><tr><th>{l_overview_priority}</th><th>{l_overview_finding}</th><th>{l_overview_impact}</th><th>{l_overview_action}</th></tr></thead><tbody>", l_overview_prioritized_recommendations = tr(language, "report.overview.prioritized_recommendations"), l_overview_priority = tr(language, "report.overview.priority"), l_overview_finding = tr(language, "report.overview.finding"), l_overview_impact = tr(language, "report.overview.impact"), l_overview_action = tr(language, "report.overview.action")));
     for item in recommendations.iter().take(12) {
         appendix.push_str(&format!(
-            "<tr><td>{}</td><td>{}: {}</td><td>${:.4}; {} tokens; {}</td><td>{}</td></tr>",
+            "<tr><td>{}</td><td>{}: {}</td><td>${:.4}; {} {l_overview_tokens}; {}</td><td>{}</td></tr>",
             html_escape(&item.priority),
             html_escape(&item.category),
             html_escape(&item.rationale),
@@ -565,20 +603,32 @@ pub fn report_overview_html_with_context(
             item.estimated_savings_tokens,
             html_escape(&item.confidence),
             html_escape(&item.action)
-        ));
+        , l_overview_tokens = tr(language, "report.overview.tokens")));
     }
     appendix.push_str("</tbody></table></section>");
-    report_overview_html(overview, sessions).replacen("</main>", &(appendix + "</main>"), 1)
+    report_overview_html_with_language(overview, sessions, language).replacen(
+        "</main>",
+        &(appendix + "</main>"),
+        1,
+    )
 }
 
-fn render_recommendations_text(out: &mut String, items: &[crate::Recommendation]) {
+fn render_recommendations_text(
+    out: &mut String,
+    items: &[crate::Recommendation],
+    language: ReportLanguage,
+) {
     if items.is_empty() {
         return;
     }
-    out.push_str("\n── Prioritized recommendations ──\n");
+    out.push_str(&format!(
+        "\n── {l_overview_prioritized_recommendations} ──\n",
+        l_overview_prioritized_recommendations =
+            tr(language, "report.overview.prioritized_recommendations")
+    ));
     for item in items.iter().take(12) {
         out.push_str(&format!(
-            "  [{}] {} — {} | ${:.4}, {} tokens | {}\n    Action: {}\n    Verify: {}\n",
+            "  [{}] {} — {} | ${:.4}, {} {l_overview_tokens} | {}\n    {l_overview_action}: {}\n    {l_overview_verify}: {}\n",
             item.priority,
             item.title,
             item.rationale,
@@ -587,24 +637,29 @@ fn render_recommendations_text(out: &mut String, items: &[crate::Recommendation]
             item.confidence,
             item.action,
             item.validation_command
-        ));
+        , l_overview_tokens = tr(language, "report.overview.tokens"), l_overview_action = tr(language, "report.overview.action"), l_overview_verify = tr(language, "report.overview.verify")));
     }
 }
 
-fn render_recommendations_markdown(out: &mut String, items: &[crate::Recommendation]) {
+fn render_recommendations_markdown(
+    out: &mut String,
+    items: &[crate::Recommendation],
+    language: ReportLanguage,
+) {
     if items.is_empty() {
         return;
     }
-    out.push_str("\n## Prioritized recommendations\n\n| Priority | Finding | Estimated impact | Confidence | Action |\n|---|---|---:|---|---|\n");
+    out.push_str(&format!("\n## {l_overview_prioritized_recommendations}\n\n| {l_overview_priority} | {l_overview_finding} | {l_overview_estimated_impact} | {l_overview_confidence} | {l_overview_action} |\n|---|---|---:|---|---|\n", l_overview_prioritized_recommendations = tr(language, "report.overview.prioritized_recommendations"), l_overview_priority = tr(language, "report.overview.priority"), l_overview_finding = tr(language, "report.overview.finding"), l_overview_estimated_impact = tr(language, "report.overview.estimated_impact"), l_overview_confidence = tr(language, "report.overview.confidence"), l_overview_action = tr(language, "report.overview.action")));
     for item in items.iter().take(12) {
         out.push_str(&format!(
-            "| {} | {} | ${:.4}; {} tokens | {} | {} |\n",
+            "| {} | {} | ${:.4}; {} {l_overview_tokens} | {} | {} |\n",
             item.priority,
             markdown_cell(&item.title),
             item.estimated_savings_usd,
             item.estimated_savings_tokens,
             markdown_cell(&item.confidence),
-            markdown_cell(&item.action)
+            markdown_cell(&item.action),
+            l_overview_tokens = tr(language, "report.overview.tokens")
         ));
     }
 }
@@ -672,6 +727,14 @@ pub fn add_baseline_comparison(
 }
 
 pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String {
+    report_overview_text_with_language(overview, sessions, ReportLanguage::En)
+}
+
+pub fn report_overview_text_with_language(
+    overview: &Overview,
+    sessions: &[Session],
+    language: ReportLanguage,
+) -> String {
     let ordered = canonical_sessions(sessions);
     let authority = overview_authority_summary(&ordered);
     let sep = "━".repeat(70);
@@ -680,8 +743,11 @@ pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String
     out.push_str(&sep);
     out.push('\n');
     out.push_str(&format!(
-        "  AGENTTRACE v{} — Global Overview  ({} Sessions)\n",
-        VERSION, overview.total_sessions
+        "  AGENTTRACE v{} — {l_overview_global_overview}  ({} {l_overview_sessions})\n",
+        VERSION,
+        overview.total_sessions,
+        l_overview_global_overview = tr(language, "report.overview.global_overview"),
+        l_overview_sessions = tr(language, "report.overview.sessions")
     ));
     out.push_str(&sep);
     out.push_str("\n\n");
@@ -696,32 +762,40 @@ pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String
         .checked_div(overview.total_sessions)
         .unwrap_or(0);
     out.push_str(&format!(
-        "  Total Sessions:     {}\n",
-        overview.total_sessions
+        "  {l_overview_total_sessions}:     {}\n",
+        overview.total_sessions,
+        l_overview_total_sessions = tr(language, "report.overview.total_sessions")
     ));
     out.push_str(&format!(
-        "  🟢 Healthy:   {} ({}%)\n",
+        "  🟢 {l_overview_healthy}:   {} ({}%)\n",
         format_count(overview.healthy),
-        healthy_pct
+        healthy_pct,
+        l_overview_healthy = tr(language, "report.overview.healthy")
     ));
     out.push_str(&format!(
-        "  🟡 Warning:   {} ({}%)\n",
+        "  🟡 {l_overview_warning}:   {} ({}%)\n",
         format_count(overview.warning),
-        warning_pct
+        warning_pct,
+        l_overview_warning = tr(language, "report.overview.warning")
     ));
     out.push_str(&format!(
-        "  🔴 Critical:   {} ({}%)\n",
+        "  🔴 {l_overview_critical}:   {} ({}%)\n",
         format_count(overview.critical),
-        critical_pct
+        critical_pct,
+        l_overview_critical = tr(language, "report.overview.critical")
     ));
     out.push_str(&format!(
-        "  💰 Total estimated cost:      {}\n\n",
-        format_cost(overview.total_cost)
+        "  💰 {l_overview_total_estimated_cost}:      {}\n\n",
+        format_cost(overview.total_cost),
+        l_overview_total_estimated_cost = tr(language, "report.overview.total_estimated_cost")
     ));
 
-    let timelines = overview_incident_timelines(&ordered, 3);
+    let timelines = overview_incident_timelines(&ordered, 3, language);
     if !timelines.is_empty() {
-        out.push_str("  ── Incident timeline ──\n");
+        out.push_str(&format!(
+            "  ── {l_overview_incident_timeline} ──\n",
+            l_overview_incident_timeline = tr(language, "report.overview.incident_timeline")
+        ));
         let mut rendered = 0;
         'timeline: for timeline in timelines {
             for item in timeline.items {
@@ -741,13 +815,20 @@ pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String
     }
 
     if authority.has_data {
-        out.push_str("  ── Tool authority ──\n");
+        out.push_str(&format!(
+            "  ── {l_overview_tool_authority} ──\n",
+            l_overview_tool_authority = tr(language, "report.overview.tool_authority")
+        ));
         if !authority.highest.is_empty() {
-            out.push_str(&format!("    Highest category: {}\n", authority.highest));
+            out.push_str(&format!(
+                "    {l_overview_highest_category}: {}\n",
+                authority.highest,
+                l_overview_highest_category = tr(language, "report.overview.highest_category")
+            ));
         }
         if !authority.counts.is_empty() {
             for line in text_wrapped_key_values(
-                "Authority category counts",
+                tr(language, "report.overview.authority_category_counts"),
                 &text_authority_count_values(&authority.counts),
                 96,
             ) {
@@ -756,7 +837,7 @@ pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String
         }
         if !authority.high_tools.is_empty() {
             for line in text_wrapped_key_values(
-                "High-authority tools",
+                tr(language, "report.overview.high_authority_tools"),
                 &text_tool_values(&authority.top_high_tools()),
                 96,
             ) {
@@ -766,9 +847,13 @@ pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String
         out.push('\n');
     }
 
-    let notes = overview_cost_driver_notes(&ordered, 3);
+    let notes = overview_cost_driver_notes(&ordered, 3, language);
     if !notes.is_empty() {
-        out.push_str("  ── Possible cost drivers ──\n");
+        out.push_str(&format!(
+            "  ── {l_overview_possible_cost_drivers} ──\n",
+            l_overview_possible_cost_drivers =
+                tr(language, "report.overview.possible_cost_drivers")
+        ));
         for note in notes {
             out.push_str(&format!(
                 "    {:<30} {}\n",
@@ -779,40 +864,54 @@ pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String
         out.push('\n');
     }
 
-    out.push_str("  ── By Agent ──\n");
+    out.push_str(&format!(
+        "  ── {l_overview_by_agent_title} ──\n",
+        l_overview_by_agent_title = tr(language, "report.overview.by_agent_title")
+    ));
     for (agent, group) in overview_text_agent_groups(&overview.by_agent) {
         out.push_str(&format!(
-            "    {:<30} {:>4} Sessions  {:>8}\n",
+            "    {:<30} {:>4} {l_overview_sessions}  {:>8}\n",
             tool_display_name(&agent),
             format_count(group.sessions),
-            format_cost(group.cost)
+            format_cost(group.cost),
+            l_overview_sessions = tr(language, "report.overview.sessions")
         ));
     }
     out.push('\n');
 
-    out.push_str("  ── By Model ──\n");
+    out.push_str(&format!(
+        "  ── {l_overview_by_model_title} ──\n",
+        l_overview_by_model_title = tr(language, "report.overview.by_model_title")
+    ));
     for (model, group) in overview_text_model_groups(&overview.by_model)
         .into_iter()
         .take(8)
     {
         out.push_str(&format!(
-            "    {:<25} {:>4} Sessions  {:>8}\n",
+            "    {:<25} {:>4} {l_overview_sessions}  {:>8}\n",
             model,
             format_count(group.sessions),
-            format_cost(group.cost)
+            format_cost(group.cost),
+            l_overview_sessions = tr(language, "report.overview.sessions")
         ));
     }
     out.push('\n');
 
-    out.push_str("  ── Recent Anomalies ──\n");
+    out.push_str(&format!(
+        "  ── {l_overview_recent_anomalies_title} ──\n",
+        l_overview_recent_anomalies_title = tr(language, "report.overview.recent_anomalies_title")
+    ));
     if overview.anomalies_top.is_empty() {
-        out.push_str("    ✅ No anomalies\n");
+        out.push_str(&format!(
+            "    ✅ {l_overview_no_anomalies}\n",
+            l_overview_no_anomalies = tr(language, "report.overview.no_anomalies")
+        ));
     } else {
         for anomaly in overview.anomalies_top.iter().take(8) {
             out.push_str(&format!(
                 "    ⚠️  {:<30} {}\n",
                 text_cell(&anomaly.session, 30),
-                anomaly_type_label(&anomaly.kind)
+                anomaly_type_label_for_language(&anomaly.kind, language)
             ));
         }
     }
@@ -823,65 +922,107 @@ pub fn report_overview_text(overview: &Overview, sessions: &[Session]) -> String
 }
 
 pub fn report_overview_markdown(overview: &Overview, sessions: &[Session]) -> String {
+    report_overview_markdown_with_language(overview, sessions, ReportLanguage::En)
+}
+
+pub fn report_overview_markdown_with_language(
+    overview: &Overview,
+    sessions: &[Session],
+    language: ReportLanguage,
+) -> String {
     let ordered = canonical_sessions(sessions);
     let summary = overview_summary(overview, &ordered);
     let authority = overview_authority_summary(&ordered);
-    let trend = analyze_health_trend(sessions);
+    let trend = analyze_health_trend(sessions, language);
     let mut out = String::new();
 
-    out.push_str("# agenttrace overview\n\n");
-    out.push_str("| Metric | Value |\n|---|---:|\n");
     out.push_str(&format!(
-        "| Sessions | {} |\n",
-        format_count(overview.total_sessions)
+        "# {l_overview_title}\n\n",
+        l_overview_title = tr(language, "report.overview.title")
     ));
     out.push_str(&format!(
-        "| Healthy / Warning / Critical | {} / {} / {} |\n",
+        "| {l_overview_metric} | {l_overview_value} |\n|---|---:|\n",
+        l_overview_metric = tr(language, "report.overview.metric"),
+        l_overview_value = tr(language, "report.overview.value")
+    ));
+    out.push_str(&format!(
+        "| {l_overview_sessions} | {} |\n",
+        format_count(overview.total_sessions),
+        l_overview_sessions = tr(language, "report.overview.sessions")
+    ));
+    out.push_str(&format!(
+        "| {l_overview_healthy} / {l_overview_warning} / {l_overview_critical} | {} / {} / {} |\n",
         format_count(overview.healthy),
         format_count(overview.warning),
-        format_count(overview.critical)
+        format_count(overview.critical),
+        l_overview_healthy = tr(language, "report.overview.healthy"),
+        l_overview_warning = tr(language, "report.overview.warning"),
+        l_overview_critical = tr(language, "report.overview.critical")
     ));
     out.push_str(&format!(
-        "| Average health | {:.1} |\n",
-        number_obj(&summary, "avg_health")
+        "| {l_overview_average_health} | {:.1} |\n",
+        number_obj(&summary, "avg_health"),
+        l_overview_average_health = tr(language, "report.overview.average_health")
     ));
     out.push_str(&format!(
-        "| Health Trend | {} |\n",
-        markdown_cell(&trend.message)
+        "| {l_overview_health_trend} | {} |\n",
+        markdown_cell(&trend.message),
+        l_overview_health_trend = tr(language, "report.overview.health_trend")
     ));
     out.push_str(&format!(
-        "| Total estimated cost | {} |\n",
-        format_cost(overview.total_cost)
+        "| {l_overview_total_estimated_cost} | {} |\n",
+        format_cost(overview.total_cost),
+        l_overview_total_estimated_cost = tr(language, "report.overview.total_estimated_cost")
     ));
     out.push_str(&format!(
-        "| Total tokens | {} |\n",
-        format_tokens(number_obj(&summary, "total_tokens") as i64)
+        "| {l_overview_total_tokens} | {} |\n",
+        format_tokens(number_obj(&summary, "total_tokens") as i64),
+        l_overview_total_tokens = tr(language, "report.overview.total_tokens")
     ));
     out.push_str(&format!(
-        "| Tool failures | {:.0} / {:.0} ({:.1}%) |\n\n",
+        "| {l_overview_tool_failures} | {:.0} / {:.0} ({:.1}%) |\n\n",
         number_obj(&summary, "tool_failures"),
         number_obj(&summary, "tool_calls"),
-        number_obj(&summary, "tool_fail_rate")
+        number_obj(&summary, "tool_fail_rate"),
+        l_overview_tool_failures = tr(language, "report.overview.tool_failures")
     ));
 
     if authority.has_data {
-        out.push_str("## Tool authority\n\n");
-        out.push_str("| Metric | Value |\n|---|---:|\n");
+        out.push_str(&format!(
+            "## {l_overview_tool_authority}\n\n",
+            l_overview_tool_authority = tr(language, "report.overview.tool_authority")
+        ));
+        out.push_str(&format!(
+            "| {l_overview_metric} | {l_overview_value} |\n|---|---:|\n",
+            l_overview_metric = tr(language, "report.overview.metric"),
+            l_overview_value = tr(language, "report.overview.value")
+        ));
         if !authority.highest.is_empty() {
             out.push_str(&format!(
-                "| Highest category | `{}` |\n",
-                markdown_inline_code(&authority.highest)
+                "| {l_overview_highest_category} | `{}` |\n",
+                markdown_inline_code(&authority.highest),
+                l_overview_highest_category = tr(language, "report.overview.highest_category")
             ));
         }
         if !authority.high_tools.is_empty() {
             out.push_str(&format!(
-                "| High-authority tools | {} |\n",
-                report_markdown_code_list(&authority.top_high_tools())
+                "| {l_overview_high_authority_tools} | {} |\n",
+                report_markdown_code_list(&authority.top_high_tools()),
+                l_overview_high_authority_tools =
+                    tr(language, "report.overview.high_authority_tools")
             ));
         }
         if !authority.counts.is_empty() {
-            out.push_str("\n### Authority category counts\n\n");
-            out.push_str("| Authority category | Count |\n|---|---:|\n");
+            out.push_str(&format!(
+                "\n### {l_overview_authority_category_counts}\n\n",
+                l_overview_authority_category_counts =
+                    tr(language, "report.overview.authority_category_counts")
+            ));
+            out.push_str(&format!(
+                "| {l_overview_authority_category} | {l_overview_count} |\n|---|---:|\n",
+                l_overview_authority_category = tr(language, "report.overview.authority_category"),
+                l_overview_count = tr(language, "report.overview.count")
+            ));
             for item in &authority.counts {
                 out.push_str(&format!(
                     "| `{}` | {} |\n",
@@ -893,9 +1034,13 @@ pub fn report_overview_markdown(overview: &Overview, sessions: &[Session]) -> St
         }
     }
 
-    let cost_notes = overview_cost_driver_notes(&ordered, 6);
+    let cost_notes = overview_cost_driver_notes(&ordered, 6, language);
     if !cost_notes.is_empty() {
-        out.push_str("## Possible cost drivers\n\n");
+        out.push_str(&format!(
+            "## {l_overview_possible_cost_drivers}\n\n",
+            l_overview_possible_cost_drivers =
+                tr(language, "report.overview.possible_cost_drivers")
+        ));
         for note in cost_notes {
             out.push_str(&format!(
                 "- **{}**: {}\n",
@@ -906,12 +1051,18 @@ pub fn report_overview_markdown(overview: &Overview, sessions: &[Session]) -> St
         out.push('\n');
     }
 
-    out.push_str("## Incident timeline\n\n");
-    let timelines = overview_incident_timelines(&ordered, 6);
+    out.push_str(&format!(
+        "## {l_overview_incident_timeline}\n\n",
+        l_overview_incident_timeline = tr(language, "report.overview.incident_timeline")
+    ));
+    let timelines = overview_incident_timelines(&ordered, 6, language);
     if timelines.is_empty() {
-        out.push_str("No incident timeline evidence yet.\n\n");
+        out.push_str(&format!(
+            "{l_overview_no_incident_timeline}\n\n",
+            l_overview_no_incident_timeline = tr(language, "report.overview.no_incident_timeline")
+        ));
     } else {
-        out.push_str("| Session | Signal | Evidence | Severity |\n|---|---|---|---|\n");
+        out.push_str(&format!("| {l_overview_session} | {l_overview_signal} | {l_overview_evidence} | {l_overview_severity} |\n|---|---|---|---|\n", l_overview_session = tr(language, "report.overview.session"), l_overview_signal = tr(language, "report.overview.signal"), l_overview_evidence = tr(language, "report.overview.evidence"), l_overview_severity = tr(language, "report.overview.severity")));
         for timeline in timelines {
             for item in timeline.items {
                 out.push_str(&format!(
@@ -919,15 +1070,23 @@ pub fn report_overview_markdown(overview: &Overview, sessions: &[Session]) -> St
                     markdown_cell(&timeline.session),
                     markdown_cell(&item.label),
                     markdown_cell(&item.detail),
-                    markdown_cell(&severity_label(&item.severity))
+                    markdown_cell(&severity_label_for_language(&item.severity, language))
                 ));
             }
         }
         out.push('\n');
     }
 
-    out.push_str("## By agent\n\n");
-    out.push_str("| Agent | Sessions | Cost |\n|---|---:|---:|\n");
+    out.push_str(&format!(
+        "## {l_overview_by_agent}\n\n",
+        l_overview_by_agent = tr(language, "report.overview.by_agent")
+    ));
+    out.push_str(&format!(
+        "| {l_overview_agent} | {l_overview_sessions} | {l_overview_cost} |\n|---|---:|---:|\n",
+        l_overview_agent = tr(language, "report.overview.agent"),
+        l_overview_sessions = tr(language, "report.overview.sessions"),
+        l_overview_cost = tr(language, "report.overview.cost")
+    ));
     for (agent, group) in sorted_agent_groups(&overview.by_agent) {
         out.push_str(&format!(
             "| {} | {} | {} |\n",
@@ -937,9 +1096,12 @@ pub fn report_overview_markdown(overview: &Overview, sessions: &[Session]) -> St
         ));
     }
 
-    out.push_str("\n## Recent sessions\n\n");
+    out.push_str(&format!(
+        "\n## {l_overview_recent_sessions}\n\n",
+        l_overview_recent_sessions = tr(language, "report.overview.recent_sessions")
+    ));
     out.push_str(
-        "| Session | Source | Model | Health | Cost | Anomalies |\n|---|---|---|---:|---:|---:|\n",
+        &format!("| {l_overview_session} | {l_overview_source} | {l_overview_model} | {l_overview_health} | {l_overview_cost} | {l_overview_anomalies} |\n|---|---|---|---:|---:|---:|\n", l_overview_session = tr(language, "report.overview.session"), l_overview_source = tr(language, "report.overview.source"), l_overview_model = tr(language, "report.overview.model"), l_overview_health = tr(language, "report.overview.health"), l_overview_cost = tr(language, "report.overview.cost"), l_overview_anomalies = tr(language, "report.overview.anomalies")),
     );
     for session in ordered.iter().take(10) {
         out.push_str(&format!(
@@ -953,17 +1115,29 @@ pub fn report_overview_markdown(overview: &Overview, sessions: &[Session]) -> St
         ));
     }
 
-    out.push_str("\n## Recent anomalies\n\n");
+    out.push_str(&format!(
+        "\n## {l_overview_recent_anomalies}\n\n",
+        l_overview_recent_anomalies = tr(language, "report.overview.recent_anomalies")
+    ));
     if overview.anomalies_top.is_empty() {
-        out.push_str("No anomalies detected.\n");
+        out.push_str(&format!(
+            "{l_overview_no_anomalies_detected}\n",
+            l_overview_no_anomalies_detected =
+                tr(language, "report.overview.no_anomalies_detected")
+        ));
         return out;
     }
-    out.push_str("| Session | Type | Age |\n|---|---|---|\n");
+    out.push_str(&format!(
+        "| {l_overview_session} | {l_overview_type} | {l_overview_age} |\n|---|---|---|\n",
+        l_overview_session = tr(language, "report.overview.session"),
+        l_overview_type = tr(language, "report.overview.type"),
+        l_overview_age = tr(language, "report.overview.age")
+    ));
     for anomaly in overview.anomalies_top.iter().take(10) {
         out.push_str(&format!(
             "| {} | {} | {} |\n",
             markdown_cell(&anomaly.session),
-            markdown_cell(&anomaly_type_label(&anomaly.kind)),
+            markdown_cell(&anomaly_type_label_for_language(&anomaly.kind, language)),
             markdown_cell(&anomaly.age)
         ));
     }
@@ -971,10 +1145,18 @@ pub fn report_overview_markdown(overview: &Overview, sessions: &[Session]) -> St
 }
 
 pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String {
+    report_overview_html_with_language(overview, sessions, ReportLanguage::En)
+}
+
+pub fn report_overview_html_with_language(
+    overview: &Overview,
+    sessions: &[Session],
+    language: ReportLanguage,
+) -> String {
     let ordered = canonical_sessions(sessions);
     let summary = overview_summary(overview, &ordered);
     let authority = overview_authority_summary(&ordered);
-    let trend = analyze_health_trend(&ordered);
+    let trend = analyze_health_trend(&ordered, language);
     let agents = sorted_agent_groups(&overview.by_agent);
     let models = sorted_model_groups(&overview.by_model);
 
@@ -985,11 +1167,14 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
     };
 
     w("<!doctype html>".to_string());
-    w("<html lang=\"en\">".to_string());
+    w(format!("<html lang=\"{}\">", language.locale()));
     w("<head>".to_string());
     w("<meta charset=\"utf-8\">".to_string());
     w("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">".to_string());
-    w("<title>agenttrace overview</title>".to_string());
+    w(format!(
+        "<title>{l_overview_title}</title>",
+        l_overview_title = tr(language, "report.overview.title")
+    ));
     w("<link rel=\"icon\" href=\"data:,\">".to_string());
     w("<style>".to_string());
     w(":root{color-scheme:dark;--bg:#07090b;--panel:#101419;--line:#273039;--text:#f4f0dd;--muted:#a9a391;--green:#54ff00;--cyan:#00d8ff;--amber:#ffb000;--red:#ff4a4a}".to_string());
@@ -1003,49 +1188,53 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
     w("<body>".to_string());
     w("<main>".to_string());
     w("<header>".to_string());
-    w("<div><div class=\"brand\">agenttrace</div><h1>AI agent session overview</h1><p>Static report generated from local coding-agent traces.</p></div>".to_string());
+    w(format!("<div><div class=\"brand\">agenttrace</div><h1>{l_overview_html_heading}</h1><p>{l_overview_html_subtitle}</p></div>", l_overview_html_heading = tr(language, "report.overview.html_heading"), l_overview_html_subtitle = tr(language, "report.overview.html_subtitle")));
     w(format!(
-        "<div class=\"meta\">v{}<br>{} Sessions<br><code>agenttrace --overview -f html</code></div>",
+        "<div class=\"meta\">v{}<br>{} {l_overview_sessions}<br><code>agenttrace --overview -f html</code></div>",
         html_escape(VERSION),
         overview.total_sessions
-    ));
+    , l_overview_sessions = tr(language, "report.overview.sessions")));
     w("</header>".to_string());
     w("<div class=\"grid\" aria-label=\"summary metrics\">".to_string());
     w(format!(
-        "<div class=\"metric\"><span>Sessions</span><strong>{}</strong><p>{} Healthy / {} Warning / {} Critical</p></div>",
+        "<div class=\"metric\"><span>{l_overview_sessions}</span><strong>{}</strong><p>{} {l_overview_healthy} / {} {l_overview_warning} / {} {l_overview_critical}</p></div>",
         overview.total_sessions, overview.healthy, overview.warning, overview.critical
-    ));
+    , l_overview_sessions = tr(language, "report.overview.sessions"), l_overview_healthy = tr(language, "report.overview.healthy"), l_overview_warning = tr(language, "report.overview.warning"), l_overview_critical = tr(language, "report.overview.critical")));
     w(format!(
-        "<div class=\"metric\"><span>Total tokens</span><strong>{}</strong><p>+ live</p></div>",
+        "<div class=\"metric\"><span>{l_overview_total_tokens}</span><strong>{}</strong><p>+ live</p></div>",
         format_tokens(number_obj(&summary, "total_tokens") as i64)
-    ));
+    , l_overview_total_tokens = tr(language, "report.overview.total_tokens")));
     w(format!(
-        "<div class=\"metric\"><span>Average health</span><strong>{:.1}</strong><p>Fleet quality score</p></div>",
+        "<div class=\"metric\"><span>{l_overview_average_health}</span><strong>{:.1}</strong><p>{l_overview_fleet_quality_score}</p></div>",
         number_obj(&summary, "avg_health")
-    ));
+    , l_overview_average_health = tr(language, "report.overview.average_health"), l_overview_fleet_quality_score = tr(language, "report.overview.fleet_quality_score")));
     w(format!(
-        "<div class=\"metric\"><span>Total estimated cost</span><strong>{}</strong><p>Estimated session cost</p></div>",
+        "<div class=\"metric\"><span>{l_overview_total_estimated_cost}</span><strong>{}</strong><p>{l_overview_estimated_session_cost}</p></div>",
         format_cost(overview.total_cost)
-    ));
+    , l_overview_total_estimated_cost = tr(language, "report.overview.total_estimated_cost"), l_overview_estimated_session_cost = tr(language, "report.overview.estimated_session_cost")));
     w(format!(
-        "<div class=\"metric {}\"><span>Tool failures</span><strong>{:.0}/{:.0}</strong><p>{:.1}% failure rate</p></div>",
+        "<div class=\"metric {}\"><span>{l_overview_tool_failures}</span><strong>{:.0}/{:.0}</strong><p>{:.1}% {l_overview_failure_rate}</p></div>",
         html_escape(failure_class(number_obj(&summary, "tool_fail_rate"))),
         number_obj(&summary, "tool_failures"),
         number_obj(&summary, "tool_calls"),
         number_obj(&summary, "tool_fail_rate")
-    ));
+    , l_overview_tool_failures = tr(language, "report.overview.tool_failures"), l_overview_failure_rate = tr(language, "report.overview.failure_rate")));
     w("</div>".to_string());
 
     if authority.has_data {
-        w("<section><h2>Tool authority</h2>".to_string());
+        w(format!(
+            "<section><h2>{l_overview_tool_authority}</h2>",
+            l_overview_tool_authority = tr(language, "report.overview.tool_authority")
+        ));
         if !authority.highest.is_empty() {
             w(format!(
-                "<p><strong>Highest category</strong>: <code>{}</code></p>",
-                html_escape(&authority.highest)
+                "<p><strong>{l_overview_highest_category}</strong>: <code>{}</code></p>",
+                html_escape(&authority.highest),
+                l_overview_highest_category = tr(language, "report.overview.highest_category")
             ));
         }
         if !authority.counts.is_empty() {
-            w("<table><caption>Authority category counts</caption><thead><tr><th>Authority category</th><th class=\"num\">Count</th></tr></thead><tbody>".to_string());
+            w(format!("<table><caption>{l_overview_authority_category_counts}</caption><thead><tr><th>{l_overview_authority_category}</th><th class=\"num\">{l_overview_count}</th></tr></thead><tbody>", l_overview_authority_category_counts = tr(language, "report.overview.authority_category_counts"), l_overview_authority_category = tr(language, "report.overview.authority_category"), l_overview_count = tr(language, "report.overview.count")));
             for item in &authority.counts {
                 w(format!(
                     "<tr><td><code>{}</code></td><td class=\"num\">{}</td></tr>",
@@ -1057,16 +1246,18 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
         }
         if !authority.high_tools.is_empty() {
             w(format!(
-                "<p><strong>High-authority tools</strong>: {}</p>",
-                report_html_code_list(&authority.top_high_tools())
+                "<p><strong>{l_overview_high_authority_tools}</strong>: {}</p>",
+                report_html_code_list(&authority.top_high_tools()),
+                l_overview_high_authority_tools =
+                    tr(language, "report.overview.high_authority_tools")
             ));
         }
         w("</section>".to_string());
     }
 
-    let cost_notes = overview_cost_driver_notes(&ordered, 8);
+    let cost_notes = overview_cost_driver_notes(&ordered, 8, language);
     if !cost_notes.is_empty() {
-        w("<section><h2>Possible cost drivers</h2><table><thead><tr><th>Session</th><th>Evidence</th></tr></thead><tbody>".to_string());
+        w(format!("<section><h2>{l_overview_possible_cost_drivers}</h2><table><thead><tr><th>{l_overview_session}</th><th>{l_overview_evidence}</th></tr></thead><tbody>", l_overview_possible_cost_drivers = tr(language, "report.overview.possible_cost_drivers"), l_overview_session = tr(language, "report.overview.session"), l_overview_evidence = tr(language, "report.overview.evidence")));
         for note in cost_notes {
             w(format!(
                 "<tr><td>{}</td><td>{}</td></tr>",
@@ -1078,17 +1269,24 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
     }
     if ordered.len() > 1 {
         w(format!(
-            "<section><h2>Health Trend</h2><p>{}</p></section>",
-            html_escape(&trend.message)
+            "<section><h2>{l_overview_health_trend}</h2><p>{}</p></section>",
+            html_escape(&trend.message),
+            l_overview_health_trend = tr(language, "report.overview.health_trend")
         ));
     }
 
-    w("<section><h2>Incident timeline</h2>".to_string());
-    let timelines = overview_incident_timelines(&ordered, 8);
+    w(format!(
+        "<section><h2>{l_overview_incident_timeline}</h2>",
+        l_overview_incident_timeline = tr(language, "report.overview.incident_timeline")
+    ));
+    let timelines = overview_incident_timelines(&ordered, 8, language);
     if timelines.is_empty() {
-        w("<p>No incident timeline evidence yet.</p>".to_string());
+        w(format!(
+            "<p>{l_overview_no_incident_timeline}</p>",
+            l_overview_no_incident_timeline = tr(language, "report.overview.no_incident_timeline")
+        ));
     } else {
-        w("<table><thead><tr><th>Session</th><th>Signal</th><th>Evidence</th><th>Severity</th></tr></thead><tbody>".to_string());
+        w(format!("<table><thead><tr><th>{l_overview_session}</th><th>{l_overview_signal}</th><th>{l_overview_evidence}</th><th>{l_overview_severity}</th></tr></thead><tbody>", l_overview_session = tr(language, "report.overview.session"), l_overview_signal = tr(language, "report.overview.signal"), l_overview_evidence = tr(language, "report.overview.evidence"), l_overview_severity = tr(language, "report.overview.severity")));
         for timeline in timelines {
             for item in timeline.items {
                 w(format!(
@@ -1096,7 +1294,7 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
                     html_escape(&timeline.session),
                     html_escape(&item.label),
                     html_escape(&item.detail),
-                    html_escape(&severity_label(&item.severity))
+                    html_escape(&severity_label_for_language(&item.severity, language))
                 ));
             }
         }
@@ -1104,7 +1302,7 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
     }
     w("</section>".to_string());
 
-    w("<section><h2>Recent sessions</h2><table><thead><tr><th>Session</th><th>Source</th><th>Model</th><th class=\"num\">Total tokens</th><th class=\"num\">Cost</th><th class=\"num\">Health</th><th class=\"num\">Anomalies</th></tr></thead><tbody>".to_string());
+    w(format!("<section><h2>{l_overview_recent_sessions}</h2><table><thead><tr><th>{l_overview_session}</th><th>{l_overview_source}</th><th>{l_overview_model}</th><th class=\"num\">{l_overview_total_tokens}</th><th class=\"num\">{l_overview_cost}</th><th class=\"num\">{l_overview_health}</th><th class=\"num\">{l_overview_anomalies}</th></tr></thead><tbody>", l_overview_recent_sessions = tr(language, "report.overview.recent_sessions"), l_overview_session = tr(language, "report.overview.session"), l_overview_source = tr(language, "report.overview.source"), l_overview_model = tr(language, "report.overview.model"), l_overview_total_tokens = tr(language, "report.overview.total_tokens"), l_overview_cost = tr(language, "report.overview.cost"), l_overview_health = tr(language, "report.overview.health"), l_overview_anomalies = tr(language, "report.overview.anomalies")));
     for session in ordered.iter().take(20) {
         w(format!(
             "<tr><td>{}</td><td>{}</td><td>{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td class=\"num {}\">{}</td><td class=\"num\">{}</td></tr>",
@@ -1120,7 +1318,7 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
     }
     w("</tbody></table></section>".to_string());
 
-    w("<section><h2>By agent</h2><table><thead><tr><th>Agent</th><th class=\"num\">Sessions</th><th class=\"num\">Cost</th></tr></thead><tbody>".to_string());
+    w(format!("<section><h2>{l_overview_by_agent}</h2><table><thead><tr><th>{l_overview_agent}</th><th class=\"num\">{l_overview_sessions}</th><th class=\"num\">{l_overview_cost}</th></tr></thead><tbody>", l_overview_by_agent = tr(language, "report.overview.by_agent"), l_overview_agent = tr(language, "report.overview.agent"), l_overview_sessions = tr(language, "report.overview.sessions"), l_overview_cost = tr(language, "report.overview.cost")));
     for (agent, group) in agents {
         w(format!(
             "<tr><td>{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td></tr>",
@@ -1131,7 +1329,7 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
     }
     w("</tbody></table></section>".to_string());
 
-    w("<section><h2>By model</h2><table><thead><tr><th>Model</th><th class=\"num\">Sessions</th><th class=\"num\">Cost</th></tr></thead><tbody>".to_string());
+    w(format!("<section><h2>{l_overview_by_model}</h2><table><thead><tr><th>{l_overview_model}</th><th class=\"num\">{l_overview_sessions}</th><th class=\"num\">{l_overview_cost}</th></tr></thead><tbody>", l_overview_by_model = tr(language, "report.overview.by_model"), l_overview_model = tr(language, "report.overview.model"), l_overview_sessions = tr(language, "report.overview.sessions"), l_overview_cost = tr(language, "report.overview.cost")));
     for (model, group) in models.iter().take(12) {
         w(format!(
             "<tr><td>{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td></tr>",
@@ -1142,19 +1340,28 @@ pub fn report_overview_html(overview: &Overview, sessions: &[Session]) -> String
     }
     w("</tbody></table></section>".to_string());
 
-    w("<section><h2>Recent anomalies</h2>".to_string());
+    w(format!(
+        "<section><h2>{l_overview_recent_anomalies}</h2>",
+        l_overview_recent_anomalies = tr(language, "report.overview.recent_anomalies")
+    ));
     if overview.anomalies_top.is_empty() {
-        w("<p>No anomalies detected.</p>".to_string());
+        w(format!(
+            "<p>{l_overview_no_anomalies_detected}</p>",
+            l_overview_no_anomalies_detected =
+                tr(language, "report.overview.no_anomalies_detected")
+        ));
     } else {
-        w(
-            "<table><thead><tr><th>Session</th><th>Type</th><th>Age</th></tr></thead><tbody>"
-                .to_string(),
-        );
+        w(format!(
+            "<table><thead><tr><th>{}</th><th>{}</th><th>{}</th></tr></thead><tbody>",
+            tr(language, "report.overview.session"),
+            tr(language, "report.overview.type"),
+            tr(language, "report.overview.age")
+        ));
         for anomaly in overview.anomalies_top.iter().take(20) {
             w(format!(
                 "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
                 html_escape(&anomaly.session),
-                html_escape(&anomaly_type_label(&anomaly.kind)),
+                html_escape(&anomaly_type_label_for_language(&anomaly.kind, language)),
                 html_escape(&anomaly.age)
             ));
         }
@@ -1314,10 +1521,6 @@ fn anomaly_emoji(severity: &str) -> &'static str {
     }
 }
 
-fn severity_label(severity: &str) -> String {
-    severity_label_for_language(severity, ReportLanguage::En)
-}
-
 fn severity_label_for_language(severity: &str, language: ReportLanguage) -> String {
     match severity.to_ascii_lowercase().as_str() {
         "critical" => tr(language, "report.critical").to_string(),
@@ -1328,31 +1531,15 @@ fn severity_label_for_language(severity: &str, language: ReportLanguage) -> Stri
     }
 }
 
-fn anomaly_type_label(kind: &str) -> String {
-    anomaly_type_label_for_language(kind, ReportLanguage::En)
-}
-
 fn anomaly_type_label_for_language(kind: &str, language: ReportLanguage) -> String {
-    if language == ReportLanguage::Zh {
-        return match kind {
-            "hanging" => "卡顿".to_string(),
-            "latency" => "延迟".to_string(),
-            "tool_failures" => "工具失败".to_string(),
-            "shallow_thinking" => "推理过浅".to_string(),
-            "redacted" | "redaction" => "推理脱敏".to_string(),
-            "no_tools" => "未使用工具".to_string(),
-            other => other.replace('_', " "),
-        };
-    }
-    match kind {
-        "hanging" => "hanging".to_string(),
-        "latency" => "latency".to_string(),
-        "tool_failures" => "tool failures".to_string(),
-        "shallow_thinking" => "shallow thinking".to_string(),
-        "redacted" | "redaction" => "redacted thinking".to_string(),
-        "no_tools" => "no tools".to_string(),
-        other => other.replace('_', " "),
-    }
+    let key = if kind == "redacted" {
+        "redaction"
+    } else {
+        kind
+    };
+    Message::new(&format!("report.anomaly_type.{key}"))
+        .render(language)
+        .unwrap_or_else(|| kind.replace('_', " "))
 }
 
 pub(crate) fn json_string(value: &str) -> String {
@@ -1464,7 +1651,7 @@ fn overview_summary(overview: &Overview, sessions: &[Session]) -> Value {
     let anomalies_total = overview.anomalies_top.len();
     let authority_counts = authority_counts(sessions);
     let highest = highest_authority(sessions);
-    let trend = analyze_health_trend_full(sessions);
+    let trend = analyze_health_trend_full(sessions, ReportLanguage::En);
     json!({
         "total_sessions": overview.total_sessions,
         "healthy": overview.healthy,
@@ -1583,8 +1770,8 @@ fn report_file_surface(value: &str) -> String {
         .unwrap_or_else(|| value.to_string())
 }
 
-fn incident_timelines(sessions: &[Session]) -> Vec<Value> {
-    overview_incident_timelines(sessions, 10)
+fn incident_timelines(sessions: &[Session], language: ReportLanguage) -> Vec<Value> {
+    overview_incident_timelines(sessions, 10, language)
         .into_iter()
         .map(|timeline| {
             json!({
@@ -1905,13 +2092,17 @@ fn overview_authority_summary(sessions: &[Session]) -> OverviewAuthority {
     }
 }
 
-fn overview_cost_driver_notes(sessions: &[Session], limit: usize) -> Vec<CostDriverNote> {
+fn overview_cost_driver_notes(
+    sessions: &[Session],
+    limit: usize,
+    language: ReportLanguage,
+) -> Vec<CostDriverNote> {
     if limit == 0 {
         return Vec::new();
     }
     let mut notes = Vec::new();
     for session in sessions {
-        if let Some(note) = possible_cost_driver_note_strict(session) {
+        if let Some(note) = possible_cost_driver_note_strict(session, language) {
             notes.push(CostDriverNote {
                 session: session.name.clone(),
                 note,
@@ -1924,19 +2115,19 @@ fn overview_cost_driver_notes(sessions: &[Session], limit: usize) -> Vec<CostDri
     notes
 }
 
-fn analyze_health_trend(sessions: &[Session]) -> HealthTrend {
+fn analyze_health_trend(sessions: &[Session], language: ReportLanguage) -> HealthTrend {
     HealthTrend {
-        message: analyze_health_trend_full(sessions).message,
+        message: analyze_health_trend_full(sessions, language).message,
     }
 }
 
-fn analyze_health_trend_full(sessions: &[Session]) -> FullHealthTrend {
+fn analyze_health_trend_full(sessions: &[Session], language: ReportLanguage) -> FullHealthTrend {
     if sessions.is_empty() {
         return FullHealthTrend {
             direction: String::new(),
             regressing: false,
             avg_health: 0.0,
-            message: "No session data available".to_string(),
+            message: tr(language, "report.trend.no_data").to_string(),
             points: Vec::new(),
         };
     }
@@ -2019,14 +2210,15 @@ fn analyze_health_trend_full(sessions: &[Session]) -> FullHealthTrend {
     };
 
     let message = if regressing {
-        format!("Declining: {}", last3_values.join("→"))
+        Message::new("report.trend.declining").arg("values", last3_values.join("→"))
     } else if direction == "down" && last3_values.len() >= 2 {
-        format!("Declining: {endpoint}")
+        Message::new("report.trend.declining").arg("values", endpoint)
     } else if direction == "up" && last3_values.len() >= 2 {
-        format!("Improving: {endpoint}")
+        Message::new("report.trend.improving").arg("values", endpoint)
     } else {
-        format!("Health score stable at {avg_health:.0}")
-    };
+        Message::new("report.trend.stable").arg("avg", format!("{avg_health:.0}"))
+    }
+    .render_or(language, "");
 
     FullHealthTrend {
         direction: direction.to_string(),
@@ -2037,13 +2229,17 @@ fn analyze_health_trend_full(sessions: &[Session]) -> FullHealthTrend {
     }
 }
 
-fn overview_incident_timelines(sessions: &[Session], limit: usize) -> Vec<IncidentTimelineSummary> {
+fn overview_incident_timelines(
+    sessions: &[Session],
+    limit: usize,
+    language: ReportLanguage,
+) -> Vec<IncidentTimelineSummary> {
     if limit == 0 {
         return Vec::new();
     }
     let mut items = Vec::new();
     for session in sessions {
-        let timeline = build_incident_timeline(session);
+        let timeline = build_incident_timeline(session, language);
         if timeline.items.is_empty() {
             continue;
         }
@@ -2055,7 +2251,7 @@ fn overview_incident_timelines(sessions: &[Session], limit: usize) -> Vec<Incide
     items
 }
 
-fn build_incident_timeline(session: &Session) -> IncidentTimelineSummary {
+fn build_incident_timeline(session: &Session, language: ReportLanguage) -> IncidentTimelineSummary {
     let metrics = &session.metrics;
     let mut items = Vec::new();
     let mut add = |kind: &str, label: &str, detail: String, severity: &str| {
@@ -2074,12 +2270,11 @@ fn build_incident_timeline(session: &Session) -> IncidentTimelineSummary {
     if metrics.assistant_turns > 0 {
         add(
             "milestone",
-            "Last milestone",
-            format!(
-                "{} assistant turn(s) completed over {}",
-                metrics.assistant_turns,
-                fmt_duration(metrics.duration_sec)
-            ),
+            tr(language, "report.timeline.last_milestone"),
+            Message::new("report.timeline.milestone_detail")
+                .arg("turns", metrics.assistant_turns)
+                .arg("duration", fmt_duration(metrics.duration_sec))
+                .render_or(language, ""),
             "low",
         );
     }
@@ -2095,8 +2290,10 @@ fn build_incident_timeline(session: &Session) -> IncidentTimelineSummary {
             };
             add(
                 "idle_gap",
-                "Longest idle gap",
-                format!("{gap:.1}s gap between recorded events"),
+                tr(language, "report.timeline.longest_idle_gap"),
+                Message::new("report.timeline.idle_gap_detail")
+                    .arg("gap", format!("{gap:.1}"))
+                    .render_or(language, ""),
                 severity,
             );
         }
@@ -2108,11 +2305,12 @@ fn build_incident_timeline(session: &Session) -> IncidentTimelineSummary {
         let severity = if fail_rate >= 30.0 { "high" } else { "medium" };
         add(
             "failure_loop",
-            "Failure loop",
-            format!(
-                "{} failed tool result(s) out of {} ({fail_rate:.1}%)",
-                metrics.tool_calls_fail, total_tools
-            ),
+            tr(language, "report.timeline.failure_loop"),
+            Message::new("report.timeline.failure_loop_detail")
+                .arg("failed", metrics.tool_calls_fail)
+                .arg("total", total_tools)
+                .arg("pct", format!("{fail_rate:.1}"))
+                .render_or(language, ""),
             severity,
         );
     }
@@ -2121,14 +2319,13 @@ fn build_incident_timeline(session: &Session) -> IncidentTimelineSummary {
         if let Some((tool, count)) = top_incident_tool(&metrics.tool_usage) {
             add(
                 "touched_surface",
-                "Touched surface",
-                format!(
-                    "{} unique tool(s), {} total calls; top tool {} x{}",
-                    metrics.tool_usage.len(),
-                    total_tools,
-                    incident_safe_name(&tool),
-                    count
-                ),
+                tr(language, "report.timeline.touched_surface"),
+                Message::new("report.timeline.touched_surface_detail")
+                    .arg("unique", metrics.tool_usage.len())
+                    .arg("total", total_tools)
+                    .arg("tool", incident_safe_name(&tool))
+                    .arg("count", count)
+                    .render_or(language, ""),
                 "low",
             );
         }
@@ -2140,12 +2337,11 @@ fn build_incident_timeline(session: &Session) -> IncidentTimelineSummary {
         if tokens_per_turn >= 10000 {
             add(
                 "burn_divergence",
-                "Burn divergence",
-                format!(
-                    "{} tokens per assistant turn across {} turn(s)",
-                    format_tokens(tokens_per_turn),
-                    metrics.assistant_turns
-                ),
+                tr(language, "report.timeline.burn_divergence"),
+                Message::new("report.timeline.burn_divergence_detail")
+                    .arg("tokens", format_tokens(tokens_per_turn))
+                    .arg("turns", metrics.assistant_turns)
+                    .render_or(language, ""),
                 "medium",
             );
         }
@@ -2399,26 +2595,30 @@ fn report_markdown_code_list(values: &[String]) -> String {
         .join(", ")
 }
 
-fn possible_cost_driver_note_strict(session: &Session) -> Option<String> {
+fn possible_cost_driver_note_strict(session: &Session, language: ReportLanguage) -> Option<String> {
     let metrics = &session.metrics;
     let total_tools = metrics.tool_calls_ok + metrics.tool_calls_fail;
     if total_tools > 0 {
         let fail_rate = metrics.tool_calls_fail as f64 / total_tools as f64 * 100.0;
         if fail_rate >= 25.0 {
-            return Some(format!(
-                "possible driver: {}/{} failed tool result(s) ({fail_rate:.1}%)",
-                metrics.tool_calls_fail, total_tools
-            ));
+            return Some(
+                Message::new("report.cost_driver.failures")
+                    .arg("failed", metrics.tool_calls_fail)
+                    .arg("total", total_tools)
+                    .arg("pct", format!("{fail_rate:.1}"))
+                    .render_or(language, ""),
+            );
         }
     }
     if metrics.assistant_turns > 0 {
         let tokens_per_turn = total_tokens(session) / metrics.assistant_turns as i64;
         if tokens_per_turn >= 50000 {
-            return Some(format!(
-                "possible driver: {} tokens per assistant turn across {} turn(s)",
-                format_tokens(tokens_per_turn),
-                metrics.assistant_turns
-            ));
+            return Some(
+                Message::new("report.cost_driver.tokens")
+                    .arg("tokens", format_tokens(tokens_per_turn))
+                    .arg("turns", metrics.assistant_turns)
+                    .render_or(language, ""),
+            );
         }
     }
     None

@@ -1,19 +1,21 @@
+use agenttrace_core::tr;
 use agenttrace_core::{
-    add_baseline_comparison, average_health, compute_overview, context_trends, cost_audit,
-    data_health, delivery_evidence_with_git, demo_sessions, evaluate_overview_gate,
-    filter_sessions, fix_suggestions, inspect_first, load_sessions_with_options, mcp_governance,
-    parse_file, predict_cost_anomaly, pricing_cache_path, recommendations, render_doctor_report,
+    add_baseline_comparison, average_health, compute_overview, context_trends_with_language,
+    cost_audit_with_language, data_health, delivery_evidence_with_git_and_language, demo_sessions,
+    evaluate_overview_gate, filter_sessions, fix_suggestions, inspect_first,
+    load_sessions_with_options, mcp_governance_with_language, parse_file, predict_cost_anomaly,
+    pricing_cache_path, recommendations_with_language, render_doctor_report_with_language,
     render_model_pricing_list, render_test_match, render_waste_report_with_language,
     report_compare_json, report_json_with_language, report_overview_html_with_context,
     report_overview_json_with_context, report_overview_markdown_with_context,
-    report_overview_text_with_context, report_search_json, report_search_text,
+    report_overview_text_with_context, report_search_json, report_search_text_with_language,
     report_text_with_language, search_sessions, session_capability, tool_fail_rate, total_tokens,
-    update_pricing, BaselineThresholds, LoadOptions, LoadReport, ReportLanguage, Session,
+    update_pricing, BaselineThresholds, LoadOptions, LoadReport, Message, ReportLanguage, Session,
     TimeRange, VERSION,
 };
 use anyhow::{bail, Context};
 use chrono::Utc;
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches, Parser};
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
@@ -22,7 +24,6 @@ use std::time::SystemTime;
 
 #[derive(Debug, Parser)]
 #[command(name = "agenttrace")]
-#[command(about = "TUI observability for AI coding agent sessions")]
 struct Args {
     path: Option<String>,
     #[arg(
@@ -92,8 +93,8 @@ struct Args {
     baseline_max_cost_delta_pct: f64,
     #[arg(long = "baseline-max-token-delta-pct", default_value_t = 0.0)]
     baseline_max_token_delta_pct: f64,
-    #[arg(long = "lang", default_value = "en")]
-    lang: String,
+    #[arg(long = "lang", value_parser = parse_lang_arg)]
+    lang: Option<ReportLanguage>,
     #[arg(long, default_value = "all")]
     range: String,
     #[arg(long, default_value = "")]
@@ -124,15 +125,108 @@ struct Args {
     include_history: bool,
 }
 
+const HELP_KEYS: &[(&str, &str)] = &[
+    ("path", "cli.help.path"),
+    ("format", "cli.help.format"),
+    ("dir", "cli.help.dir"),
+    ("compare", "cli.help.compare"),
+    ("audit", "cli.help.audit"),
+    ("recommend", "cli.help.recommend"),
+    ("mcp_governance", "cli.help.mcp_governance"),
+    ("context_trends", "cli.help.context_trends"),
+    ("delivery_evidence", "cli.help.delivery_evidence"),
+    ("overview", "cli.help.overview"),
+    ("sessions", "cli.help.sessions"),
+    ("diagnostics", "cli.help.diagnostics"),
+    ("inspect", "cli.help.inspect"),
+    ("model", "cli.help.model"),
+    ("output", "cli.help.output"),
+    ("latest", "cli.help.latest"),
+    ("waste", "cli.help.waste"),
+    ("list_models", "cli.help.list_models"),
+    ("update_pricing", "cli.help.update_pricing"),
+    ("test_match", "cli.help.test_match"),
+    ("version", "cli.help.version"),
+    ("demo", "cli.help.demo"),
+    ("doctor", "cli.help.doctor"),
+    ("search", "cli.help.search"),
+    ("search_limit", "cli.help.search_limit"),
+    ("fail_under_health", "cli.help.fail_under_health"),
+    ("fail_on_critical", "cli.help.fail_on_critical"),
+    ("max_tool_fail_rate", "cli.help.max_tool_fail_rate"),
+    ("baseline", "cli.help.baseline"),
+    (
+        "baseline_max_duration_delta_pct",
+        "cli.help.baseline_duration",
+    ),
+    ("baseline_max_cost_delta_pct", "cli.help.baseline_cost"),
+    ("baseline_max_token_delta_pct", "cli.help.baseline_tokens"),
+    ("lang", "cli.help.lang"),
+    ("range", "cli.help.range"),
+    ("project", "cli.help.project"),
+    ("source", "cli.help.source"),
+    ("model_filter", "cli.help.model_filter"),
+    ("query", "cli.help.query"),
+    ("health", "cli.help.health"),
+    ("cost", "cli.help.cost"),
+    ("anomaly", "cli.help.anomaly"),
+    ("sort", "cli.help.sort"),
+    ("order", "cli.help.order"),
+    ("limit", "cli.help.limit"),
+    ("clear_cache", "cli.help.clear_cache"),
+    ("preserve_history", "cli.help.preserve_history"),
+    ("include_history", "cli.help.include_history"),
+];
+
+fn parse_lang_arg(value: &str) -> Result<ReportLanguage, String> {
+    ReportLanguage::parse(value).ok_or_else(|| {
+        Message::new("cli.err.invalid_lang")
+            .arg("value", value)
+            .render_or(ReportLanguage::En, "")
+    })
+}
+
+/// Language requested on the command line, read before clap parses so help and parse
+/// errors can be localized too. Invalid values are left for clap to reject.
+fn requested_language(args: &[OsString]) -> ReportLanguage {
+    let mut iter = args.iter().map(|arg| arg.to_string_lossy());
+    while let Some(arg) = iter.next() {
+        let value = match arg.strip_prefix("--lang=") {
+            Some(value) => Some(value.to_string()),
+            None if arg == "--lang" => iter.next().map(|value| value.to_string()),
+            None => None,
+        };
+        if let Some(language) = value.as_deref().and_then(ReportLanguage::parse) {
+            return language;
+        }
+    }
+    ReportLanguage::En
+}
+
+fn localized_command(language: ReportLanguage) -> clap::Command {
+    let mut command = Args::command().about(tr(language, "cli.about"));
+    for (id, key) in HELP_KEYS {
+        command = command.mut_arg(*id, |arg| arg.help(tr(language, key)));
+    }
+    command
+}
+
+fn language_of(args: &Args) -> ReportLanguage {
+    args.lang.unwrap_or_default()
+}
+
 fn main() {
-    if let Err(err) = run() {
-        eprintln!("Error: {err}");
+    let argv = go_flag_compatible_args(std::env::args_os());
+    let language = requested_language(&argv);
+    if let Err(err) = run(argv, language) {
+        eprintln!("{}: {err}", tr(language, "cli.err.prefix"));
         std::process::exit(1);
     }
 }
 
-fn run() -> anyhow::Result<()> {
-    let args = Args::parse_from(go_flag_compatible_args(std::env::args_os()));
+fn run(argv: Vec<OsString>, language: ReportLanguage) -> anyhow::Result<()> {
+    let matches = localized_command(language).get_matches_from(argv);
+    let args = Args::from_arg_matches(&matches).unwrap_or_else(|error| error.exit());
     validate_primary_action(&args)?;
     validate_gate_thresholds(&args)?;
     if matches!(args.format.as_str(), "markdown" | "md" | "html")
@@ -143,9 +237,8 @@ fn run() -> anyhow::Result<()> {
             || args.context_trends
             || args.delivery_evidence)
     {
-        bail!("markdown and html formats require --overview or a governance report action");
+        bail!("{}", tr(language, "cli.err.format_requires_report"));
     }
-    let language = report_language(&args.lang);
 
     if args.version {
         write_stdout(&format!("agenttrace v{}\n", VERSION))?;
@@ -154,19 +247,29 @@ fn run() -> anyhow::Result<()> {
 
     if args.clear_cache {
         agenttrace_core::clear_session_cache()?;
-        write_stdout("Session cache cleared.\n")?;
+        write_stdout(&format!("{}\n", tr(language, "cli.msg.cache_cleared")))?;
         if !has_session_action(&args) {
             return Ok(());
         }
     }
 
     if args.update_pricing {
-        write_stdout("Downloading pricing from LiteLLM...\n")?;
-        let count = update_pricing()?;
-        write_stdout(&format!("Loaded {count} model prices\n"))?;
         write_stdout(&format!(
-            "Cache saved: {}\n",
-            pricing_cache_path().display()
+            "{}\n",
+            tr(language, "cli.msg.downloading_pricing")
+        ))?;
+        let count = update_pricing()?;
+        write_stdout(&format!(
+            "{}\n",
+            Message::new("cli.msg.loaded_prices")
+                .arg("count", count)
+                .render_or(language, "")
+        ))?;
+        write_stdout(&format!(
+            "{}\n",
+            Message::new("cli.msg.cache_saved")
+                .arg("path", pricing_cache_path().display())
+                .render_or(language, "")
         ))?;
         if !has_post_pricing_action(&args) {
             return Ok(());
@@ -180,7 +283,12 @@ fn run() -> anyhow::Result<()> {
 
     if args.doctor {
         let doctor_dir = args.dir.as_deref().map(PathBuf::from);
-        let out = render_doctor_report(doctor_dir.as_deref(), args.demo, &args.format)?;
+        let out = render_doctor_report_with_language(
+            doctor_dir.as_deref(),
+            args.demo,
+            &args.format,
+            language,
+        )?;
         write_output(&args.output, &out)?;
         write_stdout(&out)?;
         return Ok(());
@@ -198,11 +306,11 @@ fn run() -> anyhow::Result<()> {
         }
         return agenttrace_tui::run_with_language(
             args.dir.as_deref().unwrap_or(""),
-            Some(&args.lang),
+            args.lang.map(ReportLanguage::locale),
         );
     }
     if args.baseline.is_some() && !args.overview {
-        bail!("--baseline requires --overview -f json");
+        bail!("{}", tr(language, "cli.err.baseline_requires_overview"));
     }
 
     if args.audit
@@ -216,18 +324,18 @@ fn run() -> anyhow::Result<()> {
             .take(args.limit)
             .collect::<Vec<_>>();
         if sessions.is_empty() {
-            bail!("No sessions match the requested filters");
+            bail!("{}", tr(language, "cli.err.no_match"));
         }
         let value = if args.audit {
-            serde_json::to_value(cost_audit(&sessions))?
+            serde_json::to_value(cost_audit_with_language(&sessions, language))?
         } else if args.recommend {
-            serde_json::to_value(recommendations(&sessions))?
+            serde_json::to_value(recommendations_with_language(&sessions, language))?
         } else if args.mcp_governance {
-            serde_json::to_value(mcp_governance(&sessions))?
+            serde_json::to_value(mcp_governance_with_language(&sessions, language))?
         } else if args.context_trends {
-            serde_json::to_value(context_trends(&sessions))?
+            serde_json::to_value(context_trends_with_language(&sessions, language))?
         } else {
-            serde_json::to_value(delivery_evidence_with_git(&sessions))?
+            serde_json::to_value(delivery_evidence_with_git_and_language(&sessions, language))?
         };
         let out = render_governance_report(&value, &args.format)?;
         write_output(&args.output, &(out.clone() + "\n"))?;
@@ -239,7 +347,7 @@ fn run() -> anyhow::Result<()> {
         let sessions = prepare_cli_view(load_sessions(&args)?, &args)?;
         let sessions = sessions.into_iter().take(args.limit).collect::<Vec<_>>();
         if sessions.is_empty() {
-            bail!("No sessions match the requested filters");
+            bail!("{}", tr(language, "cli.err.no_match"));
         }
         let out = if args.format == "json" {
             report_compare_json(&sessions)
@@ -254,7 +362,7 @@ fn run() -> anyhow::Result<()> {
     if args.waste {
         let sessions = prepare_cli_view(load_sessions(&args)?, &args)?;
         let session =
-            latest_session(&sessions).context("No sessions match the requested filters")?;
+            latest_session(&sessions).with_context(|| tr(language, "cli.err.no_match"))?;
         let out = render_waste_report_with_language(session, language);
         write_output(&args.output, &(out.clone() + "\n"))?;
         write_stdout(&out)?;
@@ -268,7 +376,7 @@ fn run() -> anyhow::Result<()> {
     {
         let sessions = prepare_cli_view(load_sessions(&args)?, &args)?;
         let session =
-            latest_session(&sessions).context("No sessions match the requested filters")?;
+            latest_session(&sessions).with_context(|| tr(language, "cli.err.no_match"))?;
         let out = match args.format.as_str() {
             "json" => report_json_with_language(session, language),
             _ => report_text_with_language(session, language),
@@ -281,7 +389,7 @@ fn run() -> anyhow::Result<()> {
     let (sessions, load_report) = load_sessions_report(&args)?;
     let sessions = prepare_cli_view(sessions, &args)?;
     if sessions.is_empty() {
-        bail!("No sessions match the requested filters");
+        bail!("{}", tr(language, "cli.err.no_match"));
     }
 
     if args.sessions || args.diagnostics || args.inspect.is_some() {
@@ -293,12 +401,12 @@ fn run() -> anyhow::Result<()> {
         }
         let session = if let Some(rank) = args.inspect {
             if rank == 0 {
-                bail!("--inspect rank starts at 1");
+                bail!("{}", tr(language, "cli.err.inspect_starts_at_one"));
             }
             let item = inspect_first(&sessions)
                 .get(rank - 1)
                 .cloned()
-                .context("inspect rank exceeds available priority sessions")?;
+                .with_context(|| tr(language, "cli.err.inspect_out_of_range"))?;
             &sessions[item.index]
         } else if args.latest {
             latest_session(&sessions).expect("sessions checked non-empty")
@@ -316,7 +424,7 @@ fn run() -> anyhow::Result<()> {
         let out = if args.format == "json" {
             report_search_json(&results)
         } else {
-            report_search_text(&results, query)
+            report_search_text_with_language(&results, query, language)
         };
         write_output(&args.output, &(out.clone() + "\n"))?;
         write_stdout(&out)?;
@@ -341,6 +449,7 @@ fn run() -> anyhow::Result<()> {
                 Some(&health),
                 range,
                 args.include_history,
+                language,
             ),
             "markdown" | "md" => report_overview_markdown_with_context(
                 &overview,
@@ -348,6 +457,7 @@ fn run() -> anyhow::Result<()> {
                 &health,
                 range,
                 args.include_history,
+                language,
             ),
             "html" => report_overview_html_with_context(
                 &overview,
@@ -355,6 +465,7 @@ fn run() -> anyhow::Result<()> {
                 &health,
                 range,
                 args.include_history,
+                language,
             ),
             _ => report_overview_text_with_context(
                 &overview,
@@ -362,11 +473,12 @@ fn run() -> anyhow::Result<()> {
                 &health,
                 range,
                 args.include_history,
+                language,
             ),
         };
         if let Some(baseline) = args.baseline.as_deref() {
             if args.format != "json" {
-                bail!("--baseline requires --overview -f json");
+                bail!("{}", tr(language, "cli.err.baseline_requires_overview"));
             }
             out = add_baseline_comparison(
                 &out,
@@ -389,19 +501,35 @@ fn run() -> anyhow::Result<()> {
         );
         if !failures.is_empty() {
             for failure in failures {
-                eprintln!("Gate failed: {failure}");
+                eprintln!("{}: {failure}", tr(language, "cli.gate.failed"));
             }
-            eprintln!("Local evidence:");
-            eprintln!("- avg health: {:.1}", average_health(&sessions));
-            eprintln!("- critical sessions: {}", overview.critical);
-            eprintln!("- tool fail rate: {:.1}%", tool_fail_rate(&sessions));
+            eprintln!("{}", tr(language, "cli.gate.local_evidence"));
+            eprintln!(
+                "- {}: {:.1}",
+                tr(language, "cli.gate.avg_health"),
+                average_health(&sessions)
+            );
+            eprintln!(
+                "- {}: {}",
+                tr(language, "cli.gate.critical_sessions"),
+                overview.critical
+            );
+            eprintln!(
+                "- {}: {:.1}%",
+                tr(language, "cli.gate.tool_fail_rate"),
+                tool_fail_rate(&sessions)
+            );
             if let Some(session) = sessions.iter().min_by(|left, right| {
                 left.health
                     .cmp(&right.health)
                     .then_with(|| left.path.cmp(&right.path))
                     .then_with(|| left.name.cmp(&right.name))
             }) {
-                eprintln!("- lowest-health session: {}", session.path);
+                eprintln!(
+                    "- {}: {}",
+                    tr(language, "cli.gate.lowest_health"),
+                    session.path
+                );
             }
             let inspect = if args.demo {
                 "agenttrace --demo --overview -f json".to_string()
@@ -410,13 +538,13 @@ fn run() -> anyhow::Result<()> {
             } else {
                 "agenttrace --overview -f json".to_string()
             };
-            eprintln!("- inspect: `{inspect}`");
+            eprintln!("- {}: `{inspect}`", tr(language, "cli.gate.inspect"));
             std::process::exit(2);
         }
         return Ok(());
     }
 
-    bail!("no report action selected")
+    bail!("{}", tr(language, "cli.err.no_action"))
 }
 
 fn write_stdout(value: &str) -> anyhow::Result<()> {
@@ -571,10 +699,6 @@ fn session_mod_time(session: &Session) -> SystemTime {
         .unwrap_or(SystemTime::UNIX_EPOCH)
 }
 
-fn report_language(value: &str) -> ReportLanguage {
-    ReportLanguage::parse(value).unwrap_or_default()
-}
-
 fn load_sessions(args: &Args) -> anyhow::Result<Vec<Session>> {
     load_sessions_report(args).map(|(sessions, _)| sessions)
 }
@@ -599,11 +723,18 @@ fn load_sessions_report(args: &Args) -> anyhow::Result<(Vec<Session>, Option<Loa
                 ));
             }
             bail!(
-                "Error loading {}: positional path must be a session file",
-                path.display()
+                "{}",
+                Message::new("cli.err.path_must_be_file")
+                    .arg("path", path.display())
+                    .render_or(language_of(args), "")
             );
         }
-        bail!("session path does not exist: {}", path.display());
+        bail!(
+            "{}",
+            Message::new("cli.err.path_missing")
+                .arg("path", path.display())
+                .render_or(language_of(args), "")
+        );
     }
     let dir = args.dir.as_deref().map(PathBuf::from);
     let range = parse_range(args)?;
@@ -622,17 +753,19 @@ fn load_sessions_report(args: &Args) -> anyhow::Result<(Vec<Session>, Option<Loa
     if sessions.is_empty() {
         if report.discovered == 0 {
             bail!(
-                "No session files found in {}",
-                args.dir.as_deref().unwrap_or("")
+                "{}",
+                Message::new("cli.err.no_files")
+                    .arg("dir", args.dir.as_deref().unwrap_or(""))
+                    .render_or(language_of(args), "")
             );
         }
-        bail!("No sessions match the requested filters");
+        bail!("{}", tr(language_of(args), "cli.err.no_match"));
     }
     Ok((sessions, Some(report)))
 }
 
 fn parse_range(args: &Args) -> anyhow::Result<TimeRange> {
-    TimeRange::parse(&args.range).context("range must be today, 7d, 30d, or all")
+    TimeRange::parse(&args.range).with_context(|| tr(language_of(args), "cli.err.range"))
 }
 
 fn filter_cli_sessions(sessions: Vec<Session>, args: &Args) -> anyhow::Result<Vec<Session>> {
@@ -698,7 +831,7 @@ fn prepare_cli_view(mut sessions: Vec<Session>, args: &Args) -> anyhow::Result<V
     let descending = match args.order.as_str() {
         "asc" => false,
         "desc" => true,
-        _ => bail!("--order must be asc or desc"),
+        _ => bail!("{}", tr(language_of(args), "cli.err.order")),
     };
     sessions.sort_by(|left, right| {
         let ordering = match args.sort.as_str() {
@@ -740,7 +873,12 @@ fn prepare_cli_view(mut sessions: Vec<Session>, args: &Args) -> anyhow::Result<V
             | "name"
             | "anomalies"
     ) {
-        bail!("unsupported --sort value: {}", args.sort);
+        bail!(
+            "{}",
+            Message::new("cli.err.sort")
+                .arg("value", &args.sort)
+                .render_or(language_of(args), "")
+        );
     }
     Ok(sessions)
 }
@@ -787,10 +925,20 @@ fn validate_view_filters(args: &Args) -> anyhow::Result<()> {
         )
         && !valid_number_filter(&args.health)
     {
-        bail!("invalid --health filter: {}", args.health);
+        bail!(
+            "{}",
+            Message::new("cli.err.health")
+                .arg("value", &args.health)
+                .render_or(language_of(args), "")
+        );
     }
     if !args.cost.is_empty() && !valid_number_filter(&args.cost) {
-        bail!("invalid --cost filter: {}", args.cost);
+        bail!(
+            "{}",
+            Message::new("cli.err.cost")
+                .arg("value", &args.cost)
+                .render_or(language_of(args), "")
+        );
     }
     Ok(())
 }
@@ -950,30 +1098,30 @@ fn validate_primary_action(args: &Args) -> anyhow::Result<()> {
             .is_some_and(|query| !query.trim().is_empty()),
     ];
     if actions.into_iter().filter(|active| *active).count() > 1 {
-        bail!("choose exactly one report action");
+        bail!("{}", tr(language_of(args), "cli.err.one_action"));
     }
     if args.latest
         && actions.into_iter().any(|active| active)
         && !args.diagnostics
         && args.inspect.is_none()
     {
-        bail!("--latest can only be combined with --diagnostics or --inspect");
+        bail!("{}", tr(language_of(args), "cli.err.latest_combo"));
     }
     Ok(())
 }
 
 fn validate_gate_thresholds(args: &Args) -> anyhow::Result<()> {
     if !(0..=100).contains(&args.fail_under_health) {
-        bail!("--fail-under-health must be between 0 and 100");
+        bail!("{}", tr(language_of(args), "cli.err.fail_under_health"));
     }
     if args
         .max_tool_fail_rate
         .is_some_and(|value| !value.is_finite() || !(0.0..=100.0).contains(&value))
     {
-        bail!("--max-tool-fail-rate must be a finite number between 0 and 100");
+        bail!("{}", tr(language_of(args), "cli.err.max_tool_fail_rate"));
     }
     if args.search.is_some() && args.search_limit == 0 {
-        bail!("--search-limit must be at least 1");
+        bail!("{}", tr(language_of(args), "cli.err.search_limit"));
     }
     Ok(())
 }
@@ -1208,7 +1356,7 @@ mod tests {
             baseline_max_duration_delta_pct: 0.0,
             baseline_max_cost_delta_pct: 0.0,
             baseline_max_token_delta_pct: 0.0,
-            lang: "en".to_string(),
+            lang: None,
             range: "all".to_string(),
             project: String::new(),
             source: String::new(),

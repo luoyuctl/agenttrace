@@ -425,32 +425,19 @@ fn explorer_attention_uses_core_inspect_reason_and_cost_shows_provenance() {
 
 #[test]
 fn chinese_workspace_copy_is_plain_language_and_width_aware() {
-    let mut item = agenttrace_core::Recommendation {
-        id: "tool-failures".to_string(),
-        priority: "P1".to_string(),
-        severity: "high".to_string(),
-        category: "tool_failure".to_string(),
-        title: "Reduce failing tool calls".to_string(),
-        rationale: String::new(),
-        evidence: Vec::new(),
-        estimated_savings_usd: 0.0,
-        estimated_savings_tokens: 0,
-        confidence: "high".to_string(),
-        action: "Inspect arguments and results".to_string(),
-        validation_command: String::new(),
-    };
-    assert_eq!(
-        recommendation_title(&item, Language::Zh),
-        "减少失败的工具调用"
+    let localized = agenttrace_core::recommendations_with_language(
+        &[{
+            let mut value = session("failing", "pi", "m", 60, 0.1, "bash");
+            value.metrics.tool_calls_fail = 3;
+            value.metrics.tool_calls_total = 4;
+            value
+        }],
+        Language::Zh,
     );
-    assert!(recommendation_action(&item, Language::Zh).contains("不要原样重试"));
+    assert_eq!(localized[0].title, "减少失败的工具调用");
+    assert!(localized[0].action.contains("不要原样重试"));
     assert_eq!(short("中文宽度", 4), "...");
     assert_eq!(short("中文宽度", 5), "中...");
-    item.id = "slow-tool".to_string();
-    assert_eq!(
-        recommendation_title(&item, Language::Zh),
-        "给慢工具设定时间上限"
-    );
     let mut app = App::new(Vec::new(), "test", None);
     app.model_filter = "gpt-5".to_string();
     app.issue_filter = "failures".to_string();
