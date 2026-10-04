@@ -653,8 +653,9 @@ impl App {
                     )
                     .unwrap_or(Ordering::Equal)
             }),
-            ExplorerView::Storage => indices
-                .sort_by_key(|index| std::cmp::Reverse(session_file_size(&self.sessions[*index]))),
+            ExplorerView::Storage => indices.sort_by_key(|index| {
+                std::cmp::Reverse(self.file_meta(&self.sessions[*index]).size)
+            }),
             ExplorerView::Cost => indices.sort_by(|a, b| {
                 self.sessions[*b]
                     .metrics
@@ -1072,7 +1073,7 @@ fn render_explorer_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     {
         let text = match app.explorer_view {
             ExplorerView::Context => context_preview(session, app.language),
-            ExplorerView::Storage => storage_preview(session, app.language),
+            ExplorerView::Storage => storage_preview(app, session),
             ExplorerView::Cost => cost_preview(session, app.language),
             ExplorerView::Tools => tools_preview(session, app.language),
             ExplorerView::Attention
@@ -1255,11 +1256,12 @@ fn context_preview(session: &Session, language: Language) -> String {
     )
 }
 
-fn storage_preview(session: &Session, language: Language) -> String {
-    let metadata = fs::metadata(&session.path).ok();
-    let size = metadata.as_ref().map(|value| value.len()).unwrap_or(0);
-    let modified = metadata
-        .and_then(|value| value.modified().ok())
+fn storage_preview(app: &App, session: &Session) -> String {
+    let language = app.language;
+    let meta = app.file_meta(session);
+    let size = meta.size;
+    let modified = meta
+        .modified
         .map(format_modified)
         .unwrap_or_else(|| text(language, "tui.unknown").to_string());
     format!(
@@ -1573,7 +1575,7 @@ fn render_detail_section(
             }
         }
         DetailSection::Context => explorer_detail_context(session, app.language),
-        DetailSection::Files => detail_files(session, app.language),
+        DetailSection::Files => detail_files(app, session),
         DetailSection::Timeline => unreachable!(),
     };
     let reason = inspect_reason(session);
@@ -2155,7 +2157,7 @@ fn explorer_row_spans(
                 Style::default().fg(risk_color(&context.risk_level)),
             )
         }
-        ExplorerView::Storage => (format_bytes(session_file_size(session)), muted),
+        ExplorerView::Storage => (format_bytes(app.file_meta(session).size), muted),
         ExplorerView::Cost => (
             format_compact_cost(session.metrics.cost_estimated),
             Style::default().fg(cost_color(session.metrics.cost_estimated)),
@@ -2667,11 +2669,12 @@ fn health_explanation(session: &Session, language: Language) -> String {
     }
 }
 
-fn detail_files(session: &Session, language: Language) -> String {
-    let size = session_file_size(session);
-    let metadata = fs::metadata(&session.path).ok();
-    let modified = metadata
-        .and_then(|value| value.modified().ok())
+fn detail_files(app: &App, session: &Session) -> String {
+    let language = app.language;
+    let meta = app.file_meta(session);
+    let size = meta.size;
+    let modified = meta
+        .modified
         .map(format_modified)
         .unwrap_or_else(|| text(language, "tui.unknown").to_string());
     let mut files = session.metrics.file_usage.iter().collect::<Vec<_>>();
@@ -2833,10 +2836,32 @@ fn explorer_recommendation(session: &Session, language: Language) -> String {
     text(language, "tui.open_what_happened_and_check_the_recorded").to_string()
 }
 
-fn session_file_size(session: &Session) -> u64 {
-    fs::metadata(&session.path)
-        .map(|value| value.len())
-        .unwrap_or(0)
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct FileMeta {
+    size: u64,
+    modified: Option<std::time::SystemTime>,
+}
+
+impl App {
+    /// Session file size and mtime, read once per path and reused by Storage
+    /// rows, the preview, Files details and Storage sorting. Animation frames
+    /// redraw these panes many times per second, so they must not stat the
+    /// filesystem; the cache is cleared whenever sessions reload.
+    pub(super) fn file_meta(&self, session: &Session) -> FileMeta {
+        if let Some(meta) = self.file_meta_cache.borrow().get(&session.path) {
+            return *meta;
+        }
+        let meta = fs::metadata(&session.path)
+            .map(|value| FileMeta {
+                size: value.len(),
+                modified: value.modified().ok(),
+            })
+            .unwrap_or_default();
+        self.file_meta_cache
+            .borrow_mut()
+            .insert(session.path.clone(), meta);
+        meta
+    }
 }
 
 fn format_bytes(bytes: u64) -> String {

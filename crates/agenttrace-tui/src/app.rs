@@ -298,6 +298,7 @@ struct App {
     filter_generation: u64,
     indices_cache: std::cell::RefCell<Option<IndicesCache>>,
     totals_cache: std::cell::Cell<Option<(u64, VisibleTotals)>>,
+    file_meta_cache: std::cell::RefCell<std::collections::HashMap<String, FileMeta>>,
     motion: Motion,
 }
 
@@ -430,6 +431,7 @@ impl App {
             filter_generation: 0,
             indices_cache: std::cell::RefCell::new(None),
             totals_cache: std::cell::Cell::new(None),
+            file_meta_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
             motion: Motion::disabled(),
         };
         app.refresh_filtered();
@@ -1286,6 +1288,9 @@ impl App {
 
     fn refresh_filtered(&mut self) {
         self.filter_generation = self.filter_generation.wrapping_add(1);
+        // Reloads, progress batches and manual refreshes all pass through here,
+        // so file sizes and mtimes are re-read after any of them.
+        self.file_meta_cache.get_mut().clear();
         let query = self.query.trim().to_ascii_lowercase();
         let now = chrono::Utc::now();
         self.filtered = self
