@@ -711,22 +711,34 @@ fn loop_fingerprints(events: &[Event]) -> Vec<LoopFingerprint> {
     out
 }
 
-const TIMEOUT_MARKERS: &[&str] = &["timed out", "timeout", "deadline exceeded"];
+const TIMEOUT_MARKERS: &[&str] = &["timed out", "deadline exceeded"];
 
 fn result_reports_timeout(event: &Event) -> bool {
+    let json = serde_json::from_str::<serde_json::Value>(&event.content).ok();
+    let error = json
+        .as_ref()
+        .and_then(|value| value.get("error"))
+        .filter(|value| match value {
+            serde_json::Value::Null => false,
+            serde_json::Value::String(text) => !text.trim().is_empty(),
+            _ => true,
+        });
     let failed = event.is_error
-        || matches!(
-            serde_json::from_str::<serde_json::Value>(&event.content),
-            Ok(serde_json::Value::Object(obj))
-                if obj.get("success") == Some(&serde_json::Value::Bool(false))
-                    || obj.get("error").is_some_and(|value| match value {
-                        serde_json::Value::Null => false,
-                        serde_json::Value::String(text) => !text.trim().is_empty(),
-                        _ => true,
-                    })
-        );
+        || error.is_some()
+        || json.as_ref().and_then(|value| value.get("success"))
+            == Some(&serde_json::Value::Bool(false));
     if !failed {
         return false;
+    }
+    // A bare "timeout" is only trusted as the whole error value; as a substring it
+    // also matches messages like "invalid timeout setting".
+    let is_bare_timeout = |text: &str| text.trim().eq_ignore_ascii_case("timeout");
+    if is_bare_timeout(&event.content)
+        || error
+            .and_then(|value| value.as_str())
+            .is_some_and(is_bare_timeout)
+    {
+        return true;
     }
     let content = event.content.to_ascii_lowercase();
     TIMEOUT_MARKERS
@@ -1027,6 +1039,24 @@ mod tests {
         ]);
         assert_eq!(latency[0].timeouts, 0);
         assert_eq!(latency[0].unmatched, 0);
+    }
+
+    #[test]
+    fn timeout_word_inside_other_errors_is_not_a_timeout() {
+        let latency = tool_latencies(&[
+            call("a", "2026-01-01T00:00:00Z"),
+            result(
+                "a",
+                "2026-01-01T00:00:01Z",
+                r#"{"success":false,"error":"invalid timeout setting"}"#,
+                false,
+            ),
+            call("b", "2026-01-01T00:00:02Z"),
+            result("b", "2026-01-01T00:00:03Z", r#"{"error":"timeout"}"#, false),
+            call("c", "2026-01-01T00:00:04Z"),
+            result("c", "2026-01-01T00:00:05Z", "timeout", true),
+        ]);
+        assert_eq!(latency[0].timeouts, 2);
     }
 
     #[test]
