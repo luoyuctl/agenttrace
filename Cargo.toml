@@ -9,7 +9,7 @@ resolver = "2"
 [workspace.package]
 version = "0.0.0-dev"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.85"
 license = "MIT"
 description = "Local-first TUI and reports for AI coding-agent session history, cost, tokens, time, and slow-run diagnosis."
 repository = "https://github.com/luoyuctl/agenttrace"
