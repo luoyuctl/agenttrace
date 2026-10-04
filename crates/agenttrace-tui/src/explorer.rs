@@ -2230,16 +2230,27 @@ fn key_hint_line(text: &str, raw: bool, width: u16) -> Line<'static> {
     Line::from(spans)
 }
 
+/// Widest label column `kv_block` aligns to; a longer label keeps two spaces
+/// instead of pushing every value right (and into a wrap) in narrow panes.
+const KV_LABEL_MAX: usize = 14;
+
 /// Aligns `label  value` rows on the widest label's display width, so blocks
 /// line up in every language (CJK labels are twice as wide per character).
 fn kv_block(rows: &[(&str, String)]) -> String {
     let width = rows
         .iter()
         .map(|(label, _)| unicode_width::UnicodeWidthStr::width(*label))
+        .filter(|width| *width <= KV_LABEL_MAX)
         .max()
         .unwrap_or(0);
     rows.iter()
-        .map(|(label, value)| format!("{}  {value}", pad_display_width(label, width)))
+        .map(|(label, value)| {
+            if unicode_width::UnicodeWidthStr::width(*label) > width {
+                format!("{label}  {value}")
+            } else {
+                format!("{}  {value}", pad_display_width(label, width))
+            }
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
