@@ -45,6 +45,7 @@ pub fn attribute_subagents(sessions: &mut [Session]) {
         session.metrics.subagent_count = 0;
         session.metrics.subagent_cost = 0.0;
         session.metrics.subagent_tokens = 0;
+        session.metrics.parent_session.clear();
     }
     for (child, parent) in links {
         let (cost, tokens) = (
@@ -118,5 +119,10 @@ mod tests {
         // Idempotent when re-run on already attributed sessions.
         attribute_subagents(&mut sessions);
         assert_eq!(sessions[0].metrics.subagent_count, 2);
+
+        // Dropping the parent clears stale child links on the next pass.
+        let mut orphans = sessions[1..].to_vec();
+        attribute_subagents(&mut orphans);
+        assert!(orphans[0].metrics.parent_session.is_empty());
     }
 }
