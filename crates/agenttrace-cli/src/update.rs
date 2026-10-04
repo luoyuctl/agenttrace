@@ -126,7 +126,14 @@ pub fn run(args: &[OsString], language: ReportLanguage) -> anyhow::Result<()> {
     )?))
     .ok_or_else(|| anyhow!("invalid checksum file for {asset}"))?;
     let binary = download(&agent, &base)?;
-    if binary.len() < MIN_BINARY_BYTES || sha256_hex(&binary) != expected {
+    if binary.len() < MIN_BINARY_BYTES || binary.len() as u64 > MAX_DOWNLOAD_BYTES {
+        bail!(msg(
+            language,
+            "cli.update.incomplete_download",
+            &[("asset", &asset), ("bytes", &binary.len().to_string())]
+        ));
+    }
+    if sha256_hex(&binary) != expected {
         bail!(msg(
             language,
             "cli.update.checksum_mismatch",
@@ -249,7 +256,8 @@ fn download_once(agent: &ureq::Agent, url: &str) -> anyhow::Result<Vec<u8>> {
         .call()
         .map_err(|error| anyhow!("{error}"))?
         .into_reader()
-        .take(MAX_DOWNLOAD_BYTES)
+        // One byte past the cap, so an oversized body is detected instead of truncated.
+        .take(MAX_DOWNLOAD_BYTES + 1)
         .read_to_end(&mut bytes)
         .with_context(|| format!("download {url}"))?;
     Ok(bytes)

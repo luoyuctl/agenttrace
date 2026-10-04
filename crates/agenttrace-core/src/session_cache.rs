@@ -320,11 +320,13 @@ pub fn load_cached_sessions_from_cache(
         .chain(cache.entries.keys())
         .map(PathBuf::from)
         .collect::<BTreeSet<_>>();
-    let sessions = paths
+    let mut sessions = paths
         .into_iter()
         .filter(|path| dir.is_none_or(|dir| path.starts_with(dir)))
         .filter_map(|path| cached_session(&path, cache))
-        .collect();
+        .collect::<Vec<_>>();
+    // Subagent rollups are derived, not cached; rebuild them like a live load does.
+    crate::subagents::attribute_subagents(&mut sessions);
     if cache.is_dirty() {
         let _ = save_session_cache(cache);
     }

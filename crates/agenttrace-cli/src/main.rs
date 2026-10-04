@@ -133,7 +133,7 @@ struct Args {
     monthly: bool,
     #[arg(long)]
     blocks: bool,
-    #[arg(long, default_value = "local")]
+    #[arg(long, default_value = "local", allow_hyphen_values = true)]
     tz: String,
     #[arg(long = "token-limit")]
     token_limit: Option<i64>,
@@ -419,14 +419,14 @@ fn run(argv: Vec<OsString>, language: ReportLanguage) -> anyhow::Result<()> {
 
     let (sessions, load_report) = load_sessions_report(&args)?;
     let sessions = prepare_cli_view(sessions, &args)?;
-    if sessions.is_empty() {
-        bail!("{}", tr(language, "cli.err.no_match"));
-    }
-
+    // Usage reports render an empty table rather than failing when nothing matches.
     if let Some(out) = render_usage_report(&sessions, &args)? {
         write_output(&args.output, &(out.clone() + "\n"))?;
         write_stdout(&out)?;
         return Ok(());
+    }
+    if sessions.is_empty() {
+        bail!("{}", tr(language, "cli.err.no_match"));
     }
 
     if args.sessions || args.diagnostics || args.inspect.is_some() {
@@ -1046,7 +1046,7 @@ fn render_usage_report(sessions: &[Session], args: &Args) -> anyhow::Result<Opti
                     UsagePeriod::Month => "month",
                 },
                 "timezone": tz_label,
-                "buckets": buckets,
+                "buckets": buckets.iter().take(args.limit.max(1)).collect::<Vec<_>>(),
             }))?));
         }
         let title = match period {

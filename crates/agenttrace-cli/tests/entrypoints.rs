@@ -86,6 +86,11 @@ fn usage_reports_split_by_timezone_and_emit_blocks() {
     let doc: serde_json::Value = serde_json::from_slice(&east.stdout).expect("daily json");
     assert_eq!(doc["buckets"][0]["period"], "2026-05-04");
 
+    let west = run(&["--daily", "--tz", "-05:00", "-f", "json"]);
+    assert!(west.status.success(), "CLI failed: {west:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&west.stdout).expect("daily json");
+    assert_eq!(doc["timezone"], "-05:00");
+
     let blocks = run(&["--blocks", "--tz", "utc", "-f", "json"]);
     assert!(blocks.status.success(), "CLI failed: {blocks:?}");
     let doc: serde_json::Value = serde_json::from_slice(&blocks.stdout).expect("blocks json");

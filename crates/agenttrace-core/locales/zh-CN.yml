@@ -97,6 +97,7 @@ cli:
     checksum_mismatch: "%{asset} 的校验和验证失败，已安装的程序未做任何改动。"
     dev_build: "当前是开发构建（v%{current}），最新发布版本是 v%{latest}。运行 `agenttrace update --force` 可替换为发布版。"
     downloading: "正在下载 %{asset}..."
+    incomplete_download: "%{asset} 下载不完整（%{bytes} 字节），请检查网络或代理后重试。已安装的程序未做任何改动。"
     managed: "agenttrace 是通过 %{manager} 安装的，请用以下命令更新：\n  %{command}\n（或运行 `agenttrace update --force` 直接覆盖程序文件）"
     unknown_arg: "`agenttrace update` 不支持的参数：%{value}"
     unsupported_platform: "没有为 %{os}/%{arch} 发布预编译程序，请从源码构建。"

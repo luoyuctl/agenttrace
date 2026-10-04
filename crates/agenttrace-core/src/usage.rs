@@ -7,9 +7,7 @@
 //! record at their start time.
 
 use crate::{round4, total_tokens, Session, UsagePoint};
-use chrono::{
-    DateTime, Datelike, Duration, FixedOffset, Local, NaiveDate, TimeZone, Timelike, Utc,
-};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -68,6 +66,27 @@ impl UsageTz {
             Self::Local => utc.with_timezone(&Local).date_naive(),
             Self::Fixed(offset) => utc.with_timezone(&offset).date_naive(),
         })
+    }
+
+    /// UTC offset in seconds at `ts`.
+    fn offset_secs(self, ts: i64) -> i64 {
+        match self {
+            Self::Local => DateTime::<Utc>::from_timestamp(ts, 0).map_or(0, |utc| {
+                i64::from(
+                    Local
+                        .offset_from_utc_datetime(&utc.naive_utc())
+                        .local_minus_utc(),
+                )
+            }),
+            Self::Fixed(offset) => i64::from(offset.local_minus_utc()),
+        }
+    }
+
+    /// Floors `ts` to the top of the hour as seen in this timezone, so blocks
+    /// start on local hour boundaries even for half-hour offsets.
+    fn floor_hour(self, ts: i64) -> i64 {
+        let offset = self.offset_secs(ts);
+        (ts + offset).div_euclid(3600) * 3600 - offset
     }
 
     fn format(self, ts: i64) -> String {
@@ -164,9 +183,9 @@ pub fn usage_by_period(sessions: &[Session], period: UsagePeriod, tz: UsageTz) -
 
 /// Splits usage into 5-hour blocks, newest first.
 ///
-/// A block starts at the top of the hour of its first record and lasts five
-/// hours; the next record at or after the block end (or after a gap of five
-/// hours) opens a new block. This mirrors how Claude subscription windows are
+/// A block starts at the top of the hour (in `tz`) of its first record and
+/// lasts five hours; the next record at or after the block end opens a new
+/// block. This mirrors how Claude subscription windows are
 /// commonly approximated from local logs; it is an estimate, not the
 /// provider's server-side accounting.
 pub fn usage_blocks(sessions: &[Session], now: DateTime<Utc>, tz: UsageTz) -> Vec<UsageBlock> {
@@ -191,15 +210,12 @@ pub fn usage_blocks(sessions: &[Session], now: DateTime<Utc>, tz: UsageTz) -> Ve
     }
     let mut blocks: Vec<Acc> = Vec::new();
     for (point, index) in points {
-        let open_new = blocks.last().is_none_or(|block| {
-            point.ts >= block.start + BLOCK_SECS || point.ts - block.last >= BLOCK_SECS
-        });
+        let open_new = blocks
+            .last()
+            .is_none_or(|block| point.ts >= block.start + BLOCK_SECS);
         if open_new {
-            let start = DateTime::<Utc>::from_timestamp(point.ts, 0)
-                .and_then(|ts| ts.with_minute(0)?.with_second(0))
-                .map_or(point.ts, |ts| ts.timestamp());
             blocks.push(Acc {
-                start,
+                start: tz.floor_hour(point.ts),
                 first: point.ts,
                 last: point.ts,
                 sessions: BTreeSet::new(),
@@ -393,6 +409,24 @@ mod tests {
         assert_eq!(done.start, "2026-10-04T08:00:00+00:00");
         assert_eq!(done.tokens, 2000);
         assert_eq!(done.projected_cost, done.cost);
+    }
+
+    #[test]
+    fn blocks_start_on_the_hour_of_the_requested_timezone() {
+        let sessions = [session(&[("2026-10-04T04:45:00Z", 100, 0.1)])];
+        let now = DateTime::parse_from_rfc3339("2026-10-05T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        // 04:45Z is 10:15 in +05:30, so the block starts at 10:00 local.
+        let ist = UsageTz::parse("+05:30").unwrap();
+        let blocks = usage_blocks(&sessions, now, ist);
+        assert_eq!(blocks[0].start, "2026-10-04T10:00:00+05:30");
+        assert_eq!(blocks[0].end, "2026-10-04T15:00:00+05:30");
+        let west = UsageTz::parse("-03:30").unwrap();
+        assert_eq!(
+            usage_blocks(&sessions, now, west)[0].start,
+            "2026-10-04T01:00:00-03:30"
+        );
     }
 
     #[test]

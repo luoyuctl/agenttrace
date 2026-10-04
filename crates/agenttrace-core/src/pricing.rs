@@ -21,6 +21,16 @@ pub struct Price {
     pub cr: f64,
 }
 
+impl Price {
+    /// USD for the given token counts (unrounded).
+    pub fn cost(&self, input: i64, output: i64, cache_write: i64, cache_read: i64) -> f64 {
+        input as f64 / 1e6 * self.input
+            + output as f64 / 1e6 * self.output
+            + cache_write as f64 / 1e6 * self.cw
+            + cache_read as f64 / 1e6 * self.cr
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PricingCatalog {
     pub entries: BTreeMap<String, Price>,
@@ -218,13 +228,7 @@ pub(crate) fn token_cost(
     cache_read: i64,
     model: &str,
 ) -> f64 {
-    let price = lookup_price(model);
-    round4(
-        input as f64 / 1e6 * price.input
-            + output as f64 / 1e6 * price.output
-            + cache_write as f64 / 1e6 * price.cw
-            + cache_read as f64 / 1e6 * price.cr,
-    )
+    round4(lookup_price(model).cost(input, output, cache_write, cache_read))
 }
 
 fn pricing_catalog() -> &'static PricingCatalog {

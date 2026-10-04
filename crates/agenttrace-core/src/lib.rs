@@ -652,6 +652,8 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
     // Unix seconds of the latest timestamped event, used to place usage records
     // that carry no timestamp of their own.
     let mut last_ts: Option<i64> = None;
+    // (latest timestamp seen before the record, tokens, cost) per usage record.
+    let mut pending_points: Vec<(Option<i64>, i64, f64)> = Vec::new();
     for event in events {
         if metrics.source_tool.is_empty()
             && !event.source_tool.is_empty()
@@ -669,36 +671,22 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
         match event.role.as_str() {
             "session_meta" | "meta" => {
                 if !event.usage.is_empty() {
-                    {
-                        let get = |key: &str| event.usage.get(key).copied().unwrap_or(0);
-                        let (input, output, cache_w, cache_r) = (
-                            get("input_tokens"),
-                            get("output_tokens"),
-                            get("cache_creation_input_tokens"),
-                            get("cache_read_input_tokens"),
-                        );
-                        metrics.usage_points.push(UsagePoint {
-                            // i64::MIN marks "no timestamp yet"; resolved after the loop.
-                            ts: last_ts.unwrap_or(i64::MIN),
-                            tokens: input + output + cache_w + cache_r,
-                            cost: input as f64 / 1e6 * price.input
-                                + output as f64 / 1e6 * price.output
-                                + cache_w as f64 / 1e6 * price.cw
-                                + cache_r as f64 / 1e6 * price.cr,
-                        });
-                    }
-                    metrics.tokens_input += event.usage.get("input_tokens").copied().unwrap_or(0);
-                    metrics.tokens_output += event.usage.get("output_tokens").copied().unwrap_or(0);
-                    metrics.tokens_cache_w += event
-                        .usage
-                        .get("cache_creation_input_tokens")
-                        .copied()
-                        .unwrap_or(0);
-                    metrics.tokens_cache_r += event
-                        .usage
-                        .get("cache_read_input_tokens")
-                        .copied()
-                        .unwrap_or(0);
+                    let get = |key: &str| event.usage.get(key).copied().unwrap_or(0);
+                    let (input, output, cache_w, cache_r) = (
+                        get("input_tokens"),
+                        get("output_tokens"),
+                        get("cache_creation_input_tokens"),
+                        get("cache_read_input_tokens"),
+                    );
+                    pending_points.push((
+                        last_ts,
+                        input + output + cache_w + cache_r,
+                        price.cost(input, output, cache_w, cache_r),
+                    ));
+                    metrics.tokens_input += input;
+                    metrics.tokens_output += output;
+                    metrics.tokens_cache_w += cache_w;
+                    metrics.tokens_cache_r += cache_r;
                 }
             }
             "user" => {
@@ -780,16 +768,15 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
     // Usage seen before any timestamp is placed at session start; without any
     // timestamp at all it cannot be placed and is dropped (the session then has
     // no start either, so period and block reports skip it entirely).
-    match metrics.timestamps.first() {
-        Some(first) => {
-            let first = first.timestamp();
-            for point in &mut metrics.usage_points {
-                if point.ts == i64::MIN {
-                    point.ts = first;
-                }
-            }
-        }
-        None => metrics.usage_points.clear(),
+    if let Some(first) = metrics.timestamps.first().map(DateTime::timestamp) {
+        metrics.usage_points = pending_points
+            .into_iter()
+            .map(|(ts, tokens, cost)| UsagePoint {
+                ts: ts.unwrap_or(first),
+                tokens,
+                cost,
+            })
+            .collect();
     }
     if let (Some(first), Some(last)) = (metrics.timestamps.first(), metrics.timestamps.last()) {
         metrics.session_start = first.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
@@ -809,12 +796,12 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
     if metrics.tool_calls_ok > max_ok {
         metrics.tool_calls_ok = max_ok;
     }
-    metrics.cost_estimated = round4(
-        metrics.tokens_input as f64 / 1e6 * price.input
-            + metrics.tokens_output as f64 / 1e6 * price.output
-            + metrics.tokens_cache_w as f64 / 1e6 * price.cw
-            + metrics.tokens_cache_r as f64 / 1e6 * price.cr,
-    );
+    metrics.cost_estimated = round4(price.cost(
+        metrics.tokens_input,
+        metrics.tokens_output,
+        metrics.tokens_cache_w,
+        metrics.tokens_cache_r,
+    ));
     metrics.provenance.cost = "calculated_from_tokens".to_string();
     metrics
 }
