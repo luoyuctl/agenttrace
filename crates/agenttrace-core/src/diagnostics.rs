@@ -732,10 +732,17 @@ fn result_reports_timeout(event: &Event) -> bool {
     }
     // When the result names its error, only that error describes the failure; other
     // fields (for example earlier command output) may mention timeouts incidentally.
-    let reported = match error {
-        Some(serde_json::Value::String(text)) => text.clone(),
-        Some(value) => value.to_string(),
-        None => event.content.clone(),
+    // JSON results without an error message carry no timeout evidence.
+    let reported = match (error, &json) {
+        (Some(serde_json::Value::String(text)), _) => text.clone(),
+        (Some(value), _) => value.to_string(),
+        (None, Some(serde_json::Value::Object(obj))) => {
+            match obj.get("message").and_then(serde_json::Value::as_str) {
+                Some(message) => message.to_string(),
+                None => return false,
+            }
+        }
+        (None, _) => event.content.clone(),
     };
     // A bare "timeout" is only trusted as the whole error text; as a substring it
     // also matches messages like "invalid timeout setting".
@@ -1064,8 +1071,22 @@ mod tests {
                 r#"{"error":"invalid option","output":"previous command timed out"}"#,
                 false,
             ),
+            call("e", "2026-01-01T00:00:08Z"),
+            result(
+                "e",
+                "2026-01-01T00:00:09Z",
+                r#"{"success":false,"message":"invalid option","output":"previous command timed out"}"#,
+                false,
+            ),
+            call("f", "2026-01-01T00:00:10Z"),
+            result(
+                "f",
+                "2026-01-01T00:00:11Z",
+                r#"{"success":false,"message":"request timed out"}"#,
+                false,
+            ),
         ]);
-        assert_eq!(latency[0].timeouts, 2);
+        assert_eq!(latency[0].timeouts, 3);
     }
 
     #[test]
