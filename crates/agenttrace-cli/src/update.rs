@@ -170,11 +170,43 @@ fn parse_options(args: &[OsString], language: ReportLanguage) -> anyhow::Result<
     Ok(options)
 }
 
+/// Resolve the latest release tag from the `releases/latest` redirect on github.com, which
+/// is not subject to the 60 requests/hour limit of the unauthenticated REST API. The API
+/// (authenticated with `GITHUB_TOKEN` when set) is only a fallback.
 fn latest_release_tag(agent: &ureq::Agent) -> anyhow::Result<String> {
+    latest_tag_from_redirect().or_else(|redirect_error| {
+        latest_tag_from_api(agent)
+            .with_context(|| format!("resolve latest release (redirect: {redirect_error:#})"))
+    })
+}
+
+fn latest_tag_from_redirect() -> anyhow::Result<String> {
+    let url = format!("https://github.com/{REPO}/releases/latest");
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(CONNECT_TIMEOUT)
+        .timeout_read(READ_TIMEOUT)
+        .redirects(0)
+        .build();
+    let response = agent
+        .head(&url)
+        .call()
+        .map_err(|error| anyhow!("{url}: {error}"))?;
+    let location = response
+        .header("location")
+        .ok_or_else(|| anyhow!("{url}: no redirect location"))?;
+    tag_from_release_url(location).ok_or_else(|| anyhow!("{url}: unexpected redirect {location}"))
+}
+
+fn latest_tag_from_api(agent: &ureq::Agent) -> anyhow::Result<String> {
     let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
-    let body = agent
-        .get(&url)
-        .set("Accept", "application/vnd.github+json")
+    let mut request = agent.get(&url).set("Accept", "application/vnd.github+json");
+    if let Some(token) = std::env::var("GITHUB_TOKEN")
+        .ok()
+        .filter(|token| !token.is_empty())
+    {
+        request = request.set("Authorization", &format!("Bearer {token}"));
+    }
+    let body = request
         .call()
         .map_err(|error| anyhow!("{url}: {error}"))?
         .into_string()
@@ -185,6 +217,15 @@ fn latest_release_tag(agent: &ureq::Agent) -> anyhow::Result<String> {
         .filter(|tag| parse_version(tag).is_some())
         .map(str::to_string)
         .ok_or_else(|| anyhow!("latest release has no valid tag_name"))
+}
+
+/// `.../releases/tag/v0.9.1` -> `v0.9.1`, only for well-formed version tags.
+fn tag_from_release_url(location: &str) -> Option<String> {
+    let tag = location
+        .trim_end_matches('/')
+        .rsplit_once("/releases/tag/")?
+        .1;
+    parse_version(tag).is_some().then(|| tag.to_string())
 }
 
 fn download(agent: &ureq::Agent, url: &str) -> anyhow::Result<Vec<u8>> {
@@ -244,16 +285,37 @@ fn swap(exe: &Path, staged: &Path) -> anyhow::Result<()> {
 
 #[cfg(windows)]
 fn swap(exe: &Path, staged: &Path) -> anyhow::Result<()> {
-    let old = exe.with_extension("old.exe");
-    let _ = fs::remove_file(&old);
+    remove_stale_images(exe);
+    // A running image cannot be replaced, only renamed. Each update parks the old image
+    // under a unique name so a copy still running elsewhere never blocks the next update.
+    let old = exe.with_extension(format!("old-{}.exe", std::process::id()));
     fs::rename(exe, &old)?;
     if let Err(error) = fs::rename(staged, exe) {
         let _ = fs::rename(&old, exe);
         return Err(error.into());
     }
-    // The running image stays locked until exit; a later update removes it.
+    // Fails while this process is still running; the next update cleans it up.
     let _ = fs::remove_file(&old);
     Ok(())
+}
+
+/// Best-effort removal of images parked by earlier updates (`agenttrace.old-<pid>.exe`).
+#[cfg(windows)]
+fn remove_stale_images(exe: &Path) {
+    let (Some(dir), Some(stem)) = (exe.parent(), exe.file_stem().and_then(|s| s.to_str())) else {
+        return;
+    };
+    let prefix = format!("{stem}.old");
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(&prefix) && name.ends_with(".exe") {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
 }
 
 fn install_channel(exe: &Path) -> Channel {
@@ -350,6 +412,24 @@ mod tests {
         assert!(!is_newer("garbage", "0.9.1"));
         assert!(is_dev_build("0.0.0-dev"));
         assert!(!is_dev_build("0.9.1"));
+    }
+
+    #[test]
+    fn release_redirects_yield_valid_tags_only() {
+        let tag = |location: &str| tag_from_release_url(location);
+        assert_eq!(
+            tag("https://github.com/luoyuctl/agenttrace/releases/tag/v0.9.1").as_deref(),
+            Some("v0.9.1")
+        );
+        assert_eq!(
+            tag("https://github.com/luoyuctl/agenttrace/releases/tag/v0.10.0/").as_deref(),
+            Some("v0.10.0")
+        );
+        assert_eq!(tag("https://github.com/luoyuctl/agenttrace/releases"), None);
+        assert_eq!(
+            tag("https://github.com/luoyuctl/agenttrace/releases/tag/nightly"),
+            None
+        );
     }
 
     #[test]

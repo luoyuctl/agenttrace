@@ -109,7 +109,7 @@ Check the installed version with `agenttrace --version`.
 | Install script | `agenttrace update` (`--check` to only look) |
 | Homebrew | `brew upgrade luoyuctl/tap/agenttrace` |
 | npm | `npm install -g @zack78/agenttrace@latest` |
-| cargo | re-run `cargo install ... --force` |
+| cargo | `cargo install --git https://github.com/luoyuctl/agenttrace agenttrace --force` |
 
 `agenttrace update` verifies the release checksum before replacing the binary,
 and points package-manager installs back to their manager.

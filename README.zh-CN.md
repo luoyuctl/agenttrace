@@ -114,7 +114,7 @@ cargo install --git https://github.com/luoyuctl/agenttrace agenttrace
 | 安装脚本 | `agenttrace update`（加 `--check` 只检查不更新） |
 | Homebrew | `brew upgrade luoyuctl/tap/agenttrace` |
 | npm | `npm install -g @zack78/agenttrace@latest` |
-| cargo | 重新运行 `cargo install ... --force` |
+| cargo | `cargo install --git https://github.com/luoyuctl/agenttrace agenttrace --force` |
 
 `agenttrace update` 会先校验发布版的校验和再替换程序；包管理器安装的会提示改用对应的包管理器更新。
 
