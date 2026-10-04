@@ -13,7 +13,7 @@ agenttrace --monthly --tz +08:00
 - Each usage record is bucketed by its own timestamp, so a session that crosses midnight is split across days.
 - Weeks are ISO weeks and are labelled by their Monday.
 - `--tz` accepts `local` (default), `utc`, or a fixed offset such as `+08:00`, `-0530`, or `+8`. IANA names such as `Asia/Shanghai` are not supported.
-- `--limit` trims the rows shown in text output; the `TOTAL` row always covers the full range. JSON returns every bucket.
+- `--limit` (default 20) caps the rows in text output and the buckets/blocks in JSON, newest first; the text `TOTAL` row always covers the full range. Pass a larger `--limit` (e.g. `--limit 1000`) to get every bucket.
 - Sessions without per-turn usage (text estimates, aggregate SQLite sources) are counted once at their start time.
 
 ## 5-hour blocks
