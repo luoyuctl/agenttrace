@@ -21,7 +21,6 @@
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
   <a href="https://github.com/luoyuctl/homebrew-tap"><img src="https://img.shields.io/badge/Homebrew-tap-2bbc8a.svg" alt="Homebrew tap"></a>
   <a href="https://www.npmjs.com/package/@zack78/agenttrace"><img src="https://img.shields.io/npm/v/@zack78/agenttrace?label=npm" alt="npm"></a>
-  <a href="https://github.com/microsoft/winget-pkgs"><img src="https://img.shields.io/badge/WinGet-Luoyuctl.AgentTrace-0078D4.svg" alt="WinGet"></a>
 </p>
 
 <p align="center">
@@ -71,7 +70,29 @@ agenttrace
 
 ## 安装
 
-优先通过包管理器安装当前公开版本；可用 `agenttrace --version` 检查实际版本。
+macOS 和 Linux：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
+```
+
+Windows CMD：
+
+```bat
+curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.cmd -o install.cmd && install.cmd && del install.cmd
+```
+
+安装脚本会下载对应平台的发布版程序，按发布的校验和验证 SHA-256，并把安装目录
+（`~/.local/bin`，Windows 上为 `%LOCALAPPDATA%\agenttrace`）加入 PATH。
+设置 `AGENTTRACE_VERSION=v0.9.1`（PowerShell 用 `-Version v0.9.1`）可固定版本。
+
+包管理器：
 
 ```bash
 # macOS 和 Linux
@@ -79,24 +100,23 @@ brew install luoyuctl/tap/agenttrace
 
 # macOS、Linux 和 Windows（需要 Node.js 18+）
 npm install -g @zack78/agenttrace
-```
 
-Windows：
-
-```powershell
-winget install --id Luoyuctl.AgentTrace --exact
-```
-
-以上包名会在对应版本发布后可用。没有包管理器时，仍可直接安装：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+# 从源码安装
 cargo install --git https://github.com/luoyuctl/agenttrace agenttrace
 ```
 
-```powershell
-iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
-```
+可用 `agenttrace --version` 检查实际版本。
+
+### 更新
+
+| 安装方式 | 更新命令 |
+| --- | --- |
+| 安装脚本 | `agenttrace update`（加 `--check` 只检查不更新） |
+| Homebrew | `brew upgrade luoyuctl/tap/agenttrace` |
+| npm | `npm install -g @zack78/agenttrace@latest` |
+| cargo | 重新运行 `cargo install ... --force` |
+
+`agenttrace update` 会先校验发布版的校验和再替换程序；包管理器安装的会提示改用对应的包管理器更新。
 
 ## Quickstart
 

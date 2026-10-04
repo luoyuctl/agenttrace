@@ -21,7 +21,6 @@
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
   <a href="https://github.com/luoyuctl/homebrew-tap"><img src="https://img.shields.io/badge/Homebrew-tap-2bbc8a.svg" alt="Homebrew tap"></a>
   <a href="https://www.npmjs.com/package/@zack78/agenttrace"><img src="https://img.shields.io/npm/v/@zack78/agenttrace?label=npm" alt="npm"></a>
-  <a href="https://github.com/microsoft/winget-pkgs"><img src="https://img.shields.io/badge/WinGet-Luoyuctl.AgentTrace-0078D4.svg" alt="WinGet"></a>
 </p>
 
 <p align="center">
@@ -64,8 +63,31 @@ agenttrace
 
 ## Install
 
-Install the latest public release with your package manager. Check the installed
-version with `agenttrace --version`.
+macOS and Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
+```
+
+Windows CMD:
+
+```bat
+curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.cmd -o install.cmd && install.cmd && del install.cmd
+```
+
+The install scripts download the release binary for your platform, verify its
+SHA-256 against the published checksum, and add the install directory to your
+PATH (`~/.local/bin`, or `%LOCALAPPDATA%\agenttrace` on Windows). Set
+`AGENTTRACE_VERSION=v0.9.1` (or `-Version v0.9.1` in PowerShell) to pin a
+release.
+
+Package managers:
 
 ```bash
 # macOS and Linux
@@ -73,25 +95,24 @@ brew install luoyuctl/tap/agenttrace
 
 # macOS, Linux, and Windows (requires Node.js 18+)
 npm install -g @zack78/agenttrace
-```
 
-Windows:
-
-```powershell
-winget install --id Luoyuctl.AgentTrace --exact
-```
-
-The package names above become available once the corresponding release has
-been published. Manual installs remain available without a package manager:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | sh
+# From source
 cargo install --git https://github.com/luoyuctl/agenttrace agenttrace
 ```
 
-```powershell
-iwr -useb https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
-```
+Check the installed version with `agenttrace --version`.
+
+### Update
+
+| Installed with | Update command |
+| --- | --- |
+| Install script | `agenttrace update` (`--check` to only look) |
+| Homebrew | `brew upgrade luoyuctl/tap/agenttrace` |
+| npm | `npm install -g @zack78/agenttrace@latest` |
+| cargo | re-run `cargo install ... --force` |
+
+`agenttrace update` verifies the release checksum before replacing the binary,
+and points package-manager installs back to their manager.
 
 ## Quickstart
 

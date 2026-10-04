@@ -22,6 +22,8 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+mod update;
+
 #[derive(Debug, Parser)]
 #[command(name = "agenttrace")]
 struct Args {
@@ -216,9 +218,16 @@ fn language_of(args: &Args) -> ReportLanguage {
 }
 
 fn main() {
-    let argv = go_flag_compatible_args(std::env::args_os());
-    let language = requested_language(&argv);
-    if let Err(err) = run(argv, language) {
+    let raw: Vec<OsString> = std::env::args_os().collect();
+    let result = if raw.get(1).is_some_and(|arg| arg == "update") {
+        let language = requested_language(&raw);
+        update::run(&raw[2..], language).map_err(|err| (err, language))
+    } else {
+        let argv = go_flag_compatible_args(raw);
+        let language = requested_language(&argv);
+        run(argv, language).map_err(|err| (err, language))
+    };
+    if let Err((err, language)) = result {
         eprintln!("{}: {err}", tr(language, "cli.err.prefix"));
         std::process::exit(1);
     }

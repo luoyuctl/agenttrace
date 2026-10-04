@@ -177,7 +177,7 @@ jobs:
         run: |
           npm publish "./dist/zack78-agenttrace-${GITHUB_REF_NAME#v}.tgz" --access public
 
-      - name: Render Homebrew and WinGet manifests
+      - name: Render Homebrew Formula
         run: |
           scripts/release/render-channels.sh \
             "${GITHUB_REF_NAME#v}" \
@@ -200,49 +200,3 @@ jobs:
           git add Formula/agenttrace.rb
           git diff --cached --quiet || git commit -m "agenttrace ${GITHUB_REF_NAME}"
           git push origin HEAD
-
-      - name: Upload WinGet manifests
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: agenttrace-winget-${{ github.ref_name }}
-          path: channel-dist/winget
-          if-no-files-found: error
-
-  winget:
-    name: Submit WinGet manifest
-    needs: release
-    runs-on: windows-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    env:
-      WINGETCREATE_VERSION: v1.12.13.0
-      WINGETCREATE_SHA256: 24042BD37915805615E6CF969AC57C6439124C3FE85823327F5F3FB24BD9FFEA
-    steps:
-      - name: Download WinGet manifests
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: agenttrace-winget-${{ github.ref_name }}
-          path: winget
-
-      - name: Download pinned wingetcreate
-        shell: pwsh
-        run: |
-          $url = "https://github.com/microsoft/winget-create/releases/download/$env:WINGETCREATE_VERSION/wingetcreate.exe"
-          Invoke-WebRequest -Uri $url -OutFile wingetcreate.exe
-          $actual = (Get-FileHash wingetcreate.exe -Algorithm SHA256).Hash
-          if ($actual -ne $env:WINGETCREATE_SHA256) {
-            throw "wingetcreate.exe checksum mismatch: $actual"
-          }
-
-      - name: Submit manifest
-        shell: pwsh
-        env:
-          WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
-        run: |
-          if (-not $env:WINGET_CREATE_GITHUB_TOKEN) {
-            throw "WINGET_GITHUB_TOKEN is required to submit the WinGet manifest."
-          }
-          $manifest = Get-ChildItem -Path winget/manifests -Recurse -Filter "Luoyuctl.AgentTrace.yaml" | Select-Object -First 1
-          if (-not $manifest) { throw "WinGet version manifest not found" }
-          ./wingetcreate.exe submit $manifest.DirectoryName --prtitle "New version: Luoyuctl.AgentTrace $env:GITHUB_REF_NAME" --no-open

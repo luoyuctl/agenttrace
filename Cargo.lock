@@ -18,6 +18,8 @@ dependencies = [
  "chrono",
  "clap",
  "serde_json",
+ "sha2",
+ "ureq",
 ]
 
 [[package]]

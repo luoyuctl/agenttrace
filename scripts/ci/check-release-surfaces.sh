@@ -28,8 +28,6 @@ grep -q "cargo install" README.zh-CN.md ||
 	fail "README.zh-CN install paths must include cargo install"
 grep -q "brew install luoyuctl/tap/agenttrace" README.md ||
 	fail "README must document Homebrew installation"
-grep -q "winget install --id Luoyuctl.AgentTrace --exact" README.md ||
-	fail "README must document WinGet installation"
 grep -q "npm install -g @zack78/agenttrace" README.md ||
 	fail "README must document npm installation"
 grep -q "npm install -g @zack78/agenttrace" README.zh-CN.md ||
@@ -48,12 +46,17 @@ grep -q "Publish npm launcher" .github/workflows/release.yml ||
 	fail "release workflow must publish the npm launcher"
 grep -q "Publish Homebrew Formula" .github/workflows/release.yml ||
 	fail "release workflow must publish the Homebrew Formula"
-grep -q "Luoyuctl.AgentTrace" scripts/release/render-channels.sh ||
-	fail "release helper must render the WinGet package identifier"
-grep -q "Submit WinGet manifest" .github/workflows/release.yml ||
-	fail "release workflow must submit the WinGet manifest"
-grep -q "WINGET_GITHUB_TOKEN" .github/workflows/release.yml ||
-	fail "release workflow must use the WinGet submission token"
+if grep -R -qi "winget" .github/workflows scripts/release README.md README.zh-CN.md; then
+	fail "WinGet is no longer a release channel; use install.ps1 on Windows"
+fi
+for script in install.sh install.ps1; do
+	grep -q "sha256" "$script" ||
+		fail "$script must verify the release SHA-256 before installing"
+done
+grep -q "install.ps1" install.cmd ||
+	fail "install.cmd must delegate to install.ps1"
+grep -q "agenttrace update" README.md ||
+	fail "README must document agenttrace update"
 
 for target in \
 	x86_64-unknown-linux-gnu \
