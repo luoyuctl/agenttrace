@@ -37,7 +37,7 @@ pub(super) fn source_counts(sessions: &[Session]) -> Vec<(String, usize)> {
 pub(super) fn render_loading_status(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(app.t("Loading", "加载中"));
+        .title(app.t("tui.loading"));
     let inner = block.inner(area);
     frame.render_widget(block, area);
     let rows = Layout::vertical([Constraint::Length(2), Constraint::Min(1)]).split(inner);
@@ -48,13 +48,10 @@ pub(super) fn render_loading_status(frame: &mut Frame<'_>, app: &App, area: Rect
         state.processed.min(state.discovered) as f64 / state.discovered as f64
     };
     let label = if state.discovered == 0 {
-        app.t("Discovering sessions…", "正在发现会话…").to_string()
+        app.t("tui.discovering_sessions").to_string()
     } else if state.processed >= state.discovered {
-        app.t(
-            "Files processed · loading databases and finishing…",
-            "文件已处理 · 正在加载数据库并汇总…",
-        )
-        .to_string()
+        app.t("tui.files_processed_loading_databases_and_finishing")
+            .to_string()
     } else {
         format!(
             "{}/{} · {:.0}%",
@@ -91,20 +88,20 @@ pub(super) fn loading_status_lines(app: &App) -> Vec<Line<'static>> {
         )),
         Line::from(format!(
             "{} {}/{} · {} {} · {}%",
-            app.t("processed", "已处理"),
+            app.t("tui.processed"),
             format_count(processed as i64),
             format_count(state.discovered as i64),
             format_count(state.cache_hits as i64),
-            app.t("cache hits", "缓存命中"),
+            app.t("tui.cache_hits"),
             percent
         )),
         Line::from(format!(
             "{} · {}",
             state.cache_state,
             if state.showing_cached {
-                app.t("showing cached sessions", "正在显示缓存会话")
+                app.t("tui.showing_cached_sessions")
             } else {
-                app.t("waiting for sessions", "正在等待会话")
+                app.t("tui.waiting_for_sessions")
             }
         )),
     ]
@@ -117,7 +114,7 @@ pub(super) fn load_summary_line(app: &App) -> String {
             frames[(app.last_auto_refresh.elapsed().as_millis() / 120) as usize % frames.len()];
         return format!(
             "{frame} {} {}/{}",
-            app.t("Refreshing", "刷新中"),
+            app.t("tui.refreshing"),
             app.load_state.processed,
             app.load_state.discovered
         );
@@ -129,10 +126,10 @@ pub(super) fn load_summary_line(app: &App) -> String {
             format_count(app.load_state.processed as i64),
             format_count(app.load_state.discovered as i64)
         ),
-        LoadPhase::Failed => app.t("load failed", "加载失败").to_string(),
+        LoadPhase::Failed => app.t("tui.load_failed").to_string(),
         _ => format!(
             "{} {}",
-            app.t("loaded", "已加载"),
+            app.t("tui.loaded"),
             format_count(app.sessions.len() as i64)
         ),
     }
@@ -140,11 +137,11 @@ pub(super) fn load_summary_line(app: &App) -> String {
 
 pub(super) fn load_phase_label(phase: LoadPhase, language: Language) -> &'static str {
     match phase {
-        LoadPhase::Idle => text(language, "Ready", "就绪"),
-        LoadPhase::Discovering => text(language, "Finding sessions", "正在查找会话"),
-        LoadPhase::Parsing => text(language, "Reading sessions", "正在读取会话"),
-        LoadPhase::Ready => text(language, "Ready", "就绪"),
-        LoadPhase::Failed => text(language, "Load failed", "加载失败"),
+        LoadPhase::Idle => text(language, "tui.ready"),
+        LoadPhase::Discovering => text(language, "tui.finding_sessions"),
+        LoadPhase::Parsing => text(language, "tui.reading_sessions"),
+        LoadPhase::Ready => text(language, "tui.ready"),
+        LoadPhase::Failed => text(language, "tui.load_failed_2"),
     }
 }
 

@@ -127,13 +127,10 @@ impl App {
                     let summary = share_summary(session);
                     self.notice = Some(match copy_summary(&summary) {
                         Ok(()) => (
-                            self.t("Summary copied", "摘要已复制").to_string(),
+                            self.t("tui.summary_copied").to_string(),
                             Some(Instant::now() + Duration::from_secs(2)),
                         ),
-                        Err(error) => (
-                            format!("{}: {error}", self.t("Copy failed", "复制失败")),
-                            None,
-                        ),
+                        Err(error) => (format!("{}: {error}", self.t("tui.copy_failed")), None),
                     });
                 }
             }
@@ -154,11 +151,8 @@ impl App {
                     self.refresh_filtered();
                     self.explorer_view = ExplorerView::All;
                     self.explorer_selected = 0;
-                    self.status = format!(
-                        "{}: {}",
-                        self.t("project filter", "项目筛选"),
-                        project.display_name
-                    );
+                    self.status =
+                        format!("{}: {}", self.t("tui.project_filter"), project.display_name);
                 }
             }
             KeyCode::Char('s') => {
@@ -193,7 +187,7 @@ impl App {
                     self.clear_filters();
                     self.refresh_filtered();
                     self.explorer_selected = 0;
-                    self.status = self.t("filter cleared", "已清除筛选").to_string();
+                    self.status = self.t("tui.filter_cleared").to_string();
                 }
             }
             KeyCode::Enter => {
@@ -236,15 +230,12 @@ impl App {
         if self.compare_anchor.as_deref() == Some(key.as_str()) {
             self.compare_anchor = None;
             self.compare_open = false;
-            self.status = self.t("comparison cleared", "已取消对比").to_string();
+            self.status = self.t("tui.comparison_cleared").to_string();
         } else {
             self.compare_anchor = Some(key);
             self.compare_open = false;
             self.status = self
-                .t(
-                    "comparison start selected; move to another session and press d",
-                    "已选中对比起点；移到另一个会话后按 d",
-                )
+                .t("tui.comparison_start_selected_move_to_another_sessio")
                 .to_string();
         }
     }
@@ -258,10 +249,7 @@ impl App {
             .then_some(current.metrics.session_start.as_str())
         else {
             self.status = self
-                .t(
-                    "This session has no timestamp for a previous-run comparison.",
-                    "当前会话没有时间戳，无法寻找上一次会话。",
-                )
+                .t("tui.this_session_has_no_timestamp_for_a")
                 .to_string();
             return;
         };
@@ -288,10 +276,7 @@ impl App {
             self.scroll = 0;
         } else {
             self.status = self
-                .t(
-                    "This is the earliest session from this project.",
-                    "当前就是这个项目最早的会话。",
-                )
+                .t("tui.this_is_the_earliest_session_from_this")
                 .to_string();
         }
     }
@@ -356,7 +341,7 @@ impl App {
             }
         }
         let query = self.input.to_lowercase();
-        std::iter::once((String::new(), self.t("Any", "不限").to_string()))
+        std::iter::once((String::new(), self.t("tui.any").to_string()))
             .chain(values)
             .filter(|(id, label)| format!("{label} {id}").to_lowercase().contains(&query))
             .collect()
@@ -653,10 +638,7 @@ pub(super) fn render_explorer(frame: &mut Frame<'_>, app: &mut App) {
     let area = frame.area();
     if area.width < 64 || area.height < 18 {
         frame.render_widget(
-            Paragraph::new(app.t(
-                "Window is too small. Make it at least 64x18.",
-                "窗口太小了，请调到至少 64×18。",
-            )),
+            Paragraph::new(app.t("tui.window_is_too_small_make_it_at")),
             area,
         );
         return;
@@ -684,10 +666,7 @@ pub(super) fn render_explorer(frame: &mut Frame<'_>, app: &mut App) {
 fn render_compare(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let Some([left, right]) = app.compare_sessions() else {
         frame.render_widget(
-            Paragraph::new(app.t(
-                "Choose a different session to compare.",
-                "请选择另一个会话进行对比。",
-            )),
+            Paragraph::new(app.t("tui.choose_a_different_session_to_compare")),
             area,
         );
         return;
@@ -697,40 +676,31 @@ fn render_compare(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let token_delta = total_tokens(&right) - total_tokens(&left);
     let fail_delta = right.metrics.tool_calls_fail as i64 - left.metrics.tool_calls_fail as i64;
     let verdict = if cost_delta > 0.0 && duration_delta > 0.0 {
-        app.t(
-            "The second session was slower and cost more.",
-            "第二个会话更慢，也更贵。",
-        )
+        app.t("tui.the_second_session_was_slower_and_cost")
     } else if cost_delta > 0.0 {
-        app.t("The second session cost more.", "第二个会话更贵。")
+        app.t("tui.the_second_session_cost_more")
     } else if duration_delta > 0.0 {
-        app.t("The second session was slower.", "第二个会话更慢。")
+        app.t("tui.the_second_session_was_slower")
     } else {
-        app.t(
-            "The second session was faster or cheaper.",
-            "第二个会话更快或更省。",
-        )
+        app.t("tui.the_second_session_was_faster_or_cheaper")
     };
     let text = format!(
         "{}\n\n{}\n→ {}\n\n{}\n{} {:+.4}\n{} {:+}\n{} {:+}\n{} {:+.1}s\n{} {:+}\n\n{}",
-        app.t("Compare sessions", "对比会话"),
+        app.t("tui.compare_sessions"),
         left.name,
         right.name,
         verdict,
-        app.t("Cost", "花费"),
+        app.t("tui.cost_4"),
         cost_delta,
-        app.t("Tokens", "Token"),
+        app.t("tui.tokens_2"),
         token_delta,
-        app.t("Tool failures", "工具失败"),
+        app.t("tui.tool_failures_2"),
         fail_delta,
-        app.t("Time", "耗时"),
+        app.t("tui.time_2"),
         duration_delta,
-        app.t("Health", "健康度"),
+        app.t("tui.health"),
         right.health - left.health,
-        app.t(
-            "Positive numbers mean the second session used more.",
-            "正数表示第二个会话用得更多。",
-        )
+        app.t("tui.positive_numbers_mean_the_second_session_used",)
     );
     frame.render_widget(
         Paragraph::new(text)
@@ -751,7 +721,7 @@ fn render_explorer_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
             app.filtered.len(),
             app.sessions.len(),
             active_filter_summary(app, app.language),
-            app.t("f Edit", "f 修改")
+            app.t("tui.f_edit")
         )
     } else {
         String::new()
@@ -766,7 +736,7 @@ fn render_explorer_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
             " · {} · {} {} · {}",
             range_label(app.range_filter, app.language),
             visible.len(),
-            app.t("sessions", "个会话"),
+            app.t("tui.sessions"),
             format_compact_cost(visible.iter().map(|item| item.metrics.cost_estimated).sum())
         );
         let used = 13 + unicode_width::UnicodeWidthStr::width(title);
@@ -807,10 +777,7 @@ fn render_explorer_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
             range_summary(app),
             shared::load_summary_line(app)
         )),
-        Span::styled(
-            app.t("   │   / search", "   │   / 搜索"),
-            Style::default().fg(Color::Gray),
-        ),
+        Span::styled(app.t("tui.search"), Style::default().fg(Color::Gray)),
     ]);
     frame.render_widget(
         Paragraph::new(vec![line, filter_line]).block(bottom_rule()),
@@ -833,11 +800,11 @@ fn range_summary(app: &App) -> String {
         "{} · {} {} · {} · {} · {} {}",
         range_label(app.range_filter, app.language),
         visible.len(),
-        app.t("sessions", "个会话"),
+        app.t("tui.sessions"),
         format_tokens(tokens),
         format_compact_cost(cost),
         attention,
-        app.t("need attention", "个需处理")
+        app.t("tui.need_attention")
     )
 }
 
@@ -909,15 +876,9 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
     if indices.is_empty() {
         let message = if app.explorer_view == ExplorerView::Attention && !app.filtered.is_empty() {
-            app.t(
-                "Nothing needs attention right now.",
-                "目前没有需要处理的问题。",
-            )
+            app.t("tui.nothing_needs_attention_right_now")
         } else {
-            app.t(
-                "No sessions match the current filter.",
-                "没有会话匹配当前筛选。",
-            )
+            app.t("tui.no_sessions_match_the_current_filter")
         };
         lines.push(Line::styled(message, Style::default().fg(Color::Gray)));
     }
@@ -940,10 +901,7 @@ fn render_explorer_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
 fn render_explorer_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let Some(session) = app.explorer_session() else {
-        frame.render_widget(
-            Paragraph::new(app.t("Nothing selected.", "还没选会话。")),
-            area,
-        );
+        frame.render_widget(Paragraph::new(app.t("tui.nothing_selected")), area);
         return;
     };
     let inner = area.inner(ratatui::layout::Margin {
@@ -978,62 +936,56 @@ fn render_explorer_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let metrics = &session.metrics;
     let context = &session.diagnostics.context_utilization;
     let mut lines = vec![
-        Line::styled(
-            app.t("Why look here", "为什么先看这个"),
-            Style::default().fg(Color::Cyan),
-        ),
+        Line::styled(app.t("tui.why_look_here"), Style::default().fg(Color::Cyan)),
         Line::styled(
             short(&session.name, 56),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        preview_field(app.t("Agent", "来源"), display_session_source(session)),
-        preview_field(app.t("Project", "项目"), project_name(session)),
-        preview_field(app.t("Model", "模型"), metrics.model_used.clone()),
+        preview_field(app.t("tui.agent"), display_session_source(session)),
+        preview_field(app.t("tui.project"), project_name(session)),
+        preview_field(app.t("tui.model"), metrics.model_used.clone()),
         Line::raw(""),
         Line::from(vec![
             metric_span(
-                app.t("Health", "健康"),
+                app.t("tui.health_3"),
                 session.health.to_string(),
                 health_color(session.health),
             ),
             Span::raw("     "),
             metric_span(
-                app.t("Context", "上下文"),
+                app.t("tui.context_2"),
                 format_context_pct(context.utilization_pct),
                 risk_color(&context.risk_level),
             ),
             Span::raw("     "),
             metric_span(
-                app.t("Cost", "花费"),
+                app.t("tui.cost_4"),
                 format_compact_cost(metrics.cost_estimated),
                 Color::White,
             ),
             Span::raw("     "),
             metric_span(
-                app.t("Time", "耗时"),
+                app.t("tui.time_2"),
                 format_duration(metrics.duration_sec),
                 Color::White,
             ),
         ]),
         Line::raw(""),
         Line::styled(
-            app.t("What's going on", "现在的问题"),
+            app.t("tui.what_s_going_on"),
             Style::default().fg(Color::Cyan),
         ),
         Line::raw(primary_finding(session, app.language)),
         Line::raw(""),
-        Line::styled(
-            app.t("What we saw", "我们看到了什么"),
-            Style::default().fg(Color::Cyan),
-        ),
+        Line::styled(app.t("tui.what_we_saw"), Style::default().fg(Color::Cyan)),
     ];
     for evidence in explorer_evidence(session, app.language).into_iter().take(5) {
         lines.push(Line::raw(format!("• {evidence}")));
     }
     lines.push(Line::raw(""));
     lines.push(Line::styled(
-        app.t("What to do", "建议怎么做"),
+        app.t("tui.what_to_do"),
         Style::default().fg(Color::Cyan),
     ));
     lines.push(Line::raw(explorer_recommendation(session, app.language)));
@@ -1061,22 +1013,19 @@ fn project_preview(app: &App, session: &Session) -> String {
     };
     format!(
         "{}\n{}\n\n{}  {}\n{}  {}\n{}  {}\n{}  {:.0}\n{}  {}\n\n{}",
-        app.t("Project summary", "项目概况"),
+        app.t("tui.project_summary"),
         project,
-        app.t("Sessions", "会话数"),
+        app.t("tui.sessions_2"),
         sessions.len(),
-        app.t("Estimated spend", "估算花费"),
+        app.t("tui.estimated_spend"),
         format_compact_cost(cost),
-        app.t("Tokens", "Token"),
+        app.t("tui.tokens_2"),
         format_tokens(tokens),
-        app.t("Average health", "平均健康度"),
+        app.t("tui.average_health"),
         average,
-        app.t("Need attention", "需处理"),
+        app.t("tui.need_attention_2"),
         attention,
-        app.t(
-            "Press s to show only this project's sessions.",
-            "按 s 只看这个项目的会话。",
-        )
+        app.t("tui.press_s_to_show_only_this_project",)
     )
 }
 
@@ -1092,34 +1041,31 @@ fn context_preview(session: &Session, language: Language) -> String {
         .join("\n");
     format!(
         "{}\n{}\n\n{}         {}\n{}                {}\n{}     {}\n{}        {}\n{}       {}\n{}    {}\n{}           {}\n\n{}\n{}\n\n{}\n{}",
-        text(language, "Context filling up", "上下文快满了"),
+        text(language, "tui.context_filling_up"),
         session.name,
-        text(language, "used", "已用"),
+        text(language, "tui.used"),
         format_context_pct(value.utilization_pct),
-        text(language, "risk", "风险"),
+        text(language, "tui.risk"),
         i18n::risk_label(&value.risk_level, language),
-        text(language, "estimated total", "估算总量"),
+        text(language, "tui.estimated_total"),
         format_tokens(value.estimated_total as i64),
-        text(language, "conversation", "对话内容"),
+        text(language, "tui.conversation"),
         format_tokens(value.conversation_history as i64),
-        text(language, "system prompt", "系统提示"),
+        text(language, "tui.system_prompt"),
         format_tokens(value.system_prompt as i64),
-        text(language, "tool definitions", "工具定义"),
+        text(language, "tui.tool_definitions"),
         format_tokens(value.tool_definitions as i64),
-        text(language, "room left", "还能用"),
+        text(language, "tui.room_left"),
         format_tokens(value.available_for_task as i64),
-        text(language, "What's taking space", "什么在占空间"),
+        text(language, "tui.what_s_taking_space"),
         if params.is_empty() {
-            text(language, "No oversized tool arguments showed up.", "没看到特别大的工具参数。")
+            text(language, "tui.no_oversized_tool_arguments_showed_up")
         } else {
             &params
         },
-        text(language, "Did it compact?", "有没有压缩"),
+        text(language, "tui.did_it_compact"),
         text(
-            language,
-            "We didn't see a compaction event from this agent.",
-            "这个来源没有记录压缩事件。"
-        )
+            language, "tui.we_didn_t_see_a_compaction_event")
     )
 }
 
@@ -1129,31 +1075,27 @@ fn storage_preview(session: &Session, language: Language) -> String {
     let modified = metadata
         .and_then(|value| value.modified().ok())
         .map(|value| format!("{value:?}"))
-        .unwrap_or_else(|| text(language, "unknown", "未知").to_string());
+        .unwrap_or_else(|| text(language, "tui.unknown").to_string());
     format!(
         "{}\n{}\n\n{}  {}\n{}  {}\n\n{}\n{}\n\n{}\n{}\n\n{}\n{}",
-        text(language, "On this machine", "在这台电脑上"),
+        text(language, "tui.on_this_machine"),
         session.name,
-        text(language, "Size", "大小"),
+        text(language, "tui.size"),
         format_bytes(size),
-        text(language, "Last changed", "上次改动"),
+        text(language, "tui.last_changed"),
         modified,
-        text(language, "Session file", "会话文件"),
+        text(language, "tui.session_file"),
         session.path,
-        text(language, "Workspace", "工作区"),
+        text(language, "tui.workspace"),
         session.cwd,
-        text(language, "Safe to know", "可以放心"),
-        text(
-            language,
-            "Look or archive it yourself. AgentTrace never deletes these files.",
-            "你可以自己查看或归档。AgentTrace 不会删这些文件。"
-        )
+        text(language, "tui.safe_to_know"),
+        text(language, "tui.look_or_archive_it_yourself_agenttrace_never")
     )
 }
 
 fn cost_preview(session: &Session, language: Language) -> String {
     let audit = session_cost_audit(session);
-    let unavailable = text(language, "not available", "不可用");
+    let unavailable = text(language, "tui.not_available");
     let current_cost = audit
         .estimated_cost_usd
         .map(format_compact_cost)
@@ -1168,13 +1110,13 @@ fn cost_preview(session: &Session, language: Language) -> String {
         .map(|cost| {
             format!(
                 "{} {}  {} {}  {} {}  {} {}",
-                text(language, "in", "输入"),
+                text(language, "tui.in"),
                 format_compact_cost(cost.input),
-                text(language, "out", "输出"),
+                text(language, "tui.out"),
                 format_compact_cost(cost.output),
-                text(language, "cache write", "写缓存"),
+                text(language, "tui.cache_write"),
                 format_compact_cost(cost.cache_write),
-                text(language, "cache read", "读缓存"),
+                text(language, "tui.cache_read"),
                 format_compact_cost(cost.cache_read)
             )
         })
@@ -1185,20 +1127,20 @@ fn cost_preview(session: &Session, language: Language) -> String {
         .map(|rate| {
             format!(
                 "{}  {} ${:.2}  {} ${:.2}  {} ${:.2}  {} ${:.2}",
-                text(language, "Price per 1M tokens", "每百万 token 价格"),
-                text(language, "in", "输入"),
+                text(language, "tui.price_per_1m_tokens"),
+                text(language, "tui.in"),
                 rate.input,
-                text(language, "out", "输出"),
+                text(language, "tui.out"),
                 rate.output,
-                text(language, "cache write", "写缓存"),
+                text(language, "tui.cache_write"),
                 rate.cache_write,
-                text(language, "cache read", "读缓存"),
+                text(language, "tui.cache_read"),
                 rate.cache_read
             )
         })
         .unwrap_or_else(|| unavailable.to_string());
     [
-        text(language, "Estimated spend", "估算花费").to_string(),
+        text(language, "tui.estimated_spend").to_string(),
         session.name.clone(),
         String::new(),
         audit
@@ -1208,104 +1150,92 @@ fn cost_preview(session: &Session, language: Language) -> String {
         String::new(),
         format!(
             "{}       {}",
-            text(language, "input tokens", "输入 token"),
+            text(language, "tui.input_tokens"),
             format_tokens(audit.tokens.input)
         ),
         format!(
             "{}      {}",
-            text(language, "output tokens", "输出 token"),
+            text(language, "tui.output_tokens"),
             format_tokens(audit.tokens.output)
         ),
         format!(
             "{}        {}",
-            text(language, "cache write", "写入缓存"),
+            text(language, "tui.cache_write_2"),
             format_tokens(audit.tokens.cache_write)
         ),
         format!(
             "{}         {}",
-            text(language, "cache read", "读取缓存"),
+            text(language, "tui.cache_read_2"),
             format_tokens(audit.tokens.cache_read)
         ),
         format!(
             "{}     {}",
-            text(language, "total counted", "统计总量"),
+            text(language, "tui.total_counted"),
             format_tokens(audit.tokens.total)
         ),
         String::new(),
-        text(language, "Price sources", "价格来源").to_string(),
+        text(language, "tui.price_sources").to_string(),
         format!(
             "{}  {}",
-            text(language, "Current rates", "当前价格"),
+            text(language, "tui.current_rates"),
             audit.pricing_source
         ),
         format!(
             "{}  {}",
-            text(language, "Stored estimate", "历史估算"),
+            text(language, "tui.stored_estimate"),
             audit.stored_pricing_source
         ),
         format!(
             "{}  {}",
-            text(language, "Price status", "价格状态"),
+            text(language, "tui.price_status"),
             i18n::pricing_status_label(&audit.pricing_status, language)
         ),
         format!(
             "{}  {}",
-            text(language, "How complete the data is", "数据全不全"),
+            text(language, "tui.how_complete_the_data_is"),
             i18n::capability_label(audit.capability, language)
         ),
         format!(
             "{}  {} / {}",
-            text(language, "Source / model", "来源 / 模型"),
+            text(language, "tui.source_model"),
             audit.provider,
             audit.model
         ),
         String::new(),
-        text(language, "Split by token type", "按 token 类型拆开").to_string(),
+        text(language, "tui.split_by_token_type").to_string(),
         component_costs,
         rates,
         format!(
             "{}  {}",
-            text(language, "Note", "说明"),
+            text(language, "tui.note"),
             text(
                 language,
                 match audit.pricing_status.as_str() {
-                    "catalog_estimate" => "This uses the matching model in our price list.",
-                    "fallback_estimate" => "No exact model match, so this is a fallback estimate.",
-                    "aggregate_estimate" =>
-                        "SQLite combined multiple models, so no single-model exact price applies.",
-                    _ => "We don't have a reliable price for this model yet.",
-                },
-                match audit.pricing_status.as_str() {
-                    "catalog_estimate" => "这是按价目表里对上的模型估算的。",
-                    "fallback_estimate" => "没有对上确切模型，所以这是兜底估算。",
-                    "aggregate_estimate" => "SQLite 聚合了多个模型，不能按单一模型精确计价。",
-                    _ => "这个模型暂时没有靠谱的价格。",
+                    "catalog_estimate" => "tui.pricing_note.catalog_estimate",
+                    "fallback_estimate" => "tui.pricing_note.fallback_estimate",
+                    "aggregate_estimate" => "tui.pricing_note.aggregate_estimate",
+                    _ => "tui.pricing_note.unknown",
                 }
             )
         ),
         format!(
             "{}  {}",
-            text(language, "Historical stored estimate", "缓存中的历史估算"),
+            text(language, "tui.historical_stored_estimate"),
             format_compact_cost(audit.stored_estimated_cost_usd)
         ),
         format!(
             "{}  {}",
-            text(language, "Current-rate estimate", "按当前价格重算"),
+            text(language, "tui.current_rate_estimate"),
             current_cost
         ),
-        format!("{}  {}", text(language, "Difference", "差异"), difference),
+        format!("{}  {}", text(language, "tui.difference"), difference),
         format!(
             "{}  {}",
-            text(language, "Why they differ", "差异原因"),
+            text(language, "tui.why_they_differ"),
             audit.pricing_note.clone()
         ),
         String::new(),
-        text(
-            language,
-            "This is a local estimate from token counts, not a bill.",
-            "这是按 token 数量做的本地估算，不是账单。",
-        )
-        .to_string(),
+        text(language, "tui.this_is_a_local_estimate_from_token").to_string(),
     ]
     .join("\n")
 }
@@ -1334,9 +1264,9 @@ fn tools_preview(session: &Session, language: Language) -> String {
                 format_duration(item.p95_sec),
                 item.tool_name,
                 if item.timeouts > 0 {
-                    text(language, "  timeout", "  超时")
+                    text(language, "tui.timeout")
                 } else if item.unmatched > 0 {
-                    text(language, "  no result", "  无结果")
+                    text(language, "tui.no_result")
                 } else {
                     ""
                 }
@@ -1346,25 +1276,25 @@ fn tools_preview(session: &Session, language: Language) -> String {
         .join("\n");
     format!(
         "{}\n{}\n\n{}       {}\n{}   {}\n{}      {}\n{} {}\n\n{}\n{}\n\n{}\n{}",
-        text(language, "Tool trouble", "工具出问题"),
+        text(language, "tui.tool_trouble"),
         session.name,
-        text(language, "calls", "调用次数"),
+        text(language, "tui.calls"),
         session.metrics.tool_calls_total,
-        text(language, "succeeded", "成功"),
+        text(language, "tui.succeeded"),
         session.metrics.tool_calls_ok,
-        text(language, "failed", "失败"),
+        text(language, "tui.failed"),
         session.metrics.tool_calls_fail,
-        text(language, "repeat loops", "反复调用"),
+        text(language, "tui.repeat_loops"),
         session.diagnostics.loop_cost.loop_groups,
-        text(language, "Most used tools", "用得最多的工具"),
+        text(language, "tui.most_used_tools"),
         if usage.is_empty() {
-            text(language, "No tool calls showed up.", "没看到工具调用。")
+            text(language, "tui.no_tool_calls_showed_up")
         } else {
             &usage
         },
-        text(language, "Slowest tools", "最慢的工具"),
+        text(language, "tui.slowest_tools"),
         if latency.is_empty() {
-            text(language, "No timing samples showed up.", "没看到耗时样本。")
+            text(language, "tui.no_timing_samples_showed_up")
         } else {
             &latency
         }
@@ -1445,16 +1375,13 @@ fn render_detail_section(
                     .join("\n");
                 format!(
                     "{}\n{}\n\n{}\n{}\n\n{}\n{}\n\n{}",
-                    app.t("What's going on", "现在的问题"),
+                    app.t("tui.what_s_going_on"),
                     primary_finding(session, app.language),
-                    app.t("What we saw", "我们看到了什么"),
+                    app.t("tui.what_we_saw"),
                     evidence,
-                    app.t("What to do", "建议怎么做"),
+                    app.t("tui.what_to_do"),
                     explorer_recommendation(session, app.language),
-                    app.t(
-                        "e Full report · y Copy safe summary",
-                        "e 完整报告 · y 复制安全摘要"
-                    )
+                    app.t("tui.e_full_report_y_copy_safe_summary")
                 )
             }
         }
@@ -1526,31 +1453,31 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
     let audit = session_cost_audit(session);
     let text = vec![
         Line::styled(
-            app.t("Session at a glance", "会话概况"),
+            app.t("tui.session_at_a_glance"),
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
         sidebar_field(
-            app.t("Source", "来源"),
+            app.t("tui.source"),
             display_session_source(session),
             Style::default(),
         ),
         sidebar_field(
-            app.t("Model", "模型"),
+            app.t("tui.model"),
             session.metrics.model_used.clone(),
             Style::default(),
         ),
         sidebar_field(
-            app.t("Health", "健康"),
+            app.t("tui.health_3"),
             session.health.to_string(),
             Style::default()
                 .fg(health_color(session.health))
                 .add_modifier(Modifier::BOLD),
         ),
         sidebar_field(
-            app.t("Context", "上下文"),
+            app.t("tui.context_2"),
             format!(
                 "{} ({})",
                 format_context_pct(session.diagnostics.context_utilization.utilization_pct),
@@ -1564,22 +1491,22 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
             )),
         ),
         sidebar_field(
-            app.t("Spend", "花费"),
+            app.t("tui.spend"),
             format_compact_cost(session.metrics.cost_estimated),
             Style::default().fg(cost_color(session.metrics.cost_estimated)),
         ),
         sidebar_field(
-            app.t("Time", "耗时"),
+            app.t("tui.time_2"),
             format_duration(session.metrics.duration_sec),
             Style::default(),
         ),
         sidebar_field(
-            app.t("Tools", "工具"),
+            app.t("tui.tools"),
             format!(
                 "{} / {} {}",
                 session.metrics.tool_calls_fail,
                 session.metrics.tool_calls_total,
-                app.t("failed", "失败")
+                app.t("tui.failed")
             ),
             if session.metrics.tool_calls_fail > 0 {
                 Style::default().fg(Color::LightRed)
@@ -1588,10 +1515,7 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
             },
         ),
         Line::raw(""),
-        Line::styled(
-            app.t("Data quality", "数据质量"),
-            Style::default().fg(Color::Cyan),
-        ),
+        Line::styled(app.t("tui.data_quality"), Style::default().fg(Color::Cyan)),
         Line::raw(i18n::capability_label(audit.capability, app.language)),
         Line::raw(i18n::pricing_status_label(
             &audit.pricing_status,
@@ -1599,24 +1523,21 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
         )),
         Line::raw(format!(
             "{}: {}",
-            app.t("Tokens", "Token"),
+            app.t("tui.tokens_2"),
             i18n::provenance_label(&session.metrics.provenance.tokens, app.language)
         )),
         Line::raw(format!(
             "{}: {}",
-            app.t("Time", "耗时"),
+            app.t("tui.time_2"),
             i18n::provenance_label(&session.metrics.provenance.duration, app.language)
         )),
         Line::raw(format!(
             "{}: {}",
-            app.t("Tool results", "工具结果"),
+            app.t("tui.tool_results_2"),
             i18n::provenance_label(&session.metrics.provenance.tool_results, app.language)
         )),
         Line::raw(""),
-        Line::styled(
-            app.t("Workspace", "工作区"),
-            Style::default().fg(Color::Cyan),
-        ),
+        Line::styled(app.t("tui.workspace"), Style::default().fg(Color::Cyan)),
         Line::styled(
             if session.cwd.is_empty() {
                 resolve_project(session).root
@@ -1626,10 +1547,7 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
             Style::default().fg(Color::Gray),
         ),
         Line::raw(""),
-        Line::styled(
-            app.t("Session file", "会话文件"),
-            Style::default().fg(Color::Cyan),
-        ),
+        Line::styled(app.t("tui.session_file"), Style::default().fg(Color::Cyan)),
         Line::styled(session.path.clone(), Style::default().fg(Color::Gray)),
     ];
     frame.render_widget(
@@ -1642,11 +1560,8 @@ fn render_detail_sidebar(frame: &mut Frame<'_>, app: &App, session: &Session, ar
 
 fn render_explorer_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let text = if app.compare_open {
-        app.t(
-            "↑/↓ Scroll   Esc Back   Space Clear comparison   ? Help",
-            "↑/↓ 滚动   Esc 返回   Space 取消对比   ? 帮助",
-        )
-        .to_string()
+        app.t("tui.scroll_esc_back_space_clear_comparison_help")
+            .to_string()
     } else if app.mode == InputMode::Search {
         format!(
             "/ {}   {}/{}",
@@ -1655,17 +1570,9 @@ fn render_explorer_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
             app.sessions.len()
         )
     } else if app.explorer_detail.is_some() {
-        app.t(
-            "? Help  Esc Back  ←/→ Section  ↑/↓ Scroll  e Full report  y Copy  L Language",
-            "? 帮助  Esc 返回  ←/→ 分区  ↑/↓ 滚动  e 完整报告  y 复制  L 切换语言",
-        )
-        .to_string()
+        app.t("tui.help_esc_back_section_scroll_e_full").to_string()
     } else {
-        app.t(
-            "? Help  / Search  f Filter  v Views  Enter Open  l Language",
-            "? 帮助  / 搜索  f 筛选  v 视图  Enter 打开  l 语言",
-        )
-        .to_string()
+        app.t("tui.help_search_f_filter_v_views_enter").to_string()
     };
     frame.render_widget(
         Paragraph::new(vec![
@@ -1753,12 +1660,9 @@ fn render_explorer_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 lines.push(overlay_row(index == app.overlay_selected, label, id));
             }
             if choices.is_empty() {
-                lines.push(Line::raw(app.t("No matches", "无匹配项")));
+                lines.push(Line::raw(app.t("tui.no_matches")));
             }
-            lines.push(Line::raw(app.t(
-                "↑↓ Select  Enter Apply  Esc Back",
-                "↑↓ 选择  Enter 应用  Esc 返回",
-            )));
+            lines.push(Line::raw(app.t("tui.select_enter_apply_esc_back")));
             frame.render_widget(Paragraph::new(lines), inner);
         }
         ExplorerOverlay::None => {}
@@ -1768,7 +1672,7 @@ fn render_explorer_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
 fn render_view_picker(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let mut lines = vec![
         Line::styled(
-            app.t("Switch view", "换个视图"),
+            app.t("tui.switch_view"),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
@@ -1782,26 +1686,23 @@ fn render_view_picker(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
     lines.push(Line::raw(""));
     lines.push(Line::styled(
-        app.t(
-            "↑↓ Select   Enter Open   Esc Close",
-            "↑↓ 选择   Enter 打开   Esc 关闭",
-        ),
+        app.t("tui.select_enter_open_esc_close"),
         Style::default().fg(Color::Gray),
     ));
     frame.render_widget(Paragraph::new(lines), area);
 }
 
 fn render_filter_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let any = app.t("Any", "不限");
+    let any = app.t("tui.any");
     let health = if app.health_filter.is_empty() {
         any.to_string()
     } else {
         app.health_filter.clone()
     };
     let rows = [
-        (app.t("Health", "健康"), health),
+        (app.t("tui.health_3"), health),
         (
-            app.t("Source", "来源"),
+            app.t("tui.source"),
             if app.source_filter.is_empty() {
                 any.to_string()
             } else {
@@ -1809,7 +1710,7 @@ fn render_filter_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
             },
         ),
         (
-            app.t("Project", "项目"),
+            app.t("tui.project"),
             if active_project_filter_label(app).is_empty() {
                 any.to_string()
             } else {
@@ -1817,25 +1718,25 @@ fn render_filter_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
             },
         ),
         (
-            app.t("When", "时间"),
+            app.t("tui.when"),
             range_label(app.range_filter, app.language).to_string(),
         ),
         (
-            app.t("Context risk", "上下文风险"),
+            app.t("tui.context_risk"),
             if app.issue_filter == "context" {
-                app.t("warning and critical", "警告和严重").to_string()
+                app.t("tui.warning_and_critical").to_string()
             } else {
                 any.to_string()
             },
         ),
         (
-            app.t("Reset all", "全部重置"),
+            app.t("tui.reset_all"),
             active_filter_summary(app, app.language),
         ),
     ];
     let mut lines = vec![
         Line::styled(
-            app.t("Filter sessions", "筛选会话"),
+            app.t("tui.filter_sessions"),
             Style::default().add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
@@ -1847,13 +1748,10 @@ fn render_filter_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
     lines.push(Line::raw(format!(
         "{} {}",
         app.filtered.len(),
-        app.t("matching sessions", "个匹配会话")
+        app.t("tui.matching_sessions")
     )));
     lines.push(Line::styled(
-        app.t(
-            "↑↓ Field   Enter Change   x Clear   Esc Close",
-            "↑↓ 字段   Enter 修改   x 清除   Esc 关闭",
-        ),
+        app.t("tui.field_enter_change_x_clear_esc_close"),
         Style::default().fg(Color::Gray),
     ));
     frame.render_widget(Paragraph::new(lines), area);
@@ -1872,10 +1770,7 @@ fn render_command_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
     lines.push(Line::raw(""));
     lines.push(Line::styled(
-        app.t(
-            "↑↓ Select   Enter Run   Esc Close",
-            "↑↓ 选择   Enter 执行   Esc 关闭",
-        ),
+        app.t("tui.select_enter_run_esc_close"),
         Style::default().fg(Color::Gray),
     ));
     frame.render_widget(Paragraph::new(lines), area);
@@ -1903,50 +1798,50 @@ fn render_help_overlay(frame: &mut Frame<'_>, app: &App, area: Rect) {
         }
         Line::from(spans)
     };
-    let mut lines = vec![heading(app.t("Keys", "快捷键")), Line::raw("")];
+    let mut lines = vec![heading(app.t("tui.keys")), Line::raw("")];
     if app.explorer_detail.is_some() {
         lines.push(row(&[
-            ("j/k", app.t("Prev/next session", "上/下一个会话")),
-            ("←/→", app.t("Sections", "切换分区")),
+            ("j/k", app.t("tui.prev_next_session")),
+            ("←/→", app.t("tui.sections")),
         ]));
         lines.push(row(&[
-            ("↑/↓", app.t("Scroll", "滚动")),
-            ("e", app.t("Full report", "完整报告")),
+            ("↑/↓", app.t("tui.scroll")),
+            ("e", app.t("tui.full_report")),
         ]));
         lines.push(row(&[
-            ("y", app.t("Copy safe summary", "复制安全摘要")),
-            ("L", app.t("Language", "语言")),
+            ("y", app.t("tui.copy_safe_summary")),
+            ("L", app.t("tui.language")),
         ]));
     } else {
         lines.push(row(&[
-            ("↑/↓", app.t("Select", "选择")),
-            ("Enter", app.t("Open", "打开")),
+            ("↑/↓", app.t("tui.select")),
+            ("Enter", app.t("tui.open")),
         ]));
         lines.push(row(&[
-            ("Space", app.t("Mark to compare", "标记对比")),
-            ("d", app.t("Compare", "对比")),
+            ("Space", app.t("tui.mark_to_compare")),
+            ("d", app.t("tui.compare")),
         ]));
         lines.push(row(&[
-            ("D", app.t("Previous run", "同项目上次")),
-            ("l", app.t("Language", "语言")),
+            ("D", app.t("tui.previous_run")),
+            ("l", app.t("tui.language")),
         ]));
     }
     lines.push(Line::raw(""));
     lines.push(row(&[
-        ("/", app.t("Search", "搜索")),
-        ("f", app.t("Filter", "筛选")),
+        ("/", app.t("tui.search_2")),
+        ("f", app.t("tui.filter_2")),
     ]));
     lines.push(row(&[
-        ("v", app.t("Views", "视图")),
-        ("Ctrl+K", app.t("Commands", "命令")),
+        ("v", app.t("tui.views")),
+        ("Ctrl+K", app.t("tui.commands")),
     ]));
     lines.push(row(&[
-        ("R", app.t("Time range", "时间范围")),
-        ("r", app.t("Reload", "刷新")),
+        ("R", app.t("tui.time_range")),
+        ("r", app.t("tui.reload")),
     ]));
     lines.push(row(&[
-        ("Esc", app.t("Back / close", "返回/关闭")),
-        ("q", app.t("Quit", "退出")),
+        ("Esc", app.t("tui.back_close")),
+        ("q", app.t("tui.quit")),
     ]));
     frame.render_widget(Paragraph::new(lines), area);
 }
@@ -2027,7 +1922,7 @@ fn explorer_row_spans(
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
-                    format!("{:>8}  ", format!("{count} {}", app.t("runs", "次"))),
+                    format!("{:>8}  ", format!("{count} {}", app.t("tui.runs"))),
                     muted,
                 ),
                 Span::styled(
@@ -2059,7 +1954,7 @@ fn explorer_row_spans(
             format!(
                 "{} {}",
                 session.metrics.tool_calls_fail,
-                app.t("failed", "次失败")
+                app.t("tui.failed_2")
             ),
             if session.metrics.tool_calls_fail > 0 {
                 Style::default().fg(Color::LightRed)
@@ -2180,11 +2075,11 @@ fn explorer_list_title(app: &App) -> String {
             i18n::explorer_list_title(app.explorer_view, app.language),
             indices.len(),
             urgent,
-            app.t("urgent", "紧急"),
+            app.t("tui.urgent"),
             slow,
-            app.t("slow", "偏慢"),
+            app.t("tui.slow"),
             costly,
-            app.t("costly", "偏贵")
+            app.t("tui.costly")
         );
     }
     format!(
@@ -2206,34 +2101,34 @@ fn detail_summary(session: &Session, language: Language) -> String {
         i18n::capability_label(session_capability(session), language),
         i18n::inspect_reason_label(inspect_reason(session), language),
         i18n::pricing_status_label(&audit.pricing_status, language),
-        text(language, "tokens", "Token"),
+        text(language, "tui.tokens"),
         i18n::provenance_label(&session.metrics.provenance.tokens, language),
-        text(language, "time", "耗时"),
+        text(language, "tui.time"),
         i18n::provenance_label(&session.metrics.provenance.duration, language),
-        text(language, "tool results", "工具结果"),
+        text(language, "tui.tool_results"),
         i18n::provenance_label(&session.metrics.provenance.tool_results, language),
-        text(language, "cost", "成本"),
+        text(language, "tui.cost_2"),
         i18n::provenance_label(&session.metrics.provenance.cost, language)
     );
     format!(
         "{}\n{}\n\n{}\n{}={}  {}={}  {}={}  {}={}\n{}\n\n{}\n{}\n\n{}\n{}\n\n{}\n{}",
-        text(language, "What's going on", "现在的问题"),
+        text(language, "tui.what_s_going_on"),
         primary_finding(session, language),
-        text(language, "Numbers", "数字"),
-        text(language, "health", "健康"),
+        text(language, "tui.numbers"),
+        text(language, "tui.health_2"),
         session.health,
-        text(language, "context", "上下文"),
+        text(language, "tui.context"),
         format_context_pct(session.diagnostics.context_utilization.utilization_pct),
-        text(language, "cost", "花费"),
+        text(language, "tui.cost_3"),
         format_compact_cost(session.metrics.cost_estimated),
-        text(language, "time", "耗时"),
+        text(language, "tui.time"),
         format_duration(session.metrics.duration_sec),
         health_explanation(session, language),
-        text(language, "What we saw", "我们看到了什么"),
+        text(language, "tui.what_we_saw"),
         evidence,
-        text(language, "What to do", "建议怎么做"),
+        text(language, "tui.what_to_do"),
         explorer_recommendation(session, language),
-        text(language, "How complete this is", "信息全不全"),
+        text(language, "tui.how_complete_this_is"),
         completeness
     )
 }
@@ -2317,18 +2212,18 @@ fn render_timeline_table(frame: &mut Frame<'_>, app: &App, session: &Session, ar
         .collect::<Vec<_>>();
     let header = if compact {
         Row::new(vec![
-            app.t("Type", "类型"),
-            app.t("Step", "步骤"),
-            app.t("Time", "耗时"),
-            app.t("Result", "结果"),
+            app.t("tui.type"),
+            app.t("tui.step"),
+            app.t("tui.time_2"),
+            app.t("tui.result"),
         ])
     } else {
         Row::new(vec![
-            app.t("Started", "开始时间"),
-            app.t("Type", "类型"),
-            app.t("Step", "步骤"),
-            app.t("Time", "耗时"),
-            app.t("Result", "结果"),
+            app.t("tui.started"),
+            app.t("tui.type"),
+            app.t("tui.step"),
+            app.t("tui.time_2"),
+            app.t("tui.result"),
         ])
     }
     .style(
@@ -2339,9 +2234,9 @@ fn render_timeline_table(frame: &mut Frame<'_>, app: &App, session: &Session, ar
     .bottom_margin(1);
     let title = format!(
         "{} · {} {}",
-        app.t("What happened", "发生了什么"),
+        app.t("tui.what_happened"),
         session.diagnostics.steps.len(),
-        app.t("steps", "个步骤")
+        app.t("tui.steps")
     );
     frame.render_widget(
         Table::new(rows, constraints)
@@ -2368,27 +2263,15 @@ fn step_status_style(status: &str) -> Style {
 
 fn detail_timeline_empty(session: &Session, language: Language) -> String {
     let mut lines = vec![
-        text(language, "What happened", "发生了什么").to_string(),
+        text(language, "tui.what_happened").to_string(),
         String::new(),
-        text(
-            language,
-            "This session didn't record a step-by-step timeline.",
-            "这个会话没有记下逐步时间线。",
-        )
-        .to_string(),
+        text(language, "tui.this_session_didn_t_record_a_step").to_string(),
     ];
     for anomaly in &session.anomalies {
         lines.push(format!("• [{}] {}", anomaly.severity, anomaly.detail));
     }
     lines.push(String::new());
-    lines.push(
-        text(
-            language,
-            "We didn't see a compaction event from this agent.",
-            "这个来源没有记录压缩事件。",
-        )
-        .to_string(),
-    );
+    lines.push(text(language, "tui.we_didn_t_see_a_compaction_event").to_string());
     lines.join("\n")
 }
 
@@ -2404,32 +2287,30 @@ fn detail_context(session: &Session, language: Language) -> String {
         .join("\n");
     format!(
         "{}\n\n{}       {}\n{}  {}\n{}         {}\n{}      {}\n{}    {}\n{}           {}\n{}                  {}\n\n{}\n{}\n\n{}\n{}\n\n{}",
-        text(language, "Context", "上下文"),
-        text(language, "estimated total", "估算总量"),
+        text(language, "tui.context_2"),
+        text(language, "tui.estimated_total"),
         format_tokens(value.estimated_total as i64),
-        text(language, "conversation history", "对话内容"),
+        text(language, "tui.conversation_history"),
         format_tokens(value.conversation_history as i64),
-        text(language, "system prompt", "系统提示"),
+        text(language, "tui.system_prompt"),
         format_tokens(value.system_prompt as i64),
-        text(language, "tool definitions", "工具定义"),
+        text(language, "tui.tool_definitions"),
         format_tokens(value.tool_definitions as i64),
-        text(language, "room left", "还能用"),
+        text(language, "tui.room_left"),
         format_tokens(value.available_for_task as i64),
-        text(language, "used", "已用"),
+        text(language, "tui.used"),
         format_context_pct(value.utilization_pct),
-        text(language, "risk", "风险"),
+        text(language, "tui.risk"),
         i18n::risk_label(&value.risk_level, language),
-        text(language, "What's taking space", "什么在占空间"),
+        text(language, "tui.what_s_taking_space"),
         if params.is_empty() {
-            text(language, "none observed", "没看到").to_string()
+            text(language, "tui.none_observed").to_string()
         } else {
             params
         },
-        text(language, "Did it compact?", "有没有压缩"),
+        text(language, "tui.did_it_compact"),
         text(
-            language,
-            "We didn't see a compaction event from this agent.",
-            "这个来源没有记录压缩事件。",
+            language, "tui.we_didn_t_see_a_compaction_event",
         ),
         value.suggestion
     )
@@ -2441,7 +2322,7 @@ fn health_explanation(session: &Session, language: Language) -> String {
         parts.push(format!(
             "{} {}",
             session.metrics.tool_calls_fail,
-            text(language, "tool failures", "次工具失败")
+            text(language, "tui.tool_failures")
         ));
     }
     if matches!(
@@ -2450,7 +2331,7 @@ fn health_explanation(session: &Session, language: Language) -> String {
     ) {
         parts.push(format!(
             "{} {}",
-            text(language, "context", "上下文"),
+            text(language, "tui.context"),
             format_context_pct(session.diagnostics.context_utilization.utilization_pct)
         ));
     }
@@ -2458,27 +2339,22 @@ fn health_explanation(session: &Session, language: Language) -> String {
         parts.push(format!(
             "{} {}",
             session.diagnostics.loop_cost.loop_groups,
-            text(language, "repeat loops", "组反复调用")
+            text(language, "tui.repeat_loops_2")
         ));
     }
     if !session.anomalies.is_empty() {
         parts.push(format!(
             "{} {}",
             session.anomalies.len(),
-            text(language, "unusual signals", "个异常信号")
+            text(language, "tui.unusual_signals")
         ));
     }
     if parts.is_empty() {
-        text(
-            language,
-            "Health: no clear penalty found",
-            "健康度：没有明显扣分项",
-        )
-        .to_string()
+        text(language, "tui.health_no_clear_penalty_found").to_string()
     } else {
         format!(
             "{}: {}",
-            text(language, "Health is affected by", "健康度受这些因素影响"),
+            text(language, "tui.health_is_affected_by"),
             parts.join(", ")
         )
     }
@@ -2490,7 +2366,7 @@ fn detail_files(session: &Session, language: Language) -> String {
     let modified = metadata
         .and_then(|value| value.modified().ok())
         .map(|value| format!("{value:?}"))
-        .unwrap_or_else(|| text(language, "unknown", "未知").to_string());
+        .unwrap_or_else(|| text(language, "tui.unknown").to_string());
     let mut files = session.metrics.file_usage.iter().collect::<Vec<_>>();
     files.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
     let accessed = files
@@ -2510,39 +2386,26 @@ fn detail_files(session: &Session, language: Language) -> String {
         .join("\n");
     format!(
         "{}\n\n{}\n{}\n\n{}  {}\n{}  {}\n\n{}\n{}\n\n{}\n{}\n\n{}",
-        text(language, "Session file", "会话文件"),
+        text(language, "tui.session_file"),
         session.path,
         session.cwd,
-        text(language, "Size", "大小"),
+        text(language, "tui.size"),
         format_bytes(size),
-        text(language, "Last changed", "上次改动"),
+        text(language, "tui.last_changed"),
         modified,
-        text(language, "Files it touched", "碰过的文件"),
+        text(language, "tui.files_it_touched"),
         if accessed.is_empty() {
-            text(language, "none observed", "没看到").to_string()
+            text(language, "tui.none_observed").to_string()
         } else {
             accessed
         },
-        text(
-            language,
-            "Possible repeated reads",
-            "可能重复读取的文件",
-        ),
+        text(language, "tui.possible_repeated_reads",),
         if repeated.is_empty() {
-            text(
-                language,
-                "No file appeared 3 or more times.",
-                "没有文件出现 3 次以上。",
-            )
-            .to_string()
+            text(language, "tui.no_file_appeared_3_or_more_times").to_string()
         } else {
             repeated
         },
-        text(
-            language,
-            "This count comes from file paths in tool arguments; it may include reads, writes, or searches.",
-            "这里统计的是工具参数里的文件路径，可能包含读取、写入或搜索。"
-        )
+        text(language, "tui.this_count_comes_from_file_paths_in")
     )
 }
 
@@ -2550,61 +2413,41 @@ fn primary_finding(session: &Session, language: Language) -> String {
     match inspect_reason(session) {
         "critical" => format!(
             "{} ({})",
-            text(
-                language,
-                "This session looks unhealthy",
-                "这个会话看起来不健康"
-            ),
+            text(language, "tui.this_session_looks_unhealthy"),
             session.health
         ),
         "anomaly" => session
             .anomalies
             .first()
             .map(|anomaly| anomaly.detail.clone())
-            .unwrap_or_else(|| {
-                text(language, "Something unusual showed up", "出现了异常").to_string()
-            }),
+            .unwrap_or_else(|| text(language, "tui.something_unusual_showed_up").to_string()),
         "failures" => format!(
             "{}: {}",
-            text(language, "Tools failed", "工具失败了"),
+            text(language, "tui.tools_failed"),
             session.metrics.tool_calls_fail
         ),
         "context" => format!(
             "{} ({})",
-            text(language, "Context is nearly full", "上下文快满了"),
+            text(language, "tui.context_is_nearly_full"),
             format_context_pct(session.diagnostics.context_utilization.utilization_pct)
         ),
         "loops" => format!(
             "{}: {}",
-            text(language, "Repeated tool loop", "工具反复调用"),
+            text(language, "tui.repeated_tool_loop"),
             session.diagnostics.loop_cost.loop_groups
         ),
         "latency" => format!(
             "{} {}",
-            text(language, "This run was slow", "这次跑得偏慢"),
+            text(language, "tui.this_run_was_slow"),
             format_duration(session.metrics.duration_sec)
         ),
         "cost" => format!(
             "{} {}",
-            text(
-                language,
-                "This was the most expensive session",
-                "这是最贵的会话"
-            ),
+            text(language, "tui.this_was_the_most_expensive_session"),
             format_compact_cost(session.metrics.cost_estimated)
         ),
-        "warning" => text(
-            language,
-            "This session needs a closer look",
-            "这个会话需要进一步看看",
-        )
-        .to_string(),
-        _ => text(
-            language,
-            "Nothing urgent jumped out.",
-            "没有特别紧急的问题。",
-        )
-        .to_string(),
+        "warning" => text(language, "tui.this_session_needs_a_closer_look").to_string(),
+        _ => text(language, "tui.nothing_urgent_jumped_out").to_string(),
     }
 }
 
@@ -2619,13 +2462,13 @@ fn explorer_evidence(session: &Session, language: Language) -> Vec<String> {
             "{} / {} {} ({rate:.0}%)",
             session.metrics.tool_calls_fail,
             session.metrics.tool_calls_total,
-            text(language, "tool calls failed", "次工具调用失败")
+            text(language, "tui.tool_calls_failed")
         ));
     }
     if context.utilization_pct > 0.0 && context.risk_level != "good" {
         evidence.push(format!(
             "{} {} ({})",
-            text(language, "Context", "上下文"),
+            text(language, "tui.context_2"),
             format_context_pct(context.utilization_pct),
             i18n::risk_label(&context.risk_level, language)
         ));
@@ -2634,7 +2477,7 @@ fn explorer_evidence(session: &Session, language: Language) -> Vec<String> {
         evidence.push(format!(
             "{} {}",
             session.diagnostics.loop_cost.loop_groups,
-            text(language, "repeat loops", "组反复调用")
+            text(language, "tui.repeat_loops_2")
         ));
     }
     for anomaly in session
@@ -2646,14 +2489,7 @@ fn explorer_evidence(session: &Session, language: Language) -> Vec<String> {
         evidence.push(anomaly.detail.clone());
     }
     if evidence.is_empty() {
-        evidence.push(
-            text(
-                language,
-                "There's not much extra detail for this session.",
-                "这个会话没有更多细节。",
-            )
-            .to_string(),
-        );
+        evidence.push(text(language, "tui.there_s_not_much_extra_detail_for").to_string());
     }
     evidence
 }
@@ -2671,48 +2507,23 @@ fn explorer_recommendation(session: &Session, language: Language) -> String {
     let context = &session.diagnostics.context_utilization;
     match inspect_reason(session) {
         "loops" => {
-            return text(
-                language,
-                "The agent repeated the same call; check the loop in What happened before rerunning.",
-                "Agent 反复做同一个调用；重跑前先在「发生了什么」里看清循环。",
-            )
-            .to_string();
+            return text(language, "tui.the_agent_repeated_the_same_call_check").to_string();
         }
         "cost" => {
-            return text(
-                language,
-                "Check the Spend view to see which token type drove the cost.",
-                "去「花费」视图看看是哪类 token 推高了成本。",
-            )
-            .to_string();
+            return text(language, "tui.check_the_spend_view_to_see_which").to_string();
         }
         "latency" => {
-            return text(
-                language,
-                "Look for the longest gaps in What happened to see where time went.",
-                "在「发生了什么」里找最长的空档，看时间花在哪。",
-            )
-            .to_string();
+            return text(language, "tui.look_for_the_longest_gaps_in_what").to_string();
         }
         _ => {}
     }
     if session.metrics.tool_calls_fail > 0 {
-        return text(
-            language,
-            "Check the failed tool calls before trying again.",
-            "再试之前，先看看失败的工具调用。",
-        )
-        .to_string();
+        return text(language, "tui.check_the_failed_tool_calls_before_trying").to_string();
     }
     if !context.suggestion.trim().is_empty() && context.risk_level != "good" {
         return context.suggestion.clone();
     }
-    text(
-        language,
-        "Open What happened and check the recorded steps.",
-        "打开「发生了什么」，核对记下的步骤。",
-    )
-    .to_string()
+    text(language, "tui.open_what_happened_and_check_the_recorded").to_string()
 }
 
 fn session_file_size(session: &Session) -> u64 {

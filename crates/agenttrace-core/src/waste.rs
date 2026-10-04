@@ -1,3 +1,4 @@
+use crate::i18n::tr;
 use crate::{
     format_cost, format_tokens, loop_waste_percent, pricing, round4, Metrics, ReportLanguage,
     Session, VERSION,
@@ -271,59 +272,59 @@ fn waste_report_text(report: &WasteReport, language: ReportLanguage) -> String {
     out.push_str(&format!(
         "  AGENTTRACE v{} - {}\n",
         VERSION,
-        t(language, "Waste Analysis", "浪费分析")
+        tr(language, "waste.waste_analysis")
     ));
     out.push_str(&sep);
     out.push('\n');
     out.push('\n');
     out.push_str(&format!(
         "  {}: {}/100 ({} {})\n",
-        t(language, "Score", "评分"),
+        tr(language, "waste.score"),
         report.waste_score,
         level_emoji(report.waste_level),
         waste_level_label(report.waste_level, language)
     ));
     out.push_str(&format!(
         "  {}: {}\n",
-        t(language, "Wasted", "浪费成本"),
+        tr(language, "waste.wasted"),
         format_cost(report.total_wasted)
     ));
     out.push_str(&format!("  {}\n", waste_summary(report, language)));
     out.push('\n');
-    out.push_str(t(language, "  -- Cache --\n", "  -- 缓存 --\n"));
+    out.push_str(tr(language, "waste.cache"));
     out.push_str(&format!(
         "  {} ({} {:.0}%, {} {} / {} {})\n",
         cache_rating_label(report.cache.rating, language),
-        t(language, "hit", "命中"),
+        tr(language, "waste.hit"),
         report.cache.hit_rate,
         format_tokens(report.cache.cache_read_tokens),
-        t(language, "read", "读取"),
+        tr(language, "waste.read"),
         format_tokens(report.cache.total_input_tokens),
-        t(language, "input", "输入")
+        tr(language, "waste.input")
     ));
     if report.cache.wasted_cost > 0.0 {
         out.push_str(&format!(
             "  {}: {}\n",
-            t(language, "Cache waste", "缓存浪费"),
+            tr(language, "waste.cache_waste"),
             format_cost(report.cache.wasted_cost)
         ));
     }
     out.push_str(&format!(
         "  {}: {}\n",
-        t(language, "Suggestion", "建议"),
+        tr(language, "waste.suggestion"),
         cache_suggestion(report.cache.rating, language)
     ));
     out.push('\n');
-    out.push_str(t(language, "  -- Tool Bloat --\n", "  -- 工具膨胀 --\n"));
+    out.push_str(tr(language, "waste.tool_bloat"));
     out.push_str(&format!(
         "  {} ({:.1} {})\n",
         bloat_level_label(report.bloat.bloat_level, language),
         report.bloat.tools_per_turn,
-        t(language, "tools/turn", "工具/轮")
+        tr(language, "waste.tools_turn")
     ));
     for item in &report.bloat.top_bloat {
         let redundant = if item.is_redundant {
-            t(language, " *redundant", " *冗余")
+            tr(language, "waste.redundant")
         } else {
             ""
         };
@@ -336,9 +337,9 @@ fn waste_report_text(report: &WasteReport, language: ReportLanguage) -> String {
         ));
     }
     out.push('\n');
-    out.push_str(t(language, "  -- Stuck --\n", "  -- 卡住 --\n"));
+    out.push_str(tr(language, "waste.stuck"));
     if report.stuck.is_empty() {
-        out.push_str(t(language, "  none\n", "  无\n"));
+        out.push_str(tr(language, "waste.none"));
     } else {
         for stuck in &report.stuck {
             out.push_str(&format!(
@@ -349,7 +350,7 @@ fn waste_report_text(report: &WasteReport, language: ReportLanguage) -> String {
         }
     }
     out.push('\n');
-    out.push_str(t(language, "  -- Actions --\n", "  -- 建议动作 --\n"));
+    out.push_str(tr(language, "waste.actions"));
     for (index, action) in report.top_actions.iter().enumerate() {
         out.push_str(&format!(
             "  {}. {}\n",
@@ -361,13 +362,6 @@ fn waste_report_text(report: &WasteReport, language: ReportLanguage) -> String {
     out.push_str(&sep);
     out.push('\n');
     out
-}
-
-fn t(language: ReportLanguage, en: &'static str, zh: &'static str) -> &'static str {
-    match language {
-        ReportLanguage::En => en,
-        ReportLanguage::Zh => zh,
-    }
 }
 
 fn waste_summary(report: &WasteReport, language: ReportLanguage) -> String {
@@ -468,19 +462,19 @@ fn action_text(action: &str, language: ReportLanguage) -> String {
 
 fn cache_rating_label(rating: &str, language: ReportLanguage) -> &'static str {
     match rating {
-        "excellent" => t(language, "excellent", "优秀"),
-        "good" => t(language, "good", "良好"),
-        "poor" => t(language, "poor", "较差"),
-        _ => t(language, "none", "未启用"),
+        "excellent" => tr(language, "waste.excellent"),
+        "good" => tr(language, "waste.good"),
+        "poor" => tr(language, "waste.poor"),
+        _ => tr(language, "waste.none_2"),
     }
 }
 
 fn bloat_level_label(level: &str, language: ReportLanguage) -> &'static str {
     match level {
-        "severe" => t(language, "severe", "严重"),
-        "high" => t(language, "high", "高"),
-        "medium" => t(language, "medium", "中"),
-        _ => t(language, "low", "低"),
+        "severe" => tr(language, "waste.severe"),
+        "high" => tr(language, "waste.high"),
+        "medium" => tr(language, "waste.medium"),
+        _ => tr(language, "waste.low"),
     }
 }
 
@@ -495,10 +489,10 @@ fn bloat_suggestion(level: &str) -> &'static str {
 
 fn waste_level_label(level: &str, language: ReportLanguage) -> &'static str {
     match level {
-        "red" => t(language, "SEVERE", "严重"),
-        "orange" => t(language, "HIGH", "高"),
-        "yellow" => t(language, "MODERATE", "中"),
-        _ => t(language, "LOW", "低"),
+        "red" => tr(language, "waste.severe_2"),
+        "orange" => tr(language, "waste.high_2"),
+        "yellow" => tr(language, "waste.moderate"),
+        _ => tr(language, "waste.low_2"),
     }
 }
 

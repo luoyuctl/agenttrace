@@ -17,209 +17,147 @@ pub(super) enum UiText {
 
 impl UiText {
     pub(super) fn get(self, language: Language) -> &'static str {
-        let en = match self {
-            Self::ActionCenter => "Next steps",
-            Self::Efficiency => "Efficiency",
-            Self::EstimatedSavings => "estimated savings",
-            Self::PricingConfidence => "how sure the prices are",
-            Self::ExactPriceMatch => "exact model match",
-            Self::NoObservedMcpCalls => "No MCP tool calls showed up in these sessions.",
-            Self::NoPriorityFindings => "Nothing urgent in the current filter.",
-            Self::CurrentSourceUnavailable => "can't filter by this source",
-            Self::LanguageSaveFailed => "couldn't save the language setting",
-        };
-        let zh = match self {
-            Self::ActionCenter => "接下来做什么",
-            Self::Efficiency => "效率",
-            Self::EstimatedSavings => "大概能省多少",
-            Self::PricingConfidence => "价格把握有多大",
-            Self::ExactPriceMatch => "模型对得上",
-            Self::NoObservedMcpCalls => "这些会话里没看到 MCP 工具调用。",
-            Self::NoPriorityFindings => "按当前筛选，没有急需处理的问题。",
-            Self::CurrentSourceUnavailable => "没法按这个来源筛选",
-            Self::LanguageSaveFailed => "语言设置没保存成功",
-        };
-        pick(language, en, zh)
+        pick(
+            language,
+            match self {
+                Self::ActionCenter => "tui.ui.action_center",
+                Self::Efficiency => "tui.ui.efficiency",
+                Self::EstimatedSavings => "tui.ui.estimated_savings",
+                Self::PricingConfidence => "tui.ui.pricing_confidence",
+                Self::ExactPriceMatch => "tui.ui.exact_price_match",
+                Self::NoObservedMcpCalls => "tui.ui.no_observed_mcp_calls",
+                Self::NoPriorityFindings => "tui.ui.no_priority_findings",
+                Self::CurrentSourceUnavailable => "tui.ui.current_source_unavailable",
+                Self::LanguageSaveFailed => "tui.ui.language_save_failed",
+            },
+        )
     }
 }
 
-pub(super) fn pick(language: Language, en: &'static str, zh: &'static str) -> &'static str {
-    match language {
-        Language::En => en,
-        Language::Zh => zh,
-    }
+pub(super) fn pick(language: Language, key: &'static str) -> &'static str {
+    agenttrace_core::tr(language, key)
 }
 
 pub(super) fn explorer_view_label(view: ExplorerView, language: Language) -> &'static str {
     match view {
-        ExplorerView::Attention => pick(language, "Look here first", "先看这些"),
-        ExplorerView::Recent => pick(language, "Recent", "最近"),
-        ExplorerView::All => pick(language, "All sessions", "全部会话"),
-        ExplorerView::Projects => pick(language, "Projects", "项目"),
-        ExplorerView::Context => pick(language, "Context size", "上下文占用"),
-        ExplorerView::Storage => pick(language, "Disk size", "占用空间"),
-        ExplorerView::Cost => pick(language, "Spend", "花费"),
-        ExplorerView::Tools => pick(language, "Tools", "工具"),
+        ExplorerView::Attention => pick(language, "tui.look_here_first"),
+        ExplorerView::Recent => pick(language, "tui.recent"),
+        ExplorerView::All => pick(language, "tui.all_sessions"),
+        ExplorerView::Projects => pick(language, "tui.projects"),
+        ExplorerView::Context => pick(language, "tui.context_size"),
+        ExplorerView::Storage => pick(language, "tui.disk_size"),
+        ExplorerView::Cost => pick(language, "tui.spend"),
+        ExplorerView::Tools => pick(language, "tui.tools"),
     }
 }
 
 pub(super) fn explorer_view_description(view: ExplorerView, language: Language) -> &'static str {
     match view {
-        ExplorerView::Attention => pick(
-            language,
-            "Sessions that look unhealthy or expensive",
-            "看起来不健康或很贵的会话",
-        ),
-        ExplorerView::Recent => pick(language, "Latest sessions", "最近用过的会话"),
-        ExplorerView::All => pick(language, "Search everything", "搜索全部会话"),
-        ExplorerView::Projects => pick(language, "Sessions grouped by project", "按项目查看会话"),
-        ExplorerView::Context => pick(
-            language,
-            "Sessions filling up their context window",
-            "上下文快撑满的会话",
-        ),
-        ExplorerView::Storage => pick(
-            language,
-            "Biggest session files on disk",
-            "磁盘上最大的会话文件",
-        ),
-        ExplorerView::Cost => pick(
-            language,
-            "Rough token spend, not a bill",
-            "大概花了多少，不是账单",
-        ),
-        ExplorerView::Tools => pick(
-            language,
-            "Failures, slowness, and loops",
-            "失败、偏慢和反复调用",
-        ),
+        ExplorerView::Attention => pick(language, "tui.sessions_that_look_unhealthy_or_expensive"),
+        ExplorerView::Recent => pick(language, "tui.latest_sessions"),
+        ExplorerView::All => pick(language, "tui.search_everything"),
+        ExplorerView::Projects => pick(language, "tui.sessions_grouped_by_project"),
+        ExplorerView::Context => pick(language, "tui.sessions_filling_up_their_context_window"),
+        ExplorerView::Storage => pick(language, "tui.biggest_session_files_on_disk"),
+        ExplorerView::Cost => pick(language, "tui.rough_token_spend_not_a_bill"),
+        ExplorerView::Tools => pick(language, "tui.failures_slowness_and_loops"),
     }
 }
 
 pub(super) fn explorer_list_title(view: ExplorerView, language: Language) -> &'static str {
     match view {
-        ExplorerView::Attention => pick(language, "Look here first", "先看这些"),
-        ExplorerView::Recent => pick(language, "Recent sessions", "最近会话"),
-        ExplorerView::All => pick(language, "All sessions", "全部会话"),
-        ExplorerView::Projects => pick(language, "Projects", "项目"),
-        ExplorerView::Context => pick(language, "Context filling up", "上下文快满了"),
-        ExplorerView::Storage => pick(language, "Largest session files", "最大的会话文件"),
-        ExplorerView::Cost => pick(language, "Estimated spend", "估算花费"),
-        ExplorerView::Tools => pick(language, "Tool trouble", "工具出问题"),
+        ExplorerView::Attention => pick(language, "tui.look_here_first"),
+        ExplorerView::Recent => pick(language, "tui.recent_sessions_2"),
+        ExplorerView::All => pick(language, "tui.all_sessions"),
+        ExplorerView::Projects => pick(language, "tui.projects"),
+        ExplorerView::Context => pick(language, "tui.context_filling_up"),
+        ExplorerView::Storage => pick(language, "tui.largest_session_files"),
+        ExplorerView::Cost => pick(language, "tui.estimated_spend"),
+        ExplorerView::Tools => pick(language, "tui.tool_trouble"),
     }
 }
 
 pub(super) fn detail_section_label(section: DetailSection, language: Language) -> &'static str {
     match section {
-        DetailSection::Summary => pick(language, "Summary", "摘要"),
-        DetailSection::Timeline => pick(language, "What happened", "发生了什么"),
-        DetailSection::Context => pick(language, "Context", "上下文"),
-        DetailSection::Files => pick(language, "Files", "文件"),
+        DetailSection::Summary => pick(language, "tui.summary"),
+        DetailSection::Timeline => pick(language, "tui.what_happened"),
+        DetailSection::Context => pick(language, "tui.context_2"),
+        DetailSection::Files => pick(language, "tui.files_2"),
     }
 }
 
 pub(super) fn inspect_reason_label(reason: &str, language: Language) -> &'static str {
     match reason {
-        "critical" => pick(language, "unhealthy", "不健康"),
-        "anomaly" => pick(language, "unusual", "异常"),
-        "failures" => pick(language, "tool fails", "工具失败"),
-        "context" => pick(language, "context risk", "上下文风险"),
-        "loops" => pick(language, "repeat loop", "反复调用"),
-        "latency" => pick(language, "slow", "偏慢"),
-        "cost" => pick(language, "costly", "偏贵"),
-        "warning" => pick(language, "needs a look", "建议看看"),
-        _ => pick(language, "ok", "正常"),
+        "critical" => pick(language, "tui.unhealthy"),
+        "anomaly" => pick(language, "tui.unusual"),
+        "failures" => pick(language, "tui.tool_fails"),
+        "context" => pick(language, "tui.context_risk_2"),
+        "loops" => pick(language, "tui.repeat_loop"),
+        "latency" => pick(language, "tui.slow"),
+        "cost" => pick(language, "tui.costly"),
+        "warning" => pick(language, "tui.needs_a_look"),
+        _ => pick(language, "tui.ok_3"),
     }
 }
 
 pub(super) fn pricing_status_label(status: &str, language: Language) -> &'static str {
     match status {
-        "catalog_estimate" => pick(language, "priced from our model list", "按模型价目表估算"),
-        "fallback_estimate" => pick(
-            language,
-            "best-effort price, no exact model match",
-            "没有对上确切模型，按兜底价格估算",
-        ),
-        "unpriced_or_unknown" => pick(
-            language,
-            "can't price this model yet",
-            "这个模型暂时没法估价",
-        ),
-        "aggregate_estimate" => pick(
-            language,
-            "aggregate estimate across multiple models",
-            "多个模型聚合估算",
-        ),
-        _ => pick(language, "unknown price status", "价格状态未知"),
+        "catalog_estimate" => pick(language, "tui.priced_from_our_model_list"),
+        "fallback_estimate" => pick(language, "tui.best_effort_price_no_exact_model_match"),
+        "unpriced_or_unknown" => pick(language, "tui.can_t_price_this_model_yet"),
+        "aggregate_estimate" => pick(language, "tui.aggregate_estimate_across_multiple_models"),
+        _ => pick(language, "tui.unknown_price_status"),
     }
 }
 
 pub(super) fn capability_label(capability: &str, language: Language) -> &'static str {
     match capability {
-        "detailed" => pick(language, "full details", "细节齐全"),
-        "aggregate" => pick(language, "totals only", "只有合计"),
-        "limited" => pick(language, "sparse data", "数据很少"),
-        _ => pick(language, "unknown data coverage", "数据覆盖未知"),
+        "detailed" => pick(language, "tui.full_details"),
+        "aggregate" => pick(language, "tui.totals_only"),
+        "limited" => pick(language, "tui.sparse_data"),
+        _ => pick(language, "tui.unknown_data_coverage"),
     }
 }
 
 pub(super) fn provenance_label(value: &str, language: Language) -> &'static str {
     match value {
-        "reported_by_agent" => pick(language, "recorded by the agent", "Agent 直接记录"),
-        "estimated_from_text" => pick(language, "estimated from text", "根据文本估算"),
-        "timestamp_span" => pick(language, "calculated from timestamps", "根据时间戳计算"),
-        "reported_or_inferred" => pick(language, "recorded or inferred", "直接记录或推断"),
-        "calculated_from_tokens" => pick(language, "calculated from tokens", "根据 token 重算"),
-        "calculated_per_message_tokens" => pick(
-            language,
-            "calculated per SQLite message tokens",
-            "按 SQLite 消息 token 计算",
-        ),
-        "tool_arguments" => pick(language, "found in tool arguments", "从工具参数中提取"),
-        "unavailable" | "" => pick(language, "not available", "没有数据"),
-        _ => pick(language, "source unknown", "来源未知"),
+        "reported_by_agent" => pick(language, "tui.recorded_by_the_agent"),
+        "estimated_from_text" => pick(language, "tui.estimated_from_text"),
+        "timestamp_span" => pick(language, "tui.calculated_from_timestamps"),
+        "reported_or_inferred" => pick(language, "tui.recorded_or_inferred"),
+        "calculated_from_tokens" => pick(language, "tui.calculated_from_tokens"),
+        "calculated_per_message_tokens" => {
+            pick(language, "tui.calculated_per_sqlite_message_tokens")
+        }
+        "tool_arguments" => pick(language, "tui.found_in_tool_arguments"),
+        "unavailable" | "" => pick(language, "tui.not_available_2"),
+        _ => pick(language, "tui.source_unknown"),
     }
 }
 
 pub(super) fn risk_label(risk: &str, language: Language) -> &'static str {
     match risk {
-        "critical" => pick(language, "critical", "严重"),
-        "warning" => pick(language, "warning", "警告"),
-        "ok" | "normal" | "" => pick(language, "ok", "正常"),
-        _ => pick(language, "unknown risk", "风险未知"),
+        "critical" => pick(language, "tui.critical"),
+        "warning" => pick(language, "tui.warning"),
+        "ok" | "normal" | "" => pick(language, "tui.ok_3"),
+        _ => pick(language, "tui.unknown_risk"),
     }
 }
 
 pub(super) fn command_choices(language: Language) -> [(&'static str, &'static str); 10] {
     [
+        (pick(language, "tui.open_look_here_first"), "view:attention"),
+        (pick(language, "tui.open_context_size"), "view:context"),
+        (pick(language, "tui.open_disk_size"), "view:storage"),
+        (pick(language, "tui.open_projects"), "view:projects"),
+        (pick(language, "tui.open_spend"), "view:cost"),
+        (pick(language, "tui.open_tools"), "view:tools"),
         (
-            pick(language, "Open Look here first", "打开「先看这些」"),
-            "view:attention",
-        ),
-        (
-            pick(language, "Open Context size", "打开「上下文占用」"),
-            "view:context",
-        ),
-        (
-            pick(language, "Open Disk size", "打开「占用空间」"),
-            "view:storage",
-        ),
-        (
-            pick(language, "Open Projects", "打开「项目」"),
-            "view:projects",
-        ),
-        (pick(language, "Open Spend", "打开「花费」"), "view:cost"),
-        (pick(language, "Open Tools", "打开「工具」"), "view:tools"),
-        (
-            pick(
-                language,
-                "Only sessions with context risk",
-                "只看上下文有风险的会话",
-            ),
+            pick(language, "tui.only_sessions_with_context_risk"),
             "filter:context",
         ),
-        (pick(language, "Clear filters", "清除筛选"), "clear"),
-        (pick(language, "Switch language", "切换语言"), "language"),
-        (pick(language, "Reload sessions", "重新加载"), "reload"),
+        (pick(language, "tui.clear_filters"), "clear"),
+        (pick(language, "tui.switch_language"), "language"),
+        (pick(language, "tui.reload_sessions"), "reload"),
     ]
 }

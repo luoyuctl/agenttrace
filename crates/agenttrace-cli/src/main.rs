@@ -572,10 +572,7 @@ fn session_mod_time(session: &Session) -> SystemTime {
 }
 
 fn report_language(value: &str) -> ReportLanguage {
-    match value.to_ascii_lowercase().as_str() {
-        "zh" | "zh-cn" | "zh_cn" | "chinese" => ReportLanguage::Zh,
-        _ => ReportLanguage::En,
-    }
+    ReportLanguage::parse(value).unwrap_or_default()
 }
 
 fn load_sessions(args: &Args) -> anyhow::Result<Vec<Session>> {

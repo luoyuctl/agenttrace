@@ -8,8 +8,8 @@ use agenttrace_core::{
     load_sessions_with_progress_from_cache_mode, mcp_governance, needs_attention, project_name,
     recommendations, resolve_project, session_capability, session_cost_audit,
     session_matches_time_range, total_tokens, ContextTrend, CostAudit, DataHealth,
-    DeliveryEvidence, LoadOptions, LoadProgress, LoadReport, McpGovernance, Overview,
-    Recommendation, ReportLanguage, Session, SessionCache, TimeRange,
+    DeliveryEvidence, Language, LoadOptions, LoadProgress, LoadReport, McpGovernance, Overview,
+    Recommendation, Session, SessionCache, TimeRange,
 };
 #[cfg(test)]
 use agenttrace_core::{
@@ -61,11 +61,7 @@ pub fn run_with_sessions(sessions: Vec<Session>, label: &str) -> anyhow::Result<
 }
 
 fn parse_language(value: Option<&str>) -> Option<Language> {
-    match value?.trim().to_ascii_lowercase().as_str() {
-        "en" | "english" => Some(Language::En),
-        "zh" | "zh-cn" | "zh_cn" | "chinese" => Some(Language::Zh),
-        _ => None,
-    }
+    Language::parse(value?)
 }
 
 fn run_with_app(app: App) -> anyhow::Result<()> {
@@ -167,28 +163,6 @@ enum SortKey {
 enum DriverKind {
     Source,
     Model,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Language {
-    En,
-    Zh,
-}
-
-impl Language {
-    fn toggle(self) -> Self {
-        match self {
-            Self::En => Self::Zh,
-            Self::Zh => Self::En,
-        }
-    }
-
-    fn report(self) -> ReportLanguage {
-        match self {
-            Self::En => ReportLanguage::En,
-            Self::Zh => ReportLanguage::Zh,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -426,7 +400,7 @@ impl App {
                 self.mode = InputMode::Normal;
                 self.input.clear();
                 self.input_original.clear();
-                self.status = self.t("search cancelled", "已取消搜索").to_string();
+                self.status = self.t("tui.search_cancelled").to_string();
             }
             KeyCode::Enter => {
                 self.apply_search_input();
@@ -435,9 +409,9 @@ impl App {
                 self.input_original.clear();
                 self.search_snapshot = None;
                 self.status = if self.query.is_empty() {
-                    self.t("filter cleared", "已清除筛选").to_string()
+                    self.t("tui.filter_cleared").to_string()
                 } else {
-                    format!("{}: {}", self.t("filter", "筛选"), self.query)
+                    format!("{}: {}", self.t("tui.filter"), self.query)
                 };
             }
             KeyCode::Backspace => {
@@ -576,7 +550,7 @@ impl App {
         };
         if recognized {
             self.query.clear();
-            self.status = format!("{}: {value}", self.t("filter", "筛选"));
+            self.status = format!("{}: {value}", self.t("tui.filter"));
         }
         recognized
     }
@@ -585,8 +559,8 @@ impl App {
         self.handle_explorer_event(Event::Key(key))
     }
 
-    fn t(&self, en: &'static str, zh: &'static str) -> &'static str {
-        text(self.language, en, zh)
+    fn t(&self, key: &'static str) -> &'static str {
+        text(self.language, key)
     }
 
     fn toggle_language(&mut self) {
@@ -595,10 +569,7 @@ impl App {
             self.status = format!("{}: {error}", UiText::LanguageSaveFailed.get(self.language));
             return;
         }
-        self.status = match self.language {
-            Language::En => "language: English (saved)".to_string(),
-            Language::Zh => "语言：中文（已保存）".to_string(),
-        };
+        self.status = self.t("tui.status.language_saved").to_string();
     }
 
     fn run_command(&mut self, command: &str) -> anyhow::Result<bool> {
@@ -642,22 +613,20 @@ impl App {
                 self.clear_filters();
                 self.refresh_filtered();
                 self.view = View::List;
-                self.status = self.t("filter cleared", "已清除筛选").to_string();
+                self.status = self.t("tui.filter_cleared").to_string();
             }
             "reload" | "r" => self.reload(false)?,
             "critical" => {
                 self.health_filter = "crit".to_string();
                 self.refresh_filtered();
                 self.view = View::List;
-                self.status = self
-                    .t("filter health: critical", "筛选健康度：严重")
-                    .to_string();
+                self.status = self.t("tui.filter_health_critical").to_string();
             }
             "anomalies" | "anomaly" => {
                 self.anomaly_filter = Some(String::new());
                 self.refresh_filtered();
                 self.view = View::List;
-                self.status = self.t("filter anomalies", "筛选异常").to_string();
+                self.status = self.t("tui.filter_anomalies").to_string();
             }
             _ if lower.starts_with("first ") || lower.starts_with("inspect ") => {
                 let fields = command.split_whitespace().collect::<Vec<_>>();
@@ -666,16 +635,10 @@ impl App {
                         Ok(rank) if rank > 0 => {
                             self.select_inspect_item(rank - 1);
                         }
-                        _ => {
-                            self.status = self
-                                .t("usage: :inspect [1-5]", "用法：:inspect [1-5]")
-                                .to_string()
-                        }
+                        _ => self.status = self.t("tui.usage_inspect_1_5").to_string(),
                     }
                 } else {
-                    self.status = self
-                        .t("usage: :inspect [1-5]", "用法：:inspect [1-5]")
-                        .to_string();
+                    self.status = self.t("tui.usage_inspect_1_5").to_string();
                 }
             }
             _ if lower.starts_with("search ") || lower.starts_with("filter ") => {
@@ -686,7 +649,7 @@ impl App {
                 self.query = query.to_string();
                 self.refresh_filtered();
                 self.view = View::List;
-                self.status = format!("{}: {}", self.t("filter", "筛选"), self.query);
+                self.status = format!("{}: {}", self.t("tui.filter"), self.query);
             }
             _ if lower.starts_with("health ") => {
                 let value = command_value(command);
@@ -694,64 +657,39 @@ impl App {
                     self.health_filter = value.to_ascii_lowercase();
                     self.refresh_filtered();
                     self.view = View::List;
-                    self.status = format!(
-                        "{}: {}",
-                        self.t("filter health", "筛选健康度"),
-                        self.health_filter
-                    );
+                    self.status =
+                        format!("{}: {}", self.t("tui.filter_health"), self.health_filter);
                 } else {
-                    self.status = self
-                        .t(
-                            "usage: :health good|warn|crit|<80|>=90",
-                            "用法：:health good|warn|crit|<80|>=90",
-                        )
-                        .to_string();
+                    self.status = self.t("tui.usage_health_good_warn_crit_80_90").to_string();
                 }
             }
             _ if lower.starts_with("source ") => {
                 self.source_filter = command_value(command);
                 self.refresh_filtered();
                 self.view = View::List;
-                self.status = format!(
-                    "{}: {}",
-                    self.t("filter source", "筛选来源"),
-                    self.source_filter
-                );
+                self.status = format!("{}: {}", self.t("tui.filter_source"), self.source_filter);
             }
             _ if lower.starts_with("model ") => {
                 self.model_filter = command_value(command);
                 self.refresh_filtered();
                 self.view = View::List;
-                self.status = format!(
-                    "{}: {}",
-                    self.t("filter model", "筛选模型"),
-                    self.model_filter
-                );
+                self.status = format!("{}: {}", self.t("tui.filter_model"), self.model_filter);
             }
             _ if lower.starts_with("project ") => {
                 self.project_filter = command_value(command);
                 self.project_id_filter.clear();
                 self.refresh_filtered();
                 self.view = View::List;
-                self.status = format!(
-                    "{}: {}",
-                    self.t("filter project", "筛选项目"),
-                    self.project_filter
-                );
+                self.status = format!("{}: {}", self.t("tui.filter_project"), self.project_filter);
             }
             _ if lower.starts_with("range ") => {
                 let value = command_value(command);
                 if let Some(range) = TimeRange::parse(&value) {
                     self.range_filter = range;
                     self.refresh_filtered();
-                    self.status = format!("{}: {}", self.t("range", "范围"), range.label());
+                    self.status = format!("{}: {}", self.t("tui.range"), range.label());
                 } else {
-                    self.status = self
-                        .t(
-                            "usage: :range today|7d|30d|all",
-                            "用法：:range today|7d|30d|all",
-                        )
-                        .to_string();
+                    self.status = self.t("tui.usage_range_today_7d_30d_all").to_string();
                 }
             }
             _ if lower.starts_with("cost ") => {
@@ -760,14 +698,9 @@ impl App {
                     self.cost_filter = Some(filter);
                     self.refresh_filtered();
                     self.view = View::List;
-                    self.status = format!("{}: {}", self.t("filter cost", "筛选成本"), value);
+                    self.status = format!("{}: {}", self.t("tui.filter_cost"), value);
                 } else {
-                    self.status = self
-                        .t(
-                            "usage: :cost >0.10|>=1|<0.05|=0",
-                            "用法：:cost >0.10|>=1|<0.05|=0",
-                        )
-                        .to_string();
+                    self.status = self.t("tui.usage_cost_0_10_1_0_05").to_string();
                 }
             }
             _ if lower.starts_with("anomaly ") || lower.starts_with("anomalies ") => {
@@ -776,9 +709,9 @@ impl App {
                 self.refresh_filtered();
                 self.view = View::List;
                 self.status = if value.is_empty() {
-                    self.t("filter anomalies", "筛选异常").to_string()
+                    self.t("tui.filter_anomalies").to_string()
                 } else {
-                    format!("{}: {value}", self.t("filter anomaly", "筛选异常"))
+                    format!("{}: {value}", self.t("tui.filter_anomaly"))
                 };
             }
             _ if lower.starts_with("capability ") || lower.starts_with("data ") => {
@@ -787,14 +720,10 @@ impl App {
                     self.capability_filter = value.clone();
                     self.refresh_filtered();
                     self.view = View::List;
-                    self.status =
-                        format!("{}: {value}", self.t("filter capability", "筛选数据能力"));
+                    self.status = format!("{}: {value}", self.t("tui.filter_capability"));
                 } else {
                     self.status = self
-                        .t(
-                            "usage: :capability detailed|aggregate|limited",
-                            "用法：:capability detailed|aggregate|limited",
-                        )
+                        .t("tui.usage_capability_detailed_aggregate_limited")
                         .to_string();
                 }
             }
@@ -804,13 +733,10 @@ impl App {
                     self.issue_filter = value.clone();
                     self.refresh_filtered();
                     self.view = View::List;
-                    self.status = format!("{}: {value}", self.t("filter issue", "筛选问题"));
+                    self.status = format!("{}: {value}", self.t("tui.filter_issue"));
                 } else {
                     self.status = self
-                        .t(
-                            "usage: :issues failures|stuck|context|loops",
-                            "用法：:issues failures|stuck|context|loops",
-                        )
+                        .t("tui.usage_issues_failures_stuck_context_loops")
                         .to_string();
                 }
             }
@@ -818,10 +744,7 @@ impl App {
                 Some(key) => self.set_sort_desc(key, true),
                 None => {
                     self.status = self
-                        .t(
-                            "usage: :top cost|turns|failures|health|source|anomalies",
-                            "用法：:top cost|turns|failures|health|source|anomalies",
-                        )
+                        .t("tui.usage_top_cost_turns_failures_health_source")
                         .to_string()
                 }
             },
@@ -829,10 +752,7 @@ impl App {
                 let fields = command.split_whitespace().collect::<Vec<_>>();
                 if fields.len() < 2 || fields.len() > 3 {
                     self.status = self
-                        .t(
-                            "usage: :sort health|cost|turns|failures|source|name|anomalies [asc|desc]",
-                            "用法：:sort health|cost|turns|failures|source|name|anomalies [asc|desc]",
-                        )
+                        .t("tui.usage_sort_health_cost_turns_failures_source")
                         .to_string();
                 } else if let Some(key) = parse_sort_key(fields[1]) {
                     let desc = if fields.len() == 3 {
@@ -842,7 +762,7 @@ impl App {
                             _ => {
                                 self.status = format!(
                                     "{}: {}",
-                                    self.t("unknown sort direction", "未知排序方向"),
+                                    self.t("tui.unknown_sort_direction"),
                                     fields[2]
                                 );
                                 return Ok(false);
@@ -854,10 +774,7 @@ impl App {
                     self.set_sort_desc(key, desc);
                 } else {
                     self.status = self
-                        .t(
-                            "usage: :sort health|cost|turns|failures|source|name|anomalies [asc|desc]",
-                            "用法：:sort health|cost|turns|failures|source|name|anomalies [asc|desc]",
-                        )
+                        .t("tui.usage_sort_health_cost_turns_failures_source")
                         .to_string();
                 }
             }
@@ -865,7 +782,7 @@ impl App {
                 self.query = command.to_string();
                 self.refresh_filtered();
                 self.view = View::List;
-                self.status = format!("{}: {}", self.t("filter", "筛选"), self.query);
+                self.status = format!("{}: {}", self.t("tui.filter"), self.query);
             }
         }
         Ok(false)
@@ -882,18 +799,13 @@ impl App {
 
     fn start_reload_with_cache(&mut self, force: bool, cache: Option<SessionCache>) {
         if self.pending_load.is_some() {
-            self.status = self
-                .t("reload already in progress", "正在加载，暂不重复刷新")
-                .to_string();
+            self.status = self.t("tui.reload_already_in_progress").to_string();
             return;
         }
         self.last_auto_refresh = Instant::now();
         let Some(dir) = self.reload_dir.as_deref() else {
             self.status = self
-                .t(
-                    "reload unavailable for this session source",
-                    "当前会话来源不支持重新加载",
-                )
+                .t("tui.reload_unavailable_for_this_session_source")
                 .to_string();
             return;
         };
@@ -924,18 +836,11 @@ impl App {
         };
         self.derived.health = data_health(&self.sessions, 0, 0);
         self.status = self
-            .t(
-                if force {
-                    "force reload: discovering session files"
-                } else {
-                    "loading: discovering session files"
-                },
-                if force {
-                    "强制重载：正在发现会话文件"
-                } else {
-                    "加载中：正在发现会话文件"
-                },
-            )
+            .t(if force {
+                "tui.status.force_reload"
+            } else {
+                "tui.status.loading_discovering"
+            })
             .to_string();
         thread::spawn(move || {
             let mut batch = Vec::with_capacity(LOAD_BATCH_SIZE);
@@ -985,18 +890,13 @@ impl App {
                 }
                 Ok(LoadMessage::Complete(Err(err))) => {
                     self.load_state.phase = LoadPhase::Failed;
-                    self.status = format!("{}: {err}", self.t("reload failed", "重新加载失败"));
+                    self.status = format!("{}: {err}", self.t("tui.reload_failed"));
                     return true;
                 }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.load_state.phase = LoadPhase::Failed;
-                    self.status = self
-                        .t(
-                            "reload failed: loader disconnected",
-                            "重新加载失败：加载器已断开",
-                        )
-                        .to_string();
+                    self.status = self.t("tui.reload_failed_loader_disconnected").to_string();
                     return true;
                 }
             }
@@ -1075,34 +975,31 @@ impl App {
         }
         let new_sessions = self.sessions.len().saturating_sub(previous_count);
         self.status = if selection_missing {
-            self.t(
-                "reloaded; selected session is no longer available",
-                "已重新加载；原选中会话已不存在",
-            )
-            .to_string()
+            self.t("tui.reloaded_selected_session_is_no_longer_available")
+                .to_string()
         } else if new_sessions > 0 && !force && was_refresh {
             format!(
                 "{} {}",
                 format_count(new_sessions as i64),
-                self.t("new sessions since last view", "个新会话（相比上次）")
+                self.t("tui.new_sessions_since_last_view")
             )
         } else if force {
             format!(
                 "{} {} {} {} {}",
-                self.t("force reloaded", "已强制重载"),
+                self.t("tui.force_reloaded"),
                 format_count(self.sessions.len() as i64),
-                self.t("sessions from", "个会话，来自"),
+                self.t("tui.sessions_from"),
                 format_count(self.load_state.discovered as i64),
-                self.t("files", "个文件")
+                self.t("tui.files")
             )
         } else {
             format!(
                 "{} {} {} {} {}",
-                self.t("loaded", "已加载"),
+                self.t("tui.loaded"),
                 format_count(self.sessions.len() as i64),
-                self.t("sessions from", "个会话，来自"),
+                self.t("tui.sessions_from"),
                 format_count(self.load_state.discovered as i64),
-                self.t("files", "个文件")
+                self.t("tui.files")
             )
         };
     }
@@ -1131,7 +1028,7 @@ impl App {
         }
         self.status = format!(
             "{} {}",
-            self.t("sorted by", "排序："),
+            self.t("tui.sorted_by"),
             sort_key_label(self.sort_key, self.language)
         );
         self.view = View::List;
@@ -1144,12 +1041,12 @@ impl App {
         self.refresh_filtered();
         self.status = format!(
             "{} {} {}",
-            self.t("sorted by", "排序："),
+            self.t("tui.sorted_by"),
             sort_key_label(self.sort_key, self.language),
             if self.sort_desc {
-                self.t("desc", "降序")
+                self.t("tui.desc")
             } else {
-                self.t("asc", "升序")
+                self.t("tui.asc")
             }
         );
         self.view = View::List;
@@ -1202,12 +1099,11 @@ impl App {
         self.refresh_filtered();
         self.view = View::List;
         self.status = if self.health_filter.is_empty() {
-            self.t("quick health filter cleared", "已清除快捷健康度筛选")
-                .to_string()
+            self.t("tui.quick_health_filter_cleared").to_string()
         } else {
             format!(
                 "{}: {}",
-                self.t("quick health filter", "快捷健康度筛选"),
+                self.t("tui.quick_health_filter"),
                 health_filter_label(&self.health_filter, self.language)
             )
         };
@@ -1221,7 +1117,7 @@ impl App {
             TimeRange::Days30 => TimeRange::All,
         };
         self.refresh_filtered();
-        self.status = format!("{}: {}", self.t("range", "范围"), self.range_filter.label());
+        self.status = format!("{}: {}", self.t("tui.range"), self.range_filter.label());
     }
 
     fn filter_selected_source(&mut self) {
@@ -1240,7 +1136,7 @@ impl App {
         self.view = View::List;
         self.status = format!(
             "{}: {}",
-            self.t("quick source filter", "快捷来源筛选"),
+            self.t("tui.quick_source_filter"),
             display_source_label(&self.source_filter)
         );
     }
@@ -1259,52 +1155,46 @@ impl App {
         }
         self.refresh_filtered();
         self.view = View::List;
-        self.status = format!("{}: {value}", self.t("top driver filter", "主要驱动筛选"));
+        self.status = format!("{}: {value}", self.t("tui.top_driver_filter"));
     }
 
     fn filter_costly_sessions(&mut self) {
         self.cost_filter = Some((CostOp::Gt, 0.0));
         self.refresh_filtered();
         self.view = View::List;
-        self.status = self
-            .t("quick cost filter: >0", "快捷成本筛选：>0")
-            .to_string();
+        self.status = self.t("tui.quick_cost_filter_0").to_string();
     }
 
     fn filter_critical_sessions(&mut self) {
         self.health_filter = "crit".to_string();
         self.refresh_filtered();
         self.view = View::List;
-        self.status = self.t("quick critical filter", "快捷严重筛选").to_string();
+        self.status = self.t("tui.quick_critical_filter").to_string();
     }
 
     fn select_inspect_item(&mut self, rank: usize) -> bool {
         let Some(item) = self.derived.inspect_first.get(rank).cloned() else {
             self.status = if self.sessions.is_empty() {
-                self.t("no sessions loaded", "尚未加载会话").to_string()
+                self.t("tui.no_sessions_loaded").to_string()
             } else {
                 format!(
                     "{} {} {}",
-                    self.t("inspect rank", "检查排名"),
+                    self.t("tui.inspect_rank"),
                     rank + 1,
-                    self.t("unavailable", "不可用")
+                    self.t("tui.unavailable")
                 )
             };
             return false;
         };
         let Some(session) = self.sessions.get(item.index) else {
-            self.status = self
-                .t("inspect target unavailable", "检查目标不可用")
-                .to_string();
+            self.status = self.t("tui.inspect_target_unavailable").to_string();
             return false;
         };
         let session_name = session.name.clone();
         let target_view = inspect_target_view(item.label);
 
         let Some(position) = self.filtered.iter().position(|idx| *idx == item.index) else {
-            self.status = self
-                .t("inspect target hidden", "检查目标已隐藏")
-                .to_string();
+            self.status = self.t("tui.inspect_target_hidden").to_string();
             return false;
         };
         self.selected = position;
@@ -1313,7 +1203,7 @@ impl App {
         self.scroll = 0;
         self.status = format!(
             "{} {} #{}: {}",
-            self.t("inspect", "检查"),
+            self.t("tui.inspect"),
             inspect_label(item.label, self.language),
             rank + 1,
             short(&session_name, 36)
@@ -1600,80 +1490,77 @@ fn same_session(left: &Session, right: &Session) -> bool {
         && left.metrics.session_start == right.metrics.session_start
 }
 
-fn text(language: Language, en: &'static str, zh: &'static str) -> &'static str {
-    match language {
-        Language::En => en,
-        Language::Zh => zh,
-    }
+fn text(language: Language, key: &'static str) -> &'static str {
+    agenttrace_core::tr(language, key)
 }
 
 fn context_view_label(view: View, language: Language) -> &'static str {
     match view {
-        View::Overview => text(language, "Overview", "概览"),
-        View::List => text(language, "List", "列表"),
-        View::Detail => text(language, "Detail", "详情"),
-        View::Diagnostics => text(language, "Diagnostics", "诊断"),
-        View::Diff => text(language, "Diff", "对比"),
+        View::Overview => text(language, "tui.overview"),
+        View::List => text(language, "tui.list"),
+        View::Detail => text(language, "tui.detail"),
+        View::Diagnostics => text(language, "tui.diagnostics"),
+        View::Diff => text(language, "tui.diff"),
         View::Governance(panel) => governance_panel_label(panel, language),
-        View::Help => text(language, "Help", "帮助"),
+        View::Help => text(language, "tui.help"),
     }
 }
 
 fn governance_panel_label(panel: GovernancePanel, language: Language) -> &'static str {
     match panel {
-        GovernancePanel::ActionCenter => text(language, "Action Center", "行动中心"),
-        GovernancePanel::Efficiency => text(language, "Efficiency", "效率"),
-        GovernancePanel::Delivery => text(language, "Delivery", "交付"),
+        GovernancePanel::ActionCenter => text(language, "tui.action_center"),
+        GovernancePanel::Efficiency => text(language, "tui.efficiency"),
+        GovernancePanel::Delivery => text(language, "tui.delivery"),
     }
 }
 
 fn sort_key_label(key: SortKey, language: Language) -> &'static str {
     match key {
-        SortKey::Recent => text(language, "Recent", "最近"),
-        SortKey::Health => text(language, "Health", "健康度"),
-        SortKey::Cost => text(language, "Cost", "成本"),
-        SortKey::Turns => text(language, "Turns", "轮次"),
-        SortKey::Failures => text(language, "Failures", "失败"),
-        SortKey::Source => text(language, "Source", "来源"),
-        SortKey::Name => text(language, "Name", "名称"),
-        SortKey::Anomalies => text(language, "Anomalies", "异常"),
+        SortKey::Recent => text(language, "tui.recent"),
+        SortKey::Health => text(language, "tui.health"),
+        SortKey::Cost => text(language, "tui.cost"),
+        SortKey::Turns => text(language, "tui.turns"),
+        SortKey::Failures => text(language, "tui.failures"),
+        SortKey::Source => text(language, "tui.source"),
+        SortKey::Name => text(language, "tui.name"),
+        SortKey::Anomalies => text(language, "tui.anomalies"),
     }
 }
 
 fn health_filter_label(filter: &str, language: Language) -> String {
     match filter {
-        "good" | "healthy" => text(language, "good", "良好").to_string(),
-        "warn" | "warning" => text(language, "warning", "警告").to_string(),
-        "crit" | "critical" => text(language, "critical", "严重").to_string(),
+        "good" | "healthy" => text(language, "tui.good").to_string(),
+        "warn" | "warning" => text(language, "tui.warning").to_string(),
+        "crit" | "critical" => text(language, "tui.critical").to_string(),
         _ => filter.to_string(),
     }
 }
 
 fn range_label(range: TimeRange, language: Language) -> &'static str {
     match range {
-        TimeRange::Today => text(language, "today", "今天"),
-        TimeRange::Days7 => text(language, "7d", "7天"),
-        TimeRange::Days30 => text(language, "30d", "30天"),
-        TimeRange::All => text(language, "all", "全部"),
+        TimeRange::Today => text(language, "tui.today"),
+        TimeRange::Days7 => text(language, "tui.n_7d"),
+        TimeRange::Days30 => text(language, "tui.n_30d"),
+        TimeRange::All => text(language, "tui.all"),
     }
 }
 
 fn cache_state_for_language(state: &str, language: Language) -> &'static str {
     match state {
-        "cache warm" => text(language, "cache warm", "缓存已预热"),
-        "cache bypass" => text(language, "cache bypass", "绕过缓存"),
-        _ => text(language, "cache empty", "缓存为空"),
+        "cache warm" => text(language, "tui.cache_warm"),
+        "cache bypass" => text(language, "tui.cache_bypass"),
+        _ => text(language, "tui.cache_empty"),
     }
 }
 
 fn inspect_label(label: &str, language: Language) -> &'static str {
     match label {
-        "critical" => text(language, "critical", "严重"),
-        "anomaly" => text(language, "anomaly", "异常"),
-        "failures" => text(language, "failures", "失败"),
-        "cost" => text(language, "cost", "成本"),
-        "latency" => text(language, "latency", "延迟"),
-        _ => text(language, "session", "会话"),
+        "critical" => text(language, "tui.critical"),
+        "anomaly" => text(language, "tui.anomaly"),
+        "failures" => text(language, "tui.failures_2"),
+        "cost" => text(language, "tui.cost_2"),
+        "latency" => text(language, "tui.latency"),
+        _ => text(language, "tui.session"),
     }
 }
 

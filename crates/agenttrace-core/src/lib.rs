@@ -4,6 +4,7 @@ mod discovery;
 mod doctor;
 mod governance;
 mod history;
+pub mod i18n;
 mod insights;
 mod parser;
 mod pricing;
@@ -42,6 +43,7 @@ pub use governance::{
     SessionDeliveryEvidence, TokenBreakdown,
 };
 pub use history::{history_path, merge_preserved_history, preserve_derived_history};
+pub use i18n::{tr, tr_args, Language};
 pub use insights::{
     compare_session_outcome, data_health, filter_sessions, project_name, report_scope,
     resolve_project, session_capability, session_matches_time_range, DataHealth, ProjectIdentity,

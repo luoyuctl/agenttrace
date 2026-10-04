@@ -163,42 +163,38 @@ pub(super) fn parse_sort_key(value: &str) -> Option<SortKey> {
 
 pub(super) fn active_filter_summary(app: &App, language: Language) -> String {
     let mut filters = Vec::new();
-    let label = |en, zh| text(language, en, zh);
+    let label = |key| text(language, key);
     if !app.query.is_empty() {
-        filters.push(format!("{}: {}", label("text", "关键词"), app.query));
+        filters.push(format!("{}: {}", label("tui.text"), app.query));
     }
     if !app.health_filter.is_empty() {
         filters.push(format!(
             "{}: {}",
-            label("health", "健康度"),
+            label("tui.health_4"),
             health_filter_label(&app.health_filter, language)
         ));
     }
     if !app.source_filter.is_empty() {
-        filters.push(format!(
-            "{}: {}",
-            label("source", "来源"),
-            app.source_filter
-        ));
+        filters.push(format!("{}: {}", label("tui.source_2"), app.source_filter));
     }
     if !app.model_filter.is_empty() {
-        filters.push(format!("{}: {}", label("model", "模型"), app.model_filter));
+        filters.push(format!("{}: {}", label("tui.model_2"), app.model_filter));
     }
     let project = active_project_filter_label(app);
     if !project.is_empty() {
-        filters.push(format!("{}: {}", label("project", "项目"), project));
+        filters.push(format!("{}: {}", label("tui.project_2"), project));
     }
     if app.range_filter != TimeRange::All {
         filters.push(format!(
             "{}: {}",
-            label("range", "时间范围"),
+            label("tui.range_2"),
             range_label(app.range_filter, language)
         ));
     }
     if let Some((op, value)) = app.cost_filter {
         filters.push(format!(
             "{}: {}{}",
-            label("cost", "花费"),
+            label("tui.cost_3"),
             cost_op_label(op),
             value
         ));
@@ -206,7 +202,7 @@ pub(super) fn active_filter_summary(app: &App, language: Language) -> String {
     if let Some((op, value)) = app.failure_filter {
         filters.push(format!(
             "{}: {}{}",
-            label("failed", "失败次数"),
+            label("tui.failed_4"),
             cost_op_label(op),
             value
         ));
@@ -214,30 +210,30 @@ pub(super) fn active_filter_summary(app: &App, language: Language) -> String {
     if let Some((op, value)) = app.context_filter {
         filters.push(format!(
             "{}: {}{}%",
-            label("context", "上下文"),
+            label("tui.context"),
             cost_op_label(op),
             value
         ));
     }
     if let Some(value) = &app.anomaly_filter {
         let value = if value.is_empty() {
-            label("any", "全部")
+            label("tui.any_2")
         } else {
             value
         };
-        filters.push(format!("{}: {value}", label("anomaly", "异常")));
+        filters.push(format!("{}: {value}", label("tui.anomaly")));
     }
     if !app.capability_filter.is_empty() {
         filters.push(format!(
             "{}: {}",
-            label("data", "数据完整度"),
+            label("tui.data_2"),
             capability_filter_label(&app.capability_filter, language)
         ));
     }
     if !app.issue_filter.is_empty() {
         filters.push(format!(
             "{}: {}",
-            label("issue", "问题"),
+            label("tui.issue"),
             issue_filter_label(&app.issue_filter, language)
         ));
     }
@@ -257,18 +253,18 @@ pub(super) fn active_project_filter_label(app: &App) -> String {
 
 fn capability_filter_label(value: &str, language: Language) -> &'static str {
     match value {
-        "detailed" => text(language, "detailed", "详细"),
-        "aggregate" => text(language, "aggregate", "聚合"),
-        _ => text(language, "limited", "有限"),
+        "detailed" => text(language, "tui.detailed"),
+        "aggregate" => text(language, "tui.aggregate"),
+        _ => text(language, "tui.limited"),
     }
 }
 
 fn issue_filter_label(value: &str, language: Language) -> String {
     match value {
-        "failures" => text(language, "tool failures", "工具失败"),
-        "stuck" => text(language, "stuck", "卡住"),
-        "context" => text(language, "context pressure", "上下文压力"),
-        "loops" => text(language, "repeat loops", "重复循环"),
+        "failures" => text(language, "tui.tool_failures_3"),
+        "stuck" => text(language, "tui.stuck"),
+        "context" => text(language, "tui.context_pressure_2"),
+        "loops" => text(language, "tui.repeat_loops_3"),
         _ => value,
     }
     .to_string()
@@ -276,9 +272,9 @@ fn issue_filter_label(value: &str, language: Language) -> String {
 
 pub(super) fn capability_label(session: &Session, language: Language) -> &'static str {
     match session_capability(session) {
-        "detailed" => text(language, "Detailed", "详细"),
-        "aggregate" => text(language, "Aggregate", "聚合"),
-        _ => text(language, "Limited", "有限"),
+        "detailed" => text(language, "tui.detailed_2"),
+        "aggregate" => text(language, "tui.aggregate_2"),
+        _ => text(language, "tui.limited_2"),
     }
 }
 
@@ -286,22 +282,18 @@ pub(super) fn evidence_confidence(session: &Session, language: Language) -> Stri
     match session_capability(session) {
         "detailed" => format!(
             "{} — {}",
-            text(language, "high", "高"),
-            text(
-                language,
-                "event timing and diagnostics available",
-                "有事件时间与诊断数据"
-            )
+            text(language, "tui.high"),
+            text(language, "tui.event_timing_and_diagnostics_available")
         ),
         "aggregate" => format!(
             "{} — {}",
-            text(language, "medium", "中"),
-            text(language, "aggregate metrics only", "仅有聚合指标")
+            text(language, "tui.medium"),
+            text(language, "tui.aggregate_metrics_only")
         ),
         _ => format!(
             "{} — {}",
-            text(language, "low", "低"),
-            text(language, "key fields missing", "关键字段缺失")
+            text(language, "tui.low"),
+            text(language, "tui.key_fields_missing")
         ),
     }
 }
