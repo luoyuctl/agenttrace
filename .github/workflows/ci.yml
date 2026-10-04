@@ -230,3 +230,20 @@ jobs:
         with:
           command: check
           arguments: --all-features
+
+  # Single required status check for the master ruleset; keep this job name stable.
+  gate:
+    name: Test and build
+    if: always()
+    needs: [lint, test, msrv, smoke, coverage, deny]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all CI jobs to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          for result in $RESULTS; do
+            [[ "$result" == "success" ]] || exit 1
+          done
