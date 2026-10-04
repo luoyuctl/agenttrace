@@ -719,7 +719,11 @@ fn result_reports_timeout(event: &Event) -> bool {
             serde_json::from_str::<serde_json::Value>(&event.content),
             Ok(serde_json::Value::Object(obj))
                 if obj.get("success") == Some(&serde_json::Value::Bool(false))
-                    || obj.get("error").is_some_and(|value| !value.is_null())
+                    || obj.get("error").is_some_and(|value| match value {
+                        serde_json::Value::Null => false,
+                        serde_json::Value::String(text) => !text.trim().is_empty(),
+                        _ => true,
+                    })
         );
     if !failed {
         return false;
@@ -743,7 +747,8 @@ fn tool_latencies(events: &[Event]) -> Vec<ToolLatency> {
             })
         })
         .collect::<HashMap<_, _>>();
-    let mut values: BTreeMap<String, (Vec<f64>, usize, usize)> = BTreeMap::new();
+    // (accepted durations, matched calls, explicit timeouts, unmatched calls)
+    let mut values: BTreeMap<String, (Vec<f64>, usize, usize, usize)> = BTreeMap::new();
     for event in events {
         let Some(start) = parse_time(&event.timestamp) else {
             continue;
@@ -752,23 +757,24 @@ fn tool_latencies(events: &[Event]) -> Vec<ToolLatency> {
             let entry = values.entry(call.name.clone()).or_default();
             match results.get(call.id.as_str()) {
                 Some((end, timed_out)) => {
+                    entry.1 += 1;
                     let seconds = (*end - start).num_milliseconds() as f64 / 1000.0;
                     if (0.0..3600.0).contains(&seconds) {
                         entry.0.push(seconds);
                     }
                     if *timed_out {
-                        entry.1 += 1;
+                        entry.2 += 1;
                     }
                 }
-                None => entry.2 += 1,
+                None => entry.3 += 1,
             }
         }
     }
     let mut out = values
         .into_iter()
-        .map(|(tool_name, (mut values, timeouts, unmatched))| {
+        .map(|(tool_name, (mut values, matched, timeouts, unmatched))| {
             values.sort_by(f64::total_cmp);
-            let count = values.len() + unmatched;
+            let count = matched + unmatched;
             let avg_sec = if values.is_empty() {
                 0.0
             } else {
@@ -1011,9 +1017,27 @@ mod tests {
                 "set timeout = 30 in config",
                 false,
             ),
+            call("b", "2026-01-01T00:00:02Z"),
+            result(
+                "b",
+                "2026-01-01T00:00:03Z",
+                r#"{"success":true,"error":"","output":"set timeout=30"}"#,
+                false,
+            ),
         ]);
         assert_eq!(latency[0].timeouts, 0);
         assert_eq!(latency[0].unmatched, 0);
+    }
+
+    #[test]
+    fn late_timeout_result_still_counts_toward_call_count() {
+        let latency = tool_latencies(&[
+            call("a", "2026-01-01T00:00:00Z"),
+            result("a", "2026-01-01T02:00:00Z", "Command timed out", true),
+        ]);
+        assert_eq!(latency[0].count, 1);
+        assert_eq!(latency[0].timeouts, 1);
+        assert_eq!(latency[0].max_sec, 0.0);
     }
 
     #[test]

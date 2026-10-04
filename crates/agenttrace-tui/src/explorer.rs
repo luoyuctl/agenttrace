@@ -1334,9 +1334,9 @@ fn tools_preview(session: &Session, language: Language) -> String {
                 format_duration(item.p95_sec),
                 item.tool_name,
                 if item.timeouts > 0 {
-                    "  timeout"
+                    text(language, "  timeout", "  超时")
                 } else if item.unmatched > 0 {
-                    "  no result"
+                    text(language, "  no result", "  无结果")
                 } else {
                     ""
                 }
