@@ -484,7 +484,7 @@ pub fn recommendations(sessions: &[Session]) -> Vec<Recommendation> {
                 if slow.timeouts > 0 { "high" } else { "medium" },
                 "latency",
                 "Bound slow tool execution",
-                "A tool exceeded the latency threshold or returned without a result.".to_string(),
+                "A tool exceeded the latency threshold or reported a timeout.".to_string(),
                 vec![
                     format!("session={}", session.name),
                     format!(

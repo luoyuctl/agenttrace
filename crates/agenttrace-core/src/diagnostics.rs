@@ -59,7 +59,11 @@ pub struct ToolLatency {
     pub p95_sec: f64,
     pub max_sec: f64,
     pub min_sec: f64,
+    /// Results that explicitly report a timeout.
     pub timeouts: usize,
+    /// Calls with no matching result (interrupted, truncated, or unparsed); completion is unknown.
+    #[serde(default)]
+    pub unmatched: usize,
     pub is_slow: bool,
 }
 
@@ -707,36 +711,64 @@ fn loop_fingerprints(events: &[Event]) -> Vec<LoopFingerprint> {
     out
 }
 
+const TIMEOUT_MARKERS: &[&str] = &["timed out", "timeout", "deadline exceeded"];
+
+fn result_reports_timeout(event: &Event) -> bool {
+    let failed = event.is_error
+        || matches!(
+            serde_json::from_str::<serde_json::Value>(&event.content),
+            Ok(serde_json::Value::Object(obj))
+                if obj.get("success") == Some(&serde_json::Value::Bool(false))
+                    || obj.get("error").is_some_and(|value| !value.is_null())
+        );
+    if !failed {
+        return false;
+    }
+    let content = event.content.to_ascii_lowercase();
+    TIMEOUT_MARKERS
+        .iter()
+        .any(|marker| content.contains(marker))
+}
+
 fn tool_latencies(events: &[Event]) -> Vec<ToolLatency> {
     let results = events
         .iter()
+        .filter(|event| !event.tool_call_id.is_empty())
         .filter_map(|event| {
-            parse_time(&event.timestamp).map(|time| (event.tool_call_id.as_str(), time))
+            parse_time(&event.timestamp).map(|time| {
+                (
+                    event.tool_call_id.as_str(),
+                    (time, result_reports_timeout(event)),
+                )
+            })
         })
-        .filter(|(id, _)| !id.is_empty())
         .collect::<HashMap<_, _>>();
-    let mut values: BTreeMap<String, (Vec<f64>, usize)> = BTreeMap::new();
+    let mut values: BTreeMap<String, (Vec<f64>, usize, usize)> = BTreeMap::new();
     for event in events {
         let Some(start) = parse_time(&event.timestamp) else {
             continue;
         };
         for call in &event.tool_calls {
             let entry = values.entry(call.name.clone()).or_default();
-            if let Some(end) = results.get(call.id.as_str()) {
-                let seconds = (*end - start).num_milliseconds() as f64 / 1000.0;
-                if (0.0..3600.0).contains(&seconds) {
-                    entry.0.push(seconds);
+            match results.get(call.id.as_str()) {
+                Some((end, timed_out)) => {
+                    let seconds = (*end - start).num_milliseconds() as f64 / 1000.0;
+                    if (0.0..3600.0).contains(&seconds) {
+                        entry.0.push(seconds);
+                    }
+                    if *timed_out {
+                        entry.1 += 1;
+                    }
                 }
-            } else {
-                entry.1 += 1;
+                None => entry.2 += 1,
             }
         }
     }
     let mut out = values
         .into_iter()
-        .map(|(tool_name, (mut values, timeouts))| {
+        .map(|(tool_name, (mut values, timeouts, unmatched))| {
             values.sort_by(f64::total_cmp);
-            let count = values.len() + timeouts;
+            let count = values.len() + unmatched;
             let avg_sec = if values.is_empty() {
                 0.0
             } else {
@@ -754,6 +786,7 @@ fn tool_latencies(events: &[Event]) -> Vec<ToolLatency> {
                 max_sec: values.last().copied().unwrap_or(0.0),
                 min_sec: values.first().copied().unwrap_or(0.0),
                 timeouts,
+                unmatched,
                 is_slow: p95_sec > 30.0,
             }
         })
@@ -912,6 +945,76 @@ fn hash(value: &str) -> u32 {
 mod tests {
     use super::*;
     use crate::ToolCall;
+
+    fn call(id: &str, ts: &str) -> Event {
+        Event {
+            role: "assistant".to_string(),
+            timestamp: ts.to_string(),
+            tool_calls: vec![ToolCall {
+                id: id.to_string(),
+                name: "bash".to_string(),
+                args: String::new(),
+            }],
+            ..Event::default()
+        }
+    }
+
+    fn result(id: &str, ts: &str, content: &str, is_error: bool) -> Event {
+        Event {
+            role: "tool".to_string(),
+            tool_call_id: id.to_string(),
+            timestamp: ts.to_string(),
+            content: content.to_string(),
+            is_error,
+            ..Event::default()
+        }
+    }
+
+    #[test]
+    fn call_without_result_is_unmatched_not_timeout() {
+        let latency = tool_latencies(&[call("a", "2026-01-01T00:00:00Z")]);
+        assert_eq!(latency[0].unmatched, 1);
+        assert_eq!(latency[0].timeouts, 0);
+        assert_eq!(latency[0].count, 1);
+    }
+
+    #[test]
+    fn explicit_timeout_result_counts_as_timeout() {
+        let latency = tool_latencies(&[
+            call("a", "2026-01-01T00:00:00Z"),
+            result(
+                "a",
+                "2026-01-01T00:02:00Z",
+                "Command timed out after 120s",
+                true,
+            ),
+            call("b", "2026-01-01T00:03:00Z"),
+            result(
+                "b",
+                "2026-01-01T00:03:01Z",
+                r#"{"error":"deadline exceeded"}"#,
+                false,
+            ),
+        ]);
+        assert_eq!(latency[0].timeouts, 2);
+        assert_eq!(latency[0].unmatched, 0);
+        assert_eq!(latency[0].count, 2);
+    }
+
+    #[test]
+    fn successful_result_mentioning_timeout_is_not_a_timeout() {
+        let latency = tool_latencies(&[
+            call("a", "2026-01-01T00:00:00Z"),
+            result(
+                "a",
+                "2026-01-01T00:00:01Z",
+                "set timeout = 30 in config",
+                false,
+            ),
+        ]);
+        assert_eq!(latency[0].timeouts, 0);
+        assert_eq!(latency[0].unmatched, 0);
+    }
 
     #[test]
     fn detects_loop_latency_large_params_and_stuck_signals() {

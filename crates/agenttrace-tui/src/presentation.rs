@@ -2297,11 +2297,11 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
     for latency in diagnostics
         .tool_latencies
         .iter()
-        .filter(|item| item.p95_sec > 30.0 || item.timeouts > 0)
+        .filter(|item| item.p95_sec > 30.0 || item.timeouts > 0 || item.unmatched > 0)
         .take(3)
     {
         lines.push(format!(
-            "{}: {} min={:.1}s p95={:.1}s {}={:.1}s {}={}",
+            "{}: {} min={:.1}s p95={:.1}s {}={:.1}s {}={} {}={}",
             text(language, "Tool latency", "工具延迟"),
             latency.tool_name,
             latency.min_sec,
@@ -2309,7 +2309,9 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
             text(language, "max", "最大"),
             latency.max_sec,
             text(language, "timeouts", "超时"),
-            latency.timeouts
+            latency.timeouts,
+            text(language, "no_result", "无结果"),
+            latency.unmatched
         ));
     }
     lines.push(format!(
