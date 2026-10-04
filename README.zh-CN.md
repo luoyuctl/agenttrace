@@ -131,6 +131,20 @@ JSON 字段名、代码值和 `--sessions` 的 TSV 表头等机读内容始终�
 agenttrace --overview --lang zh
 ```
 
+### 按时间统计用量
+
+```bash
+# 按天 / ISO 周 / 月汇总。每条用量按自身时间戳归入周期，跨零点的会话会被拆开。
+# 默认使用本机时区。
+agenttrace --daily --range 30d
+agenttrace --weekly --tz utc -f json
+agenttrace --monthly --tz +08:00
+
+# 5 小时窗口：消耗速率与窗口结束预测。基于本地日志估算，
+# 服务商限流在服务端计算，可能与此不同。
+agenttrace --blocks --token-limit 50000000 --cost-limit 100
+```
+
 ## 你会得到什么
 
 | 需求 | agenttrace 提供 |

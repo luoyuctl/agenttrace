@@ -12,6 +12,7 @@ mod reports;
 mod search;
 mod session_cache;
 mod sqlite_sessions;
+mod usage;
 mod waste;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -76,6 +77,9 @@ pub use session_cache::{
     load_session_cache, save_session_cache, session_cache_path, store_session, SessionCache,
 };
 pub use sqlite_sessions::{load_sqlite_backed_sessions, skip_sqlite_backed_file_dir};
+pub use usage::{
+    usage_blocks, usage_by_period, usage_tz_label, UsageBlock, UsageBucket, UsagePeriod, UsageTz,
+};
 pub use waste::{
     compute_waste_report, render_waste_report, render_waste_report_with_language, WasteReport,
 };
@@ -300,6 +304,18 @@ pub struct Metrics {
     pub duration_sec: f64,
     pub cost_estimated: f64,
     pub provenance: MetricProvenance,
+    /// Timestamped per-turn usage, used for calendar and 5-hour block rollups.
+    #[serde(skip)]
+    pub usage_points: Vec<UsagePoint>,
+}
+
+/// Tokens and estimated cost reported by one timestamped usage record.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct UsagePoint {
+    /// Unix seconds (UTC).
+    pub ts: i64,
+    pub tokens: i64,
+    pub cost: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -625,6 +641,23 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
         match event.role.as_str() {
             "session_meta" | "meta" => {
                 if !event.usage.is_empty() {
+                    if let Some(ts) = parse_ts(&event.timestamp) {
+                        let get = |key: &str| event.usage.get(key).copied().unwrap_or(0);
+                        let (input, output, cache_w, cache_r) = (
+                            get("input_tokens"),
+                            get("output_tokens"),
+                            get("cache_creation_input_tokens"),
+                            get("cache_read_input_tokens"),
+                        );
+                        metrics.usage_points.push(UsagePoint {
+                            ts: ts.timestamp(),
+                            tokens: input + output + cache_w + cache_r,
+                            cost: input as f64 / 1e6 * price.input
+                                + output as f64 / 1e6 * price.output
+                                + cache_w as f64 / 1e6 * price.cw
+                                + cache_r as f64 / 1e6 * price.cr,
+                        });
+                    }
                     metrics.tokens_input += event.usage.get("input_tokens").copied().unwrap_or(0);
                     metrics.tokens_output += event.usage.get("output_tokens").copied().unwrap_or(0);
                     metrics.tokens_cache_w += event

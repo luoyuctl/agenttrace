@@ -414,7 +414,7 @@ fn rust_writes_and_reuses_go_compatible_session_cache() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(22)
+            Some(23)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
@@ -560,7 +560,7 @@ fn rust_refreshes_cache_entries_from_old_schema_version() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(22)
+            Some(23)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))

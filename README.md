@@ -151,6 +151,20 @@ agenttrace --context-trends --range 30d -f json
 agenttrace --delivery-evidence --range 30d -f json
 ```
 
+### Usage over time
+
+```bash
+# Spend by day / ISO week / month. Usage records are bucketed by their own
+# timestamp, so a session that crosses midnight is split. Default tz is local.
+agenttrace --daily --range 30d
+agenttrace --weekly --tz utc -f json
+agenttrace --monthly --tz +08:00
+
+# 5-hour blocks with burn rate and end-of-block projection. Estimated from
+# local logs; provider rate limits are enforced server-side and may differ.
+agenttrace --blocks --token-limit 50000000 --cost-limit 100
+```
+
 `pricing-overrides.json` accepts `aliases` plus per-million-token `prices`:
 
 ```json

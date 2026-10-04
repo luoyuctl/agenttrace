@@ -59,3 +59,44 @@ fn lang_flag_localizes_reports_and_rejects_unknown_values() {
     assert_eq!(value[0]["id"], "tool-failures", "codes stay English");
     assert_eq!(value[0]["title"], "减少失败的工具调用");
 }
+
+#[test]
+fn usage_reports_split_by_timezone_and_emit_blocks() {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/claude-code-preamble.jsonl");
+    let fixture = fixture.to_str().expect("fixture path is valid UTF-8");
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_agenttrace"))
+            .args(args)
+            .arg(fixture)
+            .output()
+            .expect("run agenttrace CLI")
+    };
+
+    // Fixture usage is stamped 2026-05-03T10:00Z: still May 3 in UTC, already
+    // May 4 at +14:00.
+    let utc = run(&["--daily", "--tz", "utc", "-f", "json"]);
+    assert!(utc.status.success(), "CLI failed: {utc:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&utc.stdout).expect("daily json");
+    assert_eq!(doc["timezone"], "+00:00");
+    assert_eq!(doc["buckets"][0]["period"], "2026-05-03");
+    assert!(doc["buckets"][0]["tokens"].as_i64().unwrap_or(0) > 0);
+
+    let east = run(&["--daily", "--tz", "+14:00", "-f", "json"]);
+    let doc: serde_json::Value = serde_json::from_slice(&east.stdout).expect("daily json");
+    assert_eq!(doc["buckets"][0]["period"], "2026-05-04");
+
+    let blocks = run(&["--blocks", "--tz", "utc", "-f", "json"]);
+    assert!(blocks.status.success(), "CLI failed: {blocks:?}");
+    let doc: serde_json::Value = serde_json::from_slice(&blocks.stdout).expect("blocks json");
+    assert_eq!(doc["estimated"], true);
+    assert_eq!(doc["blocks"][0]["start"], "2026-05-03T10:00:00+00:00");
+    assert_eq!(doc["blocks"][0]["active"], false);
+
+    let bad = run(&["--weekly", "--tz", "Mars/Olympus"]);
+    assert!(!bad.status.success());
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("--tz"));
+
+    let both = run(&["--daily", "--blocks"]);
+    assert!(!both.status.success(), "multiple actions must be rejected");
+}

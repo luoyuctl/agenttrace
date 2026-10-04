@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 22;
+pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 23;
 const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 6;
 
 #[derive(Debug, Clone, Default)]
@@ -136,6 +136,9 @@ struct GoMetrics {
     cost_estimated: f64,
     #[serde(default, rename = "Provenance")]
     provenance: crate::MetricProvenance,
+    /// `[unix_seconds, tokens, cost]` triples, kept compact on disk.
+    #[serde(default, rename = "UsagePoints", skip_serializing_if = "Vec::is_empty")]
+    usage_points: Vec<(i64, i64, f64)>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -690,6 +693,11 @@ impl GoMetrics {
             duration_sec: metrics.duration_sec,
             cost_estimated: metrics.cost_estimated,
             provenance: metrics.provenance.clone(),
+            usage_points: metrics
+                .usage_points
+                .iter()
+                .map(|point| (point.ts, point.tokens, point.cost))
+                .collect(),
         }
     }
 
@@ -724,6 +732,11 @@ impl GoMetrics {
             duration_sec: self.duration_sec,
             cost_estimated: self.cost_estimated,
             provenance: self.provenance,
+            usage_points: self
+                .usage_points
+                .into_iter()
+                .map(|(ts, tokens, cost)| crate::UsagePoint { ts, tokens, cost })
+                .collect(),
         }
     }
 }

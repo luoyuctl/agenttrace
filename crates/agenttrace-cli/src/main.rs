@@ -10,8 +10,8 @@ use agenttrace_core::{
     report_overview_json_with_context, report_overview_markdown_with_context,
     report_overview_text_with_context, report_search_json, report_search_text_with_language,
     report_text_with_language, search_sessions, session_capability, tool_fail_rate, total_tokens,
-    update_pricing, BaselineThresholds, LoadOptions, LoadReport, Message, ReportLanguage, Session,
-    TimeRange, VERSION,
+    update_pricing, usage_blocks, usage_by_period, usage_tz_label, BaselineThresholds, LoadOptions,
+    LoadReport, Message, ReportLanguage, Session, TimeRange, UsagePeriod, UsageTz, VERSION,
 };
 use anyhow::{bail, Context};
 use chrono::Utc;
@@ -125,6 +125,20 @@ struct Args {
     preserve_history: bool,
     #[arg(long = "include-history")]
     include_history: bool,
+    #[arg(long)]
+    daily: bool,
+    #[arg(long)]
+    weekly: bool,
+    #[arg(long)]
+    monthly: bool,
+    #[arg(long)]
+    blocks: bool,
+    #[arg(long, default_value = "local")]
+    tz: String,
+    #[arg(long = "token-limit")]
+    token_limit: Option<i64>,
+    #[arg(long = "cost-limit")]
+    cost_limit: Option<f64>,
 }
 
 const HELP_KEYS: &[(&str, &str)] = &[
@@ -178,6 +192,13 @@ const HELP_KEYS: &[(&str, &str)] = &[
     ("clear_cache", "cli.help.clear_cache"),
     ("preserve_history", "cli.help.preserve_history"),
     ("include_history", "cli.help.include_history"),
+    ("daily", "cli.help.daily"),
+    ("weekly", "cli.help.weekly"),
+    ("monthly", "cli.help.monthly"),
+    ("blocks", "cli.help.blocks"),
+    ("tz", "cli.help.tz"),
+    ("token_limit", "cli.help.token_limit"),
+    ("cost_limit", "cli.help.cost_limit"),
 ];
 
 fn parse_lang_arg(value: &str) -> Result<ReportLanguage, String> {
@@ -382,6 +403,7 @@ fn run(argv: Vec<OsString>, language: ReportLanguage) -> anyhow::Result<()> {
         && !args.sessions
         && !args.diagnostics
         && args.inspect.is_none()
+        && !(args.daily || args.weekly || args.monthly || args.blocks)
     {
         let sessions = prepare_cli_view(load_sessions(&args)?, &args)?;
         let session =
@@ -399,6 +421,12 @@ fn run(argv: Vec<OsString>, language: ReportLanguage) -> anyhow::Result<()> {
     let sessions = prepare_cli_view(sessions, &args)?;
     if sessions.is_empty() {
         bail!("{}", tr(language, "cli.err.no_match"));
+    }
+
+    if let Some(out) = render_usage_report(&sessions, &args)? {
+        write_output(&args.output, &(out.clone() + "\n"))?;
+        write_stdout(&out)?;
+        return Ok(());
     }
 
     if args.sessions || args.diagnostics || args.inspect.is_some() {
@@ -680,6 +708,9 @@ fn flag_takes_value(arg: &OsString) -> bool {
             | "--order"
             | "--limit"
             | "--inspect"
+            | "--tz"
+            | "--token-limit"
+            | "--cost-limit"
     )
 }
 
@@ -984,6 +1015,153 @@ fn matches_number(value: f64, filter: &str) -> bool {
     false
 }
 
+/// Renders `--daily/--weekly/--monthly/--blocks`, or `None` when none was requested.
+fn render_usage_report(sessions: &[Session], args: &Args) -> anyhow::Result<Option<String>> {
+    let language = language_of(args);
+    let period = match (args.daily, args.weekly, args.monthly) {
+        (true, _, _) => Some(UsagePeriod::Day),
+        (_, true, _) => Some(UsagePeriod::Week),
+        (_, _, true) => Some(UsagePeriod::Month),
+        _ => None,
+    };
+    if period.is_none() && !args.blocks {
+        return Ok(None);
+    }
+    let tz = UsageTz::parse(&args.tz).with_context(|| {
+        Message::new("cli.err.tz")
+            .arg("value", &args.tz)
+            .render_or(language, "")
+    })?;
+    let now = Utc::now();
+    let tz_label = usage_tz_label(tz, now);
+    let json = args.format == "json";
+
+    if let Some(period) = period {
+        let buckets = usage_by_period(sessions, period, tz);
+        if json {
+            return Ok(Some(serde_json::to_string_pretty(&serde_json::json!({
+                "period": match period {
+                    UsagePeriod::Day => "day",
+                    UsagePeriod::Week => "week",
+                    UsagePeriod::Month => "month",
+                },
+                "timezone": tz_label,
+                "buckets": buckets,
+            }))?));
+        }
+        let title = match period {
+            UsagePeriod::Day => "cli.usage.daily",
+            UsagePeriod::Week => "cli.usage.weekly",
+            UsagePeriod::Month => "cli.usage.monthly",
+        };
+        let mut lines = vec![
+            format!("{} (tz {tz_label})", tr(language, title)),
+            tr(language, "cli.usage.period_header").to_string(),
+        ];
+        let (mut tokens, mut cost) = (0, 0.0);
+        for bucket in buckets.iter().take(args.limit.max(1)) {
+            tokens += bucket.tokens;
+            cost += bucket.cost;
+            lines.push(format!(
+                "{}\t{}\t{}\t{:.4}",
+                bucket.period, bucket.sessions, bucket.tokens, bucket.cost
+            ));
+        }
+        lines.push(format!(
+            "{}\t\t{tokens}\t{cost:.4}",
+            tr(language, "cli.usage.total")
+        ));
+        return Ok(Some(lines.join("\n")));
+    }
+
+    let blocks = usage_blocks(sessions, now, tz);
+    let limit_pct = |tokens: i64, cost: f64| {
+        (
+            args.token_limit
+                .filter(|limit| *limit > 0)
+                .map(|limit| tokens as f64 / limit as f64 * 100.0),
+            args.cost_limit
+                .filter(|limit| *limit > 0.0)
+                .map(|limit| cost / limit * 100.0),
+        )
+    };
+    if json {
+        let active = blocks.iter().find(|block| block.active).map(|block| {
+            let (tokens_used_pct, cost_used_pct) = limit_pct(block.tokens, block.cost);
+            let (tokens_projected_pct, cost_projected_pct) =
+                limit_pct(block.projected_tokens, block.projected_cost);
+            serde_json::json!({
+                "tokens_used_pct": tokens_used_pct,
+                "cost_used_pct": cost_used_pct,
+                "tokens_projected_pct": tokens_projected_pct,
+                "cost_projected_pct": cost_projected_pct,
+            })
+        });
+        return Ok(Some(serde_json::to_string_pretty(&serde_json::json!({
+            "timezone": tz_label,
+            "estimated": true,
+            "token_limit": args.token_limit,
+            "cost_limit": args.cost_limit,
+            "active_limits": active,
+            "blocks": blocks.iter().take(args.limit.max(1)).collect::<Vec<_>>(),
+        }))?));
+    }
+    let short_time = |value: &str| value.get(..16).unwrap_or(value).replace('T', " ");
+    let mut lines = vec![
+        format!("{} (tz {tz_label})", tr(language, "cli.usage.blocks")),
+        tr(language, "cli.usage.blocks_note").to_string(),
+        tr(language, "cli.usage.blocks_header").to_string(),
+    ];
+    for block in blocks.iter().take(args.limit.max(1)) {
+        lines.push(format!(
+            "{}\t{}\t{}\t{}\t{:.4}\t{:.0}\t{:.4}\t{}",
+            short_time(&block.start),
+            short_time(&block.end),
+            block.sessions,
+            block.tokens,
+            block.cost,
+            block.tokens_per_minute,
+            block.cost_per_hour,
+            if block.active {
+                tr(language, "cli.usage.active")
+            } else {
+                ""
+            }
+        ));
+    }
+    if let Some(active) = blocks.iter().find(|block| block.active) {
+        lines.push(String::new());
+        lines.push(
+            Message::new("cli.usage.projection")
+                .arg("end", short_time(&active.end))
+                .arg("tokens", active.projected_tokens)
+                .arg("cost", format!("{:.2}", active.projected_cost))
+                .render_or(language, ""),
+        );
+        let (tokens_used, cost_used) = limit_pct(active.tokens, active.cost);
+        let (tokens_projected, cost_projected) =
+            limit_pct(active.projected_tokens, active.projected_cost);
+        for (label, used, projected) in [
+            ("token_limit", tokens_used, tokens_projected),
+            ("cost_limit", cost_used, cost_projected),
+        ] {
+            if let (Some(used), Some(projected)) = (used, projected) {
+                lines.push(
+                    Message::new("cli.usage.limit")
+                        .arg("limit", label)
+                        .arg("used", format!("{used:.0}"))
+                        .arg("projected", format!("{projected:.0}"))
+                        .render_or(language, ""),
+                );
+            }
+        }
+    } else {
+        lines.push(String::new());
+        lines.push(tr(language, "cli.usage.no_active").to_string());
+    }
+    Ok(Some(lines.join("\n")))
+}
+
 fn render_session_list(sessions: &[Session], format: &str, limit: usize) -> String {
     let sessions = sessions.iter().take(limit).collect::<Vec<_>>();
     if format == "json" {
@@ -1078,6 +1256,10 @@ fn has_session_action(args: &Args) -> bool {
         || args.diagnostics
         || args.inspect.is_some()
         || args.waste
+        || args.daily
+        || args.weekly
+        || args.monthly
+        || args.blocks
         || args.baseline.is_some()
         || args
             .search
@@ -1098,6 +1280,10 @@ fn validate_primary_action(args: &Args) -> anyhow::Result<()> {
         args.sessions,
         args.diagnostics || args.inspect.is_some(),
         args.waste,
+        args.daily,
+        args.weekly,
+        args.monthly,
+        args.blocks,
         args.doctor,
         args.list_models,
         args.test_match,
@@ -1380,6 +1566,13 @@ mod tests {
             clear_cache: false,
             preserve_history: false,
             include_history: false,
+            daily: false,
+            weekly: false,
+            monthly: false,
+            blocks: false,
+            tz: "local".to_string(),
+            token_limit: None,
+            cost_limit: None,
         }
     }
 
