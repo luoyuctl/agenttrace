@@ -226,7 +226,7 @@ fn lexical_normalize(path: &Path) -> PathBuf {
             Component::ParentDir => {
                 out.pop();
             }
-            Component::RootDir => out.push(Path::new("/")),
+            Component::RootDir => out.push(component.as_os_str()),
             Component::Prefix(prefix) => out.push(prefix.as_os_str()),
             Component::Normal(value) => out.push(value),
         }
@@ -293,7 +293,7 @@ pub fn filter_sessions(
         .collect()
 }
 pub fn session_matches_time_range(session: &Session, range: TimeRange, now: DateTime<Utc>) -> bool {
-    range.since(now).map_or(true, |since| {
+    range.since(now).is_none_or(|since| {
         parse_ts(&session.metrics.session_start).is_some_and(|time| time >= since)
     })
 }

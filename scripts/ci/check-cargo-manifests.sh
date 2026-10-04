@@ -25,7 +25,7 @@ const required = {
   repository: "https://github.com/luoyuctl/agenttrace",
   homepage: "https://github.com/luoyuctl/agenttrace",
   license: "MIT",
-  rust_version: "1.88",
+  rust_version: "1.89",
 };
 const expectedKeywords = ["agent", "observability", "tui", "cli", "ai"];
 const expectedCategories = ["command-line-utilities", "development-tools"];

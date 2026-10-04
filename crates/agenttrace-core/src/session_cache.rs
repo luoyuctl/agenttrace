@@ -319,7 +319,7 @@ pub fn load_cached_sessions_from_cache(
         .collect::<BTreeSet<_>>();
     let sessions = paths
         .into_iter()
-        .filter(|path| dir.map_or(true, |dir| path.starts_with(dir)))
+        .filter(|path| dir.is_none_or(|dir| path.starts_with(dir)))
         .filter_map(|path| cached_session(&path, cache))
         .collect();
     if cache.is_dirty() {
