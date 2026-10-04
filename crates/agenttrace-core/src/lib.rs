@@ -625,6 +625,9 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
     metrics.provenance.files = "unavailable".to_string();
     metrics.provenance.pricing_source = pricing::pricing_source_for(model);
 
+    // Unix seconds of the latest timestamped event, used to place usage records
+    // that carry no timestamp of their own.
+    let mut last_ts: Option<i64> = None;
     for event in events {
         if metrics.source_tool.is_empty()
             && !event.source_tool.is_empty()
@@ -636,12 +639,13 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
 
         if let Some(ts) = parse_ts(&event.timestamp) {
             metrics.timestamps.push(ts);
+            last_ts = Some(ts.timestamp());
         }
 
         match event.role.as_str() {
             "session_meta" | "meta" => {
                 if !event.usage.is_empty() {
-                    if let Some(ts) = parse_ts(&event.timestamp) {
+                    {
                         let get = |key: &str| event.usage.get(key).copied().unwrap_or(0);
                         let (input, output, cache_w, cache_r) = (
                             get("input_tokens"),
@@ -650,7 +654,8 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
                             get("cache_read_input_tokens"),
                         );
                         metrics.usage_points.push(UsagePoint {
-                            ts: ts.timestamp(),
+                            // i64::MIN marks "no timestamp yet"; resolved after the loop.
+                            ts: last_ts.unwrap_or(i64::MIN),
                             tokens: input + output + cache_w + cache_r,
                             cost: input as f64 / 1e6 * price.input
                                 + output as f64 / 1e6 * price.output
@@ -748,6 +753,20 @@ pub fn analyze(events: &[Event], model: &str) -> Metrics {
 
     metrics.events_total = events.len();
     metrics.timestamps.sort();
+    // Usage seen before any timestamp is placed at session start; without any
+    // timestamp at all it cannot be placed and is dropped (the session then has
+    // no start either, so period and block reports skip it entirely).
+    match metrics.timestamps.first() {
+        Some(first) => {
+            let first = first.timestamp();
+            for point in &mut metrics.usage_points {
+                if point.ts == i64::MIN {
+                    point.ts = first;
+                }
+            }
+        }
+        None => metrics.usage_points.clear(),
+    }
     if let (Some(first), Some(last)) = (metrics.timestamps.first(), metrics.timestamps.last()) {
         metrics.session_start = first.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         metrics.session_end = last.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);

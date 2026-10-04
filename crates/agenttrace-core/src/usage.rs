@@ -16,6 +16,10 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Length of a Claude-style rolling usage window.
 const BLOCK_SECS: i64 = 5 * 3600;
 
+/// Minimum window for burn rates, so one early record does not extrapolate to
+/// an absurd projection.
+const MIN_RATE_SECS: i64 = 15 * 60;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsagePeriod {
     Day,
@@ -96,9 +100,10 @@ pub struct UsageBlock {
     pub sessions: usize,
     pub tokens: i64,
     pub cost: f64,
-    /// Tokens per minute between the first and last record in the block.
+    /// Tokens per minute since the block started (to now for the active block,
+    /// to the last record otherwise), with a short minimum window.
     pub tokens_per_minute: f64,
-    /// Estimated USD per hour between the first and last record in the block.
+    /// Estimated USD per hour over the same window as `tokens_per_minute`.
     pub cost_per_hour: f64,
     /// For the active block: cost if the current burn rate holds until `end`.
     pub projected_cost: f64,
@@ -216,7 +221,8 @@ pub fn usage_blocks(sessions: &[Session], now: DateTime<Utc>, tz: UsageTz) -> Ve
         .map(|block| {
             let end = block.start + BLOCK_SECS;
             let active = now >= block.start && now < end;
-            let minutes = ((block.last - block.first) as f64 / 60.0).max(1.0);
+            let measured_until = if active { now } else { block.last };
+            let minutes = (measured_until - block.start).max(MIN_RATE_SECS) as f64 / 60.0;
             let tokens_per_minute = block.tokens as f64 / minutes;
             let cost_per_minute = block.cost / minutes;
             let remaining = if active {
@@ -375,17 +381,35 @@ mod tests {
         assert_eq!(active.start, "2026-10-04T13:00:00+00:00");
         assert_eq!(active.end, "2026-10-04T18:00:00+00:00");
         assert_eq!(active.tokens, 1200);
-        assert_eq!(active.tokens_per_minute, 40.0); // 1200 tokens over 30 minutes
-        assert_eq!(active.cost_per_hour, 2.4);
-        // 4h remaining at $0.04/min.
-        assert_eq!(active.projected_cost, 10.8);
-        assert_eq!(active.projected_tokens, 1200 + 40 * 240);
+        // 1200 tokens over 60 minutes since the 13:00 block start.
+        assert_eq!(active.tokens_per_minute, 20.0);
+        assert_eq!(active.cost_per_hour, 1.2);
+        // 4h remaining at $0.02/min.
+        assert_eq!(active.projected_cost, 6.0);
+        assert_eq!(active.projected_tokens, 1200 + 20 * 240);
 
         let done = &blocks[1];
         assert!(!done.active);
         assert_eq!(done.start, "2026-10-04T08:00:00+00:00");
         assert_eq!(done.tokens, 2000);
         assert_eq!(done.projected_cost, done.cost);
+    }
+
+    #[test]
+    fn single_early_record_does_not_explode_the_projection() {
+        let sessions = [session(&[("2026-10-04T13:00:30Z", 100_000, 1.0)])];
+        let now = DateTime::parse_from_rfc3339("2026-10-04T13:01:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let block = &usage_blocks(&sessions, now, UsageTz::parse("utc").unwrap())[0];
+        assert!(block.active);
+        // Rate is floored to a 15-minute window, not one minute.
+        assert!((block.tokens_per_minute - 100_000.0 / 15.0).abs() < 0.1);
+        assert!(
+            block.projected_tokens < 2_100_000,
+            "{}",
+            block.projected_tokens
+        );
     }
 
     #[test]
@@ -404,5 +428,58 @@ mod tests {
             (days[0].period.as_str(), days[0].tokens, days[0].cost),
             ("2026-10-03", 70, 0.7)
         );
+    }
+}
+
+#[cfg(test)]
+mod analyze_tests {
+    use crate::{analyze, total_tokens, Event};
+    use std::collections::BTreeMap;
+
+    fn usage_event(timestamp: &str, input: i64) -> Event {
+        Event {
+            role: "meta".to_string(),
+            timestamp: timestamp.to_string(),
+            usage: BTreeMap::from([("input_tokens".to_string(), input)]),
+            ..Event::default()
+        }
+    }
+
+    #[test]
+    fn untimestamped_usage_is_placed_on_the_timeline() {
+        let user = Event {
+            role: "user".to_string(),
+            timestamp: "2026-10-04T10:00:00Z".to_string(),
+            ..Event::default()
+        };
+        let events = [
+            usage_event("", 5), // before any timestamp -> session start
+            user,
+            usage_event("2026-10-04T10:05:00Z", 10),
+            usage_event("", 20), // inherits 10:05
+        ];
+        let metrics = analyze(&events, "default");
+        let placed: i64 = metrics.usage_points.iter().map(|p| p.tokens).sum();
+        assert_eq!(placed, 35);
+        let start = chrono::DateTime::parse_from_rfc3339("2026-10-04T10:00:00Z")
+            .unwrap()
+            .timestamp();
+        let ts = metrics
+            .usage_points
+            .iter()
+            .map(|p| p.ts)
+            .collect::<Vec<_>>();
+        assert_eq!(ts, [start, start + 300, start + 300]);
+        let session = crate::Session {
+            name: String::new(),
+            path: String::new(),
+            cwd: String::new(),
+            metrics,
+            anomalies: Vec::new(),
+            health: 100,
+            tool_warnings: Vec::new(),
+            diagnostics: crate::Diagnostics::default(),
+        };
+        assert_eq!(total_tokens(&session), placed);
     }
 }

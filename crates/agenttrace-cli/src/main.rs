@@ -1058,10 +1058,10 @@ fn render_usage_report(sessions: &[Session], args: &Args) -> anyhow::Result<Opti
             format!("{} (tz {tz_label})", tr(language, title)),
             tr(language, "cli.usage.period_header").to_string(),
         ];
-        let (mut tokens, mut cost) = (0, 0.0);
+        // Totals cover every bucket in range; --limit only trims the rows shown.
+        let tokens: i64 = buckets.iter().map(|bucket| bucket.tokens).sum();
+        let cost: f64 = buckets.iter().map(|bucket| bucket.cost).sum();
         for bucket in buckets.iter().take(args.limit.max(1)) {
-            tokens += bucket.tokens;
-            cost += bucket.cost;
             lines.push(format!(
                 "{}\t{}\t{}\t{:.4}",
                 bucket.period, bucket.sessions, bucket.tokens, bucket.cost
@@ -1142,13 +1142,13 @@ fn render_usage_report(sessions: &[Session], args: &Args) -> anyhow::Result<Opti
         let (tokens_projected, cost_projected) =
             limit_pct(active.projected_tokens, active.projected_cost);
         for (label, used, projected) in [
-            ("token_limit", tokens_used, tokens_projected),
-            ("cost_limit", cost_used, cost_projected),
+            ("cli.usage.token_limit", tokens_used, tokens_projected),
+            ("cli.usage.cost_limit", cost_used, cost_projected),
         ] {
             if let (Some(used), Some(projected)) = (used, projected) {
                 lines.push(
                     Message::new("cli.usage.limit")
-                        .arg("limit", label)
+                        .arg("limit", tr(language, label))
                         .arg("used", format!("{used:.0}"))
                         .arg("projected", format!("{projected:.0}"))
                         .render_or(language, ""),

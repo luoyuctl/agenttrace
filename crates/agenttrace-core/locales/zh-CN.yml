@@ -111,11 +111,13 @@ cli:
     monthly: "每月用量"
     blocks: "5 小时用量窗口"
     blocks_note: "基于本地日志估算；服务商限流在服务端计算，可能与此不同。"
+    cost_limit: "成本额度"
     period_header: "周期\t会话\tTOKENS\t成本"
     blocks_header: "开始\t结束\t会话\tTOKENS\t成本\tTOK/分钟\t成本/小时\t状态"
     total: "合计"
     active: "进行中"
     projection: "当前窗口：按当前速率，到 %{end} 预计 %{tokens} tokens / $%{cost}。"
+    token_limit: "Token 额度"
     limit: "%{limit}：已用 %{used}%，窗口结束预计 %{projected}%。"
     no_active: "最近 5 小时内没有进行中的窗口。"
 doctor:

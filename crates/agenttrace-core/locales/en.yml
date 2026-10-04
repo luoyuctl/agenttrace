@@ -111,11 +111,13 @@ cli:
     monthly: "Monthly usage"
     blocks: "5-hour usage blocks"
     blocks_note: "Estimated from local logs; provider rate limits are enforced server-side and may differ."
+    cost_limit: "Cost budget"
     period_header: "PERIOD\tSESSIONS\tTOKENS\tCOST"
     blocks_header: "START\tEND\tSESSIONS\tTOKENS\tCOST\tTOK/MIN\tCOST/HR\tSTATUS"
     total: "TOTAL"
     active: "active"
     projection: "Active block: at the current rate, %{tokens} tokens / $%{cost} by %{end}."
+    token_limit: "Token budget"
     limit: "%{limit}: %{used}% used, %{projected}% projected by block end."
     no_active: "No active block in the last 5 hours."
 doctor:
