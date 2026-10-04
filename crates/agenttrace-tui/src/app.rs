@@ -113,12 +113,18 @@ fn run_app(terminal: &mut DefaultTerminal, mut app: App) -> anyhow::Result<()> {
             dirty = false;
             last_draw = Some(now);
             let interval = app.motion.frame_interval();
-            next_frame = app.motion.next_frame_delay(Instant::now()).map(|delay| {
+            // Ask as of the render start: a draw that straddles a transition's end
+            // still gets one more frame to show the settled state.
+            next_frame = app.motion.next_frame_delay(started).map(|delay| {
                 // Schedule from the previous deadline, not from when we woke up:
                 // OS timers overshoot by ~1ms, which would otherwise cap 120 FPS
                 // near 105. Fall back to `now` after a stall so we don't burst.
+                // Only an elapsed frame deadline is reused, never a later one
+                // such as a pending notice fade.
                 match next_frame {
-                    Some(deadline) if delay == interval && deadline + interval > now => {
+                    Some(deadline)
+                        if delay == interval && deadline <= now && deadline + interval > now =>
+                    {
                         deadline + interval
                     }
                     _ => now + delay,
