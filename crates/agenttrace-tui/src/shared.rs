@@ -97,7 +97,7 @@ pub(super) fn loading_status_lines(app: &App) -> Vec<Line<'static>> {
         )),
         Line::from(format!(
             "{} · {}",
-            state.cache_state,
+            cache_state_for_language(&state.cache_state, app.language),
             if state.showing_cached {
                 app.t("tui.showing_cached_sessions")
             } else {

@@ -161,3 +161,43 @@ pub(super) fn command_choices(language: Language) -> [(&'static str, &'static st
         (pick(language, "tui.reload_sessions"), "reload"),
     ]
 }
+
+pub(super) fn localized_level(value: &str, language: Language) -> String {
+    match value {
+        "critical" | "warning" | "high" | "medium" | "good" | "low" | "info" => {
+            agenttrace_core::Message::new(&format!("tui.level.{value}")).render_or(language, value)
+        }
+        _ => value.to_string(),
+    }
+}
+
+pub(super) fn localized_anomaly(kind: &str, language: Language) -> String {
+    let kind = if kind == "redacted" {
+        "redaction"
+    } else {
+        kind
+    };
+    agenttrace_core::Message::new(&format!("tui.anomaly_kind.{kind}"))
+        .render(language)
+        .unwrap_or_else(|| kind.replace('_', " "))
+}
+
+pub(super) fn localized_step_kind(value: &str, language: Language) -> String {
+    match value {
+        "tool" => pick(language, "tui.tool"),
+        "meta" => pick(language, "tui.note_2"),
+        _ => value,
+    }
+    .to_string()
+}
+
+pub(super) fn localized_step_status(value: &str, language: Language) -> String {
+    match value {
+        "ok" => pick(language, "tui.ok"),
+        "error" => pick(language, "tui.error"),
+        "missing" => pick(language, "tui.missing_result"),
+        "truncated" => pick(language, "tui.truncated"),
+        _ => value,
+    }
+    .to_string()
+}

@@ -687,7 +687,11 @@ impl App {
                 if let Some(range) = TimeRange::parse(&value) {
                     self.range_filter = range;
                     self.refresh_filtered();
-                    self.status = format!("{}: {}", self.t("tui.range"), range.label());
+                    self.status = format!(
+                        "{}: {}",
+                        self.t("tui.range"),
+                        range_label(range, self.language)
+                    );
                 } else {
                     self.status = self.t("tui.usage_range_today_7d_30d_all").to_string();
                 }
@@ -1117,7 +1121,11 @@ impl App {
             TimeRange::Days30 => TimeRange::All,
         };
         self.refresh_filtered();
-        self.status = format!("{}: {}", self.t("tui.range"), self.range_filter.label());
+        self.status = format!(
+            "{}: {}",
+            self.t("tui.range"),
+            range_label(self.range_filter, self.language)
+        );
     }
 
     fn filter_selected_source(&mut self) {
@@ -1606,7 +1614,9 @@ mod shared;
 
 use explorer::*;
 use filters::*;
-use i18n::UiText;
+#[cfg(test)]
+use i18n::localized_anomaly;
+use i18n::{localized_level, localized_step_kind, localized_step_status, UiText};
 #[cfg(test)]
 use presentation::*;
 #[cfg(not(test))]

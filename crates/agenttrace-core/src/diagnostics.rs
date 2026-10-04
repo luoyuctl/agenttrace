@@ -1,4 +1,4 @@
-use crate::{Event, Metrics, Session};
+use crate::{Event, Language, Message, Metrics, Session};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -49,6 +49,8 @@ pub struct LoopFingerprint {
     pub last_index: usize,
     pub severity: String,
     pub detail: String,
+    #[serde(default, skip_serializing_if = "Message::is_empty")]
+    pub i18n: Message,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,6 +79,8 @@ pub struct ContextUtilization {
     pub utilization_pct: f64,
     pub risk_level: String,
     pub suggestion: String,
+    #[serde(default, skip_serializing_if = "Message::is_empty")]
+    pub suggestion_i18n: Message,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +90,8 @@ pub struct LargeParam {
     pub risk: String,
     pub timestamp: String,
     pub detail: String,
+    #[serde(default, skip_serializing_if = "Message::is_empty")]
+    pub i18n: Message,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +100,8 @@ pub struct UnusedTool {
     pub call_count: usize,
     pub level: String,
     pub detail: String,
+    #[serde(default, skip_serializing_if = "Message::is_empty")]
+    pub i18n: Message,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,6 +109,23 @@ pub struct StuckPattern {
     pub pattern: String,
     pub description: String,
     pub severity: String,
+    #[serde(default, skip_serializing_if = "Message::is_empty")]
+    pub i18n: Message,
+}
+
+impl StuckPattern {
+    fn new(pattern: &str, severity: &str, message: Message) -> Self {
+        Self {
+            pattern: pattern.to_string(),
+            description: message.render_or(Language::En, ""),
+            severity: severity.to_string(),
+            i18n: message,
+        }
+    }
+
+    pub fn description_for(&self, language: Language) -> String {
+        self.i18n.render_or(language, &self.description)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -112,6 +137,20 @@ pub struct FixSuggestion {
     pub category: String,
 }
 
+impl FixSuggestion {
+    /// Localized (title, description, action).
+    pub fn text_for(&self, language: Language) -> (String, String, String) {
+        let part = |field: &str, english: &str| {
+            Message::new(&format!("msg.fix.{}.{field}", self.category)).render_or(language, english)
+        };
+        (
+            part("title", &self.title),
+            part("description", &self.description),
+            part("action", &self.action),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct CostAlert {
     pub triggered: bool,
@@ -120,6 +159,14 @@ pub struct CostAlert {
     pub current: f64,
     pub baseline: f64,
     pub ratio: f64,
+    #[serde(default, skip_serializing_if = "Message::is_empty")]
+    pub i18n: Message,
+}
+
+impl CostAlert {
+    pub fn message_for(&self, language: Language) -> String {
+        self.i18n.render_or(language, &self.message)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -379,6 +426,24 @@ fn trace_steps(events: &[Event], _model: &str) -> Vec<TraceStep> {
     steps
 }
 
+macro_rules! localized_detail {
+    ($($ty:ty),*) => {$(
+        impl $ty {
+            pub fn detail_for(&self, language: Language) -> String {
+                self.i18n.render_or(language, &self.detail)
+            }
+        }
+    )*};
+}
+
+localized_detail!(LoopFingerprint, LargeParam, UnusedTool);
+
+impl ContextUtilization {
+    pub fn suggestion_for(&self, language: Language) -> String {
+        self.suggestion_i18n.render_or(language, &self.suggestion)
+    }
+}
+
 pub fn fix_suggestions(session: &Session) -> Vec<FixSuggestion> {
     let mut fixes = Vec::new();
     let total = session.metrics.tool_calls_total;
@@ -434,9 +499,11 @@ pub fn predict_cost_anomaly(history: &[Session], current: &Session) -> CostAlert
         .map(|session| session.metrics.cost_estimated / session.metrics.assistant_turns as f64)
         .collect::<Vec<_>>();
     if costs.is_empty() || current.metrics.assistant_turns == 0 {
+        let message = Message::new("msg.cost_alert.no_history");
         return CostAlert {
             level: "info".to_string(),
-            message: "No comparable cost history.".to_string(),
+            message: message.render_or(Language::En, ""),
+            i18n: message,
             ..CostAlert::default()
         };
     }
@@ -451,41 +518,25 @@ pub fn predict_cost_anomaly(history: &[Session], current: &Session) -> CostAlert
         current.diagnostics.loop_cost.total_loop_cost,
         current.metrics.cost_estimated,
     );
+    let ratio_message = || Message::new("msg.cost_alert.ratio").arg("ratio", format!("{ratio:.1}"));
+    let loop_message =
+        || Message::new("msg.cost_alert.loop_waste").arg("pct", format!("{loop_pct:.0}"));
     let (triggered, level, message) = if ratio > 3.0 {
-        (
-            true,
-            "critical",
-            format!("Cost/turn is {ratio:.1}x the session baseline."),
-        )
+        (true, "critical", ratio_message())
     } else if ratio > 2.0 {
-        (
-            true,
-            "warning",
-            format!("Cost/turn is {ratio:.1}x the session baseline."),
-        )
+        (true, "warning", ratio_message())
     } else if loop_pct > 50.0 {
-        (
-            true,
-            "critical",
-            format!("Loop waste is {loop_pct:.0}% of session cost."),
-        )
+        (true, "critical", loop_message())
     } else if loop_pct > 30.0 {
-        (
-            true,
-            "warning",
-            format!("Loop waste is {loop_pct:.0}% of session cost."),
-        )
+        (true, "warning", loop_message())
     } else {
-        (
-            false,
-            "info",
-            format!("Cost/turn is {ratio:.1}x the session baseline."),
-        )
+        (false, "info", ratio_message())
     };
     CostAlert {
         triggered,
         level: level.to_string(),
-        message,
+        message: message.render_or(Language::En, ""),
+        i18n: message,
         current: value,
         baseline,
         ratio,
@@ -704,6 +755,9 @@ fn loop_fingerprints(events: &[Event]) -> Vec<LoopFingerprint> {
                     "Tool '{}' returned the same result {count} times",
                     pairs[start].0
                 ),
+                i18n: Message::new("msg.loop_fingerprint")
+                    .arg("tool", pairs[start].0)
+                    .arg("count", count),
             });
         }
         start = end;
@@ -873,6 +927,11 @@ fn context_utilization(events: &[Event], model: &str) -> ContextUtilization {
         } else {
             String::new()
         },
+        suggestion_i18n: if available < 50_000 {
+            Message::new("msg.context.reduce")
+        } else {
+            Message::default()
+        },
     }
 }
 
@@ -888,6 +947,9 @@ fn large_params(events: &[Event]) -> Vec<LargeParam> {
                 risk: if size > 50_000 { "high" } else { "medium" }.to_string(),
                 timestamp: event.timestamp.clone(),
                 detail: format!("Tool '{}' received {size} bytes of arguments", call.name),
+                i18n: Message::new("msg.large_param")
+                    .arg("tool", &call.name)
+                    .arg("size", size),
             })
         })
         .collect()
@@ -906,6 +968,7 @@ fn unused_tools(events: &[Event]) -> Vec<UnusedTool> {
             call_count,
             level: "rare".to_string(),
             detail: format!("Tool was used {call_count} time(s)."),
+            i18n: Message::new("msg.unused_tool").arg("count", call_count),
         })
         .collect()
 }
@@ -914,11 +977,11 @@ fn stuck_patterns(events: &[Event], metrics: &Metrics) -> Vec<StuckPattern> {
     let mut out = Vec::new();
     let long_gaps = metrics.gaps_sec.iter().filter(|gap| **gap > 120.0).count();
     if long_gaps >= 3 {
-        out.push(StuckPattern {
-            pattern: "long_gaps".to_string(),
-            description: format!("{long_gaps} gaps exceed 120s"),
-            severity: "critical".to_string(),
-        });
+        out.push(StuckPattern::new(
+            "long_gaps",
+            "critical",
+            Message::new("msg.stuck.long_gaps").arg("count", long_gaps),
+        ));
     }
     let mut content = BTreeMap::new();
     for event in events
@@ -930,11 +993,11 @@ fn stuck_patterns(events: &[Event], metrics: &Metrics) -> Vec<StuckPattern> {
             .or_insert(0) += 1;
     }
     for count in content.into_values().filter(|count| *count >= 4) {
-        out.push(StuckPattern {
-            pattern: "repeated_response".to_string(),
-            description: format!("Repeated assistant response {count} times"),
-            severity: "warning".to_string(),
-        });
+        out.push(StuckPattern::new(
+            "repeated_response",
+            "warning",
+            Message::new("msg.stuck.repeated_response").arg("count", count),
+        ));
     }
     let result_ids = events
         .iter()
@@ -947,11 +1010,11 @@ fn stuck_patterns(events: &[Event], metrics: &Metrics) -> Vec<StuckPattern> {
         .filter(|call| !call.id.is_empty() && !result_ids.contains(call.id.as_str()))
         .count();
     if zombies > 0 {
-        out.push(StuckPattern {
-            pattern: "zombie_tool_calls".to_string(),
-            description: format!("{zombies} tool calls have no result"),
-            severity: "warning".to_string(),
-        });
+        out.push(StuckPattern::new(
+            "zombie_tool_calls",
+            "warning",
+            Message::new("msg.stuck.zombie_tool_calls").arg("count", zombies),
+        ));
     }
     out
 }

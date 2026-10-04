@@ -1,4 +1,4 @@
-use crate::i18n::tr;
+use crate::i18n::{tr, Message};
 use crate::{
     format_cost, format_tokens, loop_waste_percent, pricing, round4, Metrics, ReportLanguage,
     Session, VERSION,
@@ -11,7 +11,6 @@ pub struct CacheEfficiency {
     hit_rate: f64,
     wasted_cost: f64,
     rating: &'static str,
-    suggestion: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -32,7 +31,8 @@ pub struct ToolBloatAnalysis {
 
 #[derive(Debug, Clone)]
 pub struct StuckPattern {
-    description: String,
+    description: Message,
+    english: String,
     severity: &'static str,
 }
 
@@ -44,9 +44,8 @@ pub struct WasteReport {
     waste_score: i32,
     waste_level: &'static str,
     total_wasted: f64,
-    loop_percent: f64,
-    summary: String,
-    top_actions: Vec<String>,
+    summary: Message,
+    top_actions: Vec<Message>,
 }
 
 pub fn compute_waste_report(session: &Session) -> WasteReport {
@@ -59,7 +58,8 @@ pub fn compute_waste_report(session: &Session) -> WasteReport {
             .stuck_patterns
             .iter()
             .map(|item| StuckPattern {
-                description: item.description.clone(),
+                description: item.i18n.clone(),
+                english: item.description.clone(),
                 severity: if item.severity == "critical" {
                     "critical"
                 } else {
@@ -109,46 +109,44 @@ pub fn compute_waste_report(session: &Session) -> WasteReport {
         _ => "green",
     };
     let summary = match waste_level {
-        "green" => "efficient session - no significant waste".to_string(),
-        "yellow" => format!(
-            "minor waste - cache {:.0}% hit, room for optimization",
-            cache.hit_rate
-        ),
-        "orange" => format!(
-            "wasting ${:.2}: loops {:.0}%, tools {:.1}/turn",
-            total_wasted, loop_percent, bloat.tools_per_turn
-        ),
-        "red" => format!(
-            "severe waste ${:.2}: loops {:.0}%, {} stuck, no cache",
-            total_wasted,
-            loop_percent,
-            stuck.len()
-        ),
-        _ => String::new(),
+        "green" => Message::new("waste.msg.summary_green"),
+        "yellow" => {
+            Message::new("waste.msg.summary_yellow").arg("hit", format!("{:.0}", cache.hit_rate))
+        }
+        "orange" => Message::new("waste.msg.summary_orange")
+            .arg("wasted", format!("{total_wasted:.2}"))
+            .arg("loops", format!("{loop_percent:.0}"))
+            .arg("tools", format!("{:.1}", bloat.tools_per_turn)),
+        _ => Message::new("waste.msg.summary_red")
+            .arg("wasted", format!("{total_wasted:.2}"))
+            .arg("loops", format!("{loop_percent:.0}"))
+            .arg("stuck", stuck.len()),
     };
 
     let mut top_actions = Vec::new();
     if cache.rating == "none" || cache.rating == "poor" {
-        top_actions.push(cache.suggestion.to_string());
+        top_actions.push(cache_suggestion(cache.rating));
     }
     if bloat.bloat_level == "severe" || bloat.bloat_level == "high" {
         if let Some(top) = bloat.top_bloat.first() {
-            top_actions.push(format!(
-                "top tool {:?} called {}x - reduce or batch",
-                top.tool_name, top.call_count
-            ));
+            top_actions.push(
+                Message::new("waste.msg.top_tool")
+                    .arg("tool", format!("{:?}", top.tool_name))
+                    .arg("count", top.call_count),
+            );
         } else {
-            top_actions.push(bloat_suggestion(bloat.bloat_level).to_string());
+            top_actions.push(bloat_suggestion(bloat.bloat_level));
         }
     }
     if loop_percent > 20.0 {
-        top_actions.push(format!(
-            "loop waste ${:.2} ({:.0}%) - add max retries limit",
-            loop_cost, loop_percent
-        ));
+        top_actions.push(
+            Message::new("waste.msg.loop_waste")
+                .arg("cost", format!("{loop_cost:.2}"))
+                .arg("pct", format!("{loop_percent:.0}")),
+        );
     }
     if top_actions.is_empty() {
-        top_actions.push("session running optimally".to_string());
+        top_actions.push(Message::new("waste.msg.optimal"));
     }
 
     WasteReport {
@@ -158,7 +156,6 @@ pub fn compute_waste_report(session: &Session) -> WasteReport {
         waste_score,
         waste_level,
         total_wasted,
-        loop_percent,
         summary,
         top_actions,
     }
@@ -181,26 +178,14 @@ fn analyze_cache_efficiency(metrics: &Metrics) -> CacheEfficiency {
     let wasted_tokens = (metrics.tokens_input - metrics.tokens_cache_r).max(0);
     let price = pricing::lookup_price(&metrics.model_used);
     let wasted_cost = round4(wasted_tokens as f64 / 1e6 * price.input);
-    let (rating, suggestion) = if hit_rate >= 80.0 {
-        (
-            "excellent",
-            "cache utilization excellent - keep current prompt structure",
-        )
+    let rating = if hit_rate >= 80.0 {
+        "excellent"
     } else if hit_rate >= 40.0 {
-        (
-            "good",
-            "moderate cache hit - place static system instructions at prompt prefix",
-        )
+        "good"
     } else if metrics.tokens_cache_w > 0 {
-        (
-            "poor",
-            "low cache hit rate - enable prompt caching with static prefix content",
-        )
+        "poor"
     } else {
-        (
-            "none",
-            "caching not enabled - enable Anthropic prompt caching to save up to 90% on input cost",
-        )
+        "none"
     };
     CacheEfficiency {
         cache_read_tokens: metrics.tokens_cache_r,
@@ -208,7 +193,6 @@ fn analyze_cache_efficiency(metrics: &Metrics) -> CacheEfficiency {
         hit_rate,
         wasted_cost,
         rating,
-        suggestion,
     }
 }
 
@@ -255,8 +239,10 @@ fn analyze_tool_bloat(metrics: &Metrics) -> ToolBloatAnalysis {
 fn detect_stuck_from_metrics(metrics: &Metrics) -> Vec<StuckPattern> {
     let long_gaps = metrics.gaps_sec.iter().filter(|gap| **gap > 120.0).count();
     if long_gaps >= 3 {
+        let description = Message::new("waste.msg.stuck_gaps").arg("count", long_gaps);
         vec![StuckPattern {
-            description: format!("{long_gaps} gaps >120s - agent appears stuck"),
+            english: description.render_or(ReportLanguage::En, ""),
+            description,
             severity: "critical",
         }]
     } else {
@@ -312,7 +298,7 @@ fn waste_report_text(report: &WasteReport, language: ReportLanguage) -> String {
     out.push_str(&format!(
         "  {}: {}\n",
         tr(language, "waste.suggestion"),
-        cache_suggestion(report.cache.rating, language)
+        cache_suggestion(report.cache.rating).render_or(language, "")
     ));
     out.push('\n');
     out.push_str(tr(language, "waste.tool_bloat"));
@@ -345,7 +331,7 @@ fn waste_report_text(report: &WasteReport, language: ReportLanguage) -> String {
             out.push_str(&format!(
                 "  [{}] {}\n",
                 severity_label(stuck.severity, language),
-                stuck_description(&stuck.description, language)
+                stuck.description.render_or(language, &stuck.english)
             ));
         }
     }
@@ -355,7 +341,7 @@ fn waste_report_text(report: &WasteReport, language: ReportLanguage) -> String {
         out.push_str(&format!(
             "  {}. {}\n",
             index + 1,
-            action_text(action, language)
+            action.render_or(language, "")
         ));
     }
     out.push('\n');
@@ -365,42 +351,16 @@ fn waste_report_text(report: &WasteReport, language: ReportLanguage) -> String {
 }
 
 fn waste_summary(report: &WasteReport, language: ReportLanguage) -> String {
-    if language == ReportLanguage::En {
-        return report.summary.clone();
-    }
-    match report.waste_level {
-        "green" => "会话效率良好，未发现明显浪费".to_string(),
-        "yellow" => format!(
-            "轻微浪费：缓存命中率 {:.0}%，仍有优化空间",
-            report.cache.hit_rate
-        ),
-        "orange" => format!(
-            "浪费 ${:.2}：循环 {:.0}%，每轮工具调用 {:.1} 次",
-            report.total_wasted, report.loop_percent, report.bloat.tools_per_turn
-        ),
-        _ => format!(
-            "严重浪费 ${:.2}：{} 个卡住信号，且未有效使用缓存",
-            report.total_wasted,
-            report.stuck.len()
-        ),
-    }
+    report.summary.render_or(language, "")
 }
 
-fn cache_suggestion(rating: &str, language: ReportLanguage) -> &'static str {
-    if language == ReportLanguage::En {
-        return match rating {
-            "excellent" => "cache utilization excellent - keep current prompt structure",
-            "good" => "moderate cache hit - place static system instructions at prompt prefix",
-            "poor" => "low cache hit rate - enable prompt caching with static prefix content",
-            _ => "caching not enabled - enable Anthropic prompt caching to save up to 90% on input cost",
-        };
-    }
-    match rating {
-        "excellent" => "缓存利用率优秀，保持当前提示词结构",
-        "good" => "缓存命中率中等，将静态系统指令放在提示词前缀",
-        "poor" => "缓存命中率较低，使用静态前缀启用提示词缓存",
-        _ => "未启用缓存，启用提示词缓存可降低输入成本",
-    }
+fn cache_suggestion(rating: &str) -> Message {
+    Message::new(match rating {
+        "excellent" => "waste.msg.cache_excellent",
+        "good" => "waste.msg.cache_good",
+        "poor" => "waste.msg.cache_poor",
+        _ => "waste.msg.cache_none",
+    })
 }
 
 fn severity_label(severity: &str, language: ReportLanguage) -> &str {
@@ -413,50 +373,6 @@ fn severity_label(severity: &str, language: ReportLanguage) -> &str {
         "high" => "高",
         "medium" => "中",
         _ => severity,
-    }
-}
-
-fn stuck_description(description: &str, language: ReportLanguage) -> String {
-    if language == ReportLanguage::En {
-        return description.to_string();
-    }
-    description
-        .replace(
-            " gaps >120s - agent appears stuck",
-            " 个间隔超过 120 秒，智能体可能卡住",
-        )
-        .replace(" gaps exceed 120s", " 个间隔超过 120 秒")
-        .replace("Repeated assistant response ", "助手重复响应 ")
-        .replace(" times", " 次")
-        .replace(" tool calls have no result", " 个工具调用没有结果")
-}
-
-fn action_text(action: &str, language: ReportLanguage) -> String {
-    if language == ReportLanguage::En {
-        return action.to_string();
-    }
-    match action {
-        "cache utilization excellent - keep current prompt structure" => {
-            "缓存利用率优秀，保持当前提示词结构".to_string()
-        }
-        "moderate cache hit - place static system instructions at prompt prefix" => {
-            "缓存命中率中等，将静态系统指令放在提示词前缀".to_string()
-        }
-        "low cache hit rate - enable prompt caching with static prefix content" => {
-            "缓存命中率较低，使用静态前缀启用提示词缓存".to_string()
-        }
-        "caching not enabled - enable Anthropic prompt caching to save up to 90% on input cost" => {
-            "未启用缓存，启用提示词缓存可降低输入成本".to_string()
-        }
-        "session running optimally" => "会话运行良好".to_string(),
-        _ if action.starts_with("top tool ") => action
-            .replace("top tool ", "最高频工具 ")
-            .replace(" called ", " 调用 ")
-            .replace("x - reduce or batch", " 次，请减少调用或批处理"),
-        _ if action.starts_with("loop waste ") => action
-            .replace("loop waste ", "循环浪费 ")
-            .replace(" - add max retries limit", "，请限制最大重试次数"),
-        _ => action.to_string(),
     }
 }
 
@@ -478,13 +394,13 @@ fn bloat_level_label(level: &str, language: ReportLanguage) -> &'static str {
     }
 }
 
-fn bloat_suggestion(level: &str) -> &'static str {
-    match level {
-        "severe" => "severe tool bloat: limit max tool calls per turn or split into smaller tasks",
-        "high" => "too many tool calls: check if simple tasks use over-complex agent orchestration",
-        "medium" => "moderate tool usage: watch for unnecessary tool call patterns",
-        _ => "tool usage is lean",
-    }
+fn bloat_suggestion(level: &str) -> Message {
+    Message::new(match level {
+        "severe" => "waste.msg.bloat_severe",
+        "high" => "waste.msg.bloat_high",
+        "medium" => "waste.msg.bloat_medium",
+        _ => "waste.msg.bloat_lean",
+    })
 }
 
 fn waste_level_label(level: &str, language: ReportLanguage) -> &'static str {

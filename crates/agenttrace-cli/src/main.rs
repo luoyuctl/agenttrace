@@ -872,11 +872,13 @@ fn render_diagnostics(
     if alert.triggered {
         out.push_str(&format!(
             "\nCost alert [{}]: {}",
-            alert.level, alert.message
+            alert.level,
+            alert.message_for(language)
         ));
     }
     for fix in fixes {
-        out.push_str(&format!("\nFix [{}]: {}", fix.severity, fix.action));
+        let (_, _, action) = fix.text_for(language);
+        out.push_str(&format!("\nFix [{}]: {action}", fix.severity));
     }
     Ok(out)
 }

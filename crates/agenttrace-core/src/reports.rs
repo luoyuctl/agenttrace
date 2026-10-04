@@ -381,7 +381,7 @@ pub fn report_text_with_language(session: &Session, language: ReportLanguage) ->
                 anomaly_emoji(&anomaly.severity),
                 severity_label_for_language(&anomaly.severity, language),
                 anomaly_type_label_for_language(&anomaly.kind, language),
-                anomaly_detail_for_language(anomaly, language)
+                anomaly.detail_for(language)
             ));
         }
     }
@@ -1415,9 +1415,7 @@ fn write_anomalies_json(
         out.push_str("{\n");
         out.push_str(&field_indent);
         out.push_str("\"detail\": ");
-        out.push_str(&json_string(&anomaly_detail_for_language(
-            anomaly, language,
-        )));
+        out.push_str(&json_string(&anomaly.detail_for(language)));
         out.push_str(",\n");
         out.push_str(&field_indent);
         out.push_str("\"severity\": ");
@@ -1453,50 +1451,6 @@ fn fmt_duration_for_language(seconds: f64, language: ReportLanguage) -> String {
             }
         }
     }
-}
-
-fn anomaly_detail_for_language(anomaly: &Anomaly, language: ReportLanguage) -> String {
-    if language == ReportLanguage::En {
-        return anomaly.detail.clone();
-    }
-    match anomaly.kind.as_str() {
-        "shallow_thinking" => {
-            if let Some(avg) = parse_avg_reasoning_chars(&anomaly.detail) {
-                if anomaly.severity == "high" {
-                    format!("平均推理 = {avg:.0} 字符 (极浅)")
-                } else {
-                    format!("平均推理 = {avg:.0} 字符")
-                }
-            } else {
-                anomaly.detail.clone()
-            }
-        }
-        "no_tools" => "无工具调用 — 纯对话会话".to_string(),
-        "hanging" => anomaly
-            .detail
-            .strip_suffix('s')
-            .map(|detail| detail.replace(" gap(s) >60s, max=", "个间隔 >60秒, 最长=") + "秒")
-            .unwrap_or_else(|| anomaly.detail.clone()),
-        "latency" => anomaly
-            .detail
-            .strip_prefix("p95 latency = ")
-            .and_then(|value| value.strip_suffix('s'))
-            .map(|value| format!("P95延迟 = {value}秒"))
-            .unwrap_or_else(|| anomaly.detail.clone()),
-        "tool_failures" => anomaly.detail.replace(" failed", " 失败"),
-        "redaction" | "redacted" => anomaly
-            .detail
-            .strip_suffix(" block(s) redacted")
-            .map(|count| format!("{count} 思维块已脱敏"))
-            .unwrap_or_else(|| anomaly.detail.clone()),
-        _ => anomaly.detail.clone(),
-    }
-}
-
-fn parse_avg_reasoning_chars(detail: &str) -> Option<f64> {
-    let value = detail.strip_prefix("avg reasoning = ")?;
-    let value = value.split_whitespace().next()?;
-    value.parse().ok()
 }
 
 fn overview_summary(overview: &Overview, sessions: &[Session]) -> Value {

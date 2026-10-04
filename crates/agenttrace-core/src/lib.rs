@@ -43,7 +43,7 @@ pub use governance::{
     SessionDeliveryEvidence, TokenBreakdown,
 };
 pub use history::{history_path, merge_preserved_history, preserve_derived_history};
-pub use i18n::{tr, tr_args, Language};
+pub use i18n::{tr, tr_args, Language, Message};
 pub use insights::{
     compare_session_outcome, data_health, filter_sessions, project_name, report_scope,
     resolve_project, session_capability, session_matches_time_range, DataHealth, ProjectIdentity,
@@ -300,6 +300,23 @@ pub struct Anomaly {
     pub kind: String,
     pub severity: String,
     pub detail: String,
+    #[serde(default, skip_serializing_if = "Message::is_empty")]
+    pub i18n: Message,
+}
+
+impl Anomaly {
+    pub fn new(kind: &str, severity: &str, message: Message) -> Self {
+        Self {
+            kind: kind.to_string(),
+            severity: severity.to_string(),
+            detail: message.render_or(Language::En, ""),
+            i18n: message,
+        }
+    }
+
+    pub fn detail_for(&self, language: Language) -> String {
+        self.i18n.render_or(language, &self.detail)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -309,6 +326,14 @@ pub struct ToolWarning {
     pub count: usize,
     pub detail: String,
     pub severity: String,
+    #[serde(default, skip_serializing_if = "Message::is_empty")]
+    pub i18n: Message,
+}
+
+impl ToolWarning {
+    pub fn detail_for(&self, language: Language) -> String {
+        self.i18n.render_or(language, &self.detail)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -718,86 +743,73 @@ pub fn detect_anomalies(metrics: &Metrics) -> Vec<Anomaly> {
         let long_gaps = gaps.iter().filter(|gap| **gap > 60.0).count();
         let max_gap = *gaps.last().unwrap_or(&0.0);
         let has_super_long = gaps.iter().any(|gap| *gap > 300.0);
+        let hanging = || {
+            Message::new("msg.anomaly.hanging")
+                .arg("count", long_gaps)
+                .arg("max", format!("{max_gap:.0}"))
+        };
         if has_super_long {
-            anomalies.push(Anomaly {
-                kind: "hanging".to_string(),
-                severity: "high".to_string(),
-                detail: format!("{long_gaps} gap(s) >60s, max={max_gap:.0}s"),
-            });
+            anomalies.push(Anomaly::new("hanging", "high", hanging()));
         } else if long_gaps > 0 {
-            anomalies.push(Anomaly {
-                kind: "hanging".to_string(),
-                severity: "medium".to_string(),
-                detail: format!("{long_gaps} gap(s) >60s, max={max_gap:.0}s"),
-            });
+            anomalies.push(Anomaly::new("hanging", "medium", hanging()));
         } else if percentile(&gaps, 0.95) > 30.0 {
-            anomalies.push(Anomaly {
-                kind: "latency".to_string(),
-                severity: "low".to_string(),
-                detail: format!("p95 latency = {:.1}s", percentile(&gaps, 0.95)),
-            });
+            anomalies.push(Anomaly::new(
+                "latency",
+                "low",
+                Message::new("msg.anomaly.latency")
+                    .arg("p95", format!("{:.1}", percentile(&gaps, 0.95))),
+            ));
         }
     }
 
     let total_tools = metrics.tool_calls_ok + metrics.tool_calls_fail;
     if total_tools > 0 {
         let fail_rate = metrics.tool_calls_fail as f64 / total_tools as f64;
+        let failures = || {
+            Message::new("msg.anomaly.tool_failures")
+                .arg("failed", metrics.tool_calls_fail)
+                .arg("total", total_tools)
+                .arg("pct", format!("{:.0}", fail_rate * 100.0))
+        };
         if fail_rate > 0.30 {
-            anomalies.push(Anomaly {
-                kind: "tool_failures".to_string(),
-                severity: "high".to_string(),
-                detail: format!(
-                    "{}/{} failed ({:.0}%)",
-                    metrics.tool_calls_fail,
-                    total_tools,
-                    fail_rate * 100.0
-                ),
-            });
+            anomalies.push(Anomaly::new("tool_failures", "high", failures()));
         } else if fail_rate > 0.15 {
-            anomalies.push(Anomaly {
-                kind: "tool_failures".to_string(),
-                severity: "medium".to_string(),
-                detail: format!(
-                    "{}/{} failed ({:.0}%)",
-                    metrics.tool_calls_fail,
-                    total_tools,
-                    fail_rate * 100.0
-                ),
-            });
+            anomalies.push(Anomaly::new("tool_failures", "medium", failures()));
         }
     }
 
     if !metrics.reasoning_lens.is_empty() && metrics.reasoning_blocks > 0 {
         let avg_reason = metrics.reasoning_chars as f64 / metrics.reasoning_blocks as f64;
+        let avg = format!("{avg_reason:.0}");
         if avg_reason < 200.0 {
-            anomalies.push(Anomaly {
-                kind: "shallow_thinking".to_string(),
-                severity: "high".to_string(),
-                detail: format!("avg reasoning = {avg_reason:.0} chars (very shallow)"),
-            });
+            anomalies.push(Anomaly::new(
+                "shallow_thinking",
+                "high",
+                Message::new("msg.anomaly.shallow_thinking_severe").arg("avg", avg),
+            ));
         } else if avg_reason < 500.0 {
-            anomalies.push(Anomaly {
-                kind: "shallow_thinking".to_string(),
-                severity: "medium".to_string(),
-                detail: format!("avg reasoning = {avg_reason:.0} chars"),
-            });
+            anomalies.push(Anomaly::new(
+                "shallow_thinking",
+                "medium",
+                Message::new("msg.anomaly.shallow_thinking").arg("avg", avg),
+            ));
         }
     }
 
     if metrics.reasoning_redact > 0 {
-        anomalies.push(Anomaly {
-            kind: "redaction".to_string(),
-            severity: "medium".to_string(),
-            detail: format!("{} block(s) redacted", metrics.reasoning_redact),
-        });
+        anomalies.push(Anomaly::new(
+            "redaction",
+            "medium",
+            Message::new("msg.anomaly.redaction").arg("count", metrics.reasoning_redact),
+        ));
     }
 
     if metrics.tool_calls_total == 0 && metrics.assistant_turns > 2 {
-        anomalies.push(Anomaly {
-            kind: "no_tools".to_string(),
-            severity: "low".to_string(),
-            detail: "no tool calls — chat-only session".to_string(),
-        });
+        anomalies.push(Anomaly::new(
+            "no_tools",
+            "low",
+            Message::new("msg.anomaly.no_tools"),
+        ));
     }
 
     anomalies
@@ -943,20 +955,21 @@ fn validate_tool_warnings(events: &[Event]) -> Vec<ToolWarning> {
 }
 
 fn tool_warning(name: &str, pattern: &str, count: usize, severity: &str) -> ToolWarning {
-    let detail = match pattern {
-        "empty_args" => format!("Tool '{name}' had {count} call(s) with empty arguments"),
-        "invalid_args" => format!("Tool '{name}' had {count} call(s) with malformed arguments"),
-        "dead_loop" => format!("Tool '{name}' repeated the same call {count} times"),
-        "fail_retry_chain" => format!("Tool '{name}' failed {count} consecutive times"),
-        "redundant" => format!("Tool '{name}' repeated the same call {count} times across turns"),
-        _ => String::new(),
+    let message = match pattern {
+        "empty_args" | "invalid_args" | "dead_loop" | "fail_retry_chain" | "redundant" => {
+            Message::new(&format!("msg.tool_warning.{pattern}"))
+                .arg("tool", name)
+                .arg("count", count)
+        }
+        _ => Message::default(),
     };
     ToolWarning {
         tool_name: name.to_string(),
         pattern: pattern.to_string(),
         count,
-        detail,
+        detail: message.render_or(Language::En, ""),
         severity: severity.to_string(),
+        i18n: message,
     }
 }
 

@@ -4,7 +4,9 @@
 //! (`tui.*`, `report.*`, `waste.*`). Look messages up with [`tr`]; use [`tr_args`] for
 //! messages with `%{name}` placeholders.
 
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 
 rust_i18n::i18n!("locales", fallback = "en");
 
@@ -64,6 +66,57 @@ pub fn tr_args(
     text
 }
 
+/// Look up a runtime key (e.g. one stored in a [`Message`]). `None` when the key is unknown.
+pub fn tr_key(language: Language, key: &str) -> Option<Cow<'static, str>> {
+    _rust_i18n_try_translate(language.locale(), key)
+}
+
+/// A localizable message: a catalog key plus pre-formatted parameters. Core stores this next
+/// to its English prose so every display path can render it in the reader's language, and a
+/// cached session can be shown in either language without being re-parsed.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Message {
+    pub key: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub params: BTreeMap<String, String>,
+}
+
+impl Message {
+    pub fn new(key: &str) -> Self {
+        Self {
+            key: key.to_string(),
+            params: BTreeMap::new(),
+        }
+    }
+
+    pub fn arg(mut self, name: &str, value: impl std::fmt::Display) -> Self {
+        self.params.insert(name.to_string(), value.to_string());
+        self
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.key.is_empty()
+    }
+
+    /// Render in `language`; `None` when there is no key or the key is unknown.
+    pub fn render(&self, language: Language) -> Option<String> {
+        if self.key.is_empty() {
+            return None;
+        }
+        let mut text = tr_key(language, &self.key)?.into_owned();
+        for (name, value) in &self.params {
+            text = text.replace(&format!("%{{{name}}}"), value);
+        }
+        Some(text)
+    }
+
+    /// Render in `language`, falling back to `english` (the stored prose) for messages
+    /// produced before keys existed.
+    pub fn render_or(&self, language: Language, english: &str) -> String {
+        self.render(language).unwrap_or_else(|| english.to_string())
+    }
+}
+
 /// Keys present in the English catalog, for consistency checks.
 pub fn catalog_keys(language: Language) -> Vec<String> {
     let mut keys = _RUST_I18N_BACKEND
@@ -98,6 +151,53 @@ mod tests {
         );
         assert!(missing_en.is_empty(), "missing in en.yml: {missing_en:?}");
         assert!(!en.is_empty());
+    }
+
+    #[test]
+    fn translations_use_the_same_placeholders() {
+        let placeholders = |text: &str| {
+            let mut names = text
+                .match_indices("%{")
+                .filter_map(|(start, _)| {
+                    let rest = &text[start + 2..];
+                    rest.find('}').map(|end| rest[..end].to_string())
+                })
+                .collect::<Vec<_>>();
+            names.sort();
+            names
+        };
+        for key in catalog_keys(Language::En) {
+            let en = tr_key(Language::En, &key).unwrap_or_default();
+            let zh = tr_key(Language::Zh, &key).unwrap_or_default();
+            assert_eq!(
+                placeholders(&en),
+                placeholders(&zh),
+                "placeholders differ for {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn message_renders_in_each_language() {
+        let message = Message::new("msg.anomaly.hanging")
+            .arg("count", 2)
+            .arg("max", 400);
+        assert_eq!(
+            message.render_or(Language::En, ""),
+            "2 gap(s) >60s, max=400s"
+        );
+        assert_eq!(
+            message.render_or(Language::Zh, ""),
+            "2 个间隔超过 60 秒，最长 400 秒"
+        );
+        assert_eq!(
+            Message::default().render_or(Language::Zh, "legacy"),
+            "legacy"
+        );
+        assert_eq!(
+            Message::new("msg.nope").render_or(Language::Zh, "legacy"),
+            "legacy"
+        );
     }
 
     #[test]

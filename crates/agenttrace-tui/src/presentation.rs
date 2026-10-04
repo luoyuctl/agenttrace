@@ -1995,7 +1995,7 @@ pub(super) fn diagnostics_text(app: &App) -> String {
                     "\n{} [{}]: {} (current={:.4}, baseline={:.4}, ratio={:.1}x)",
                     app.t("tui.cost_alert"),
                     localized_level(&alert.level, app.language),
-                    cost_alert_message(&alert.message, app.language),
+                    alert.message_for(app.language),
                     alert.current,
                     alert.baseline,
                     alert.ratio
@@ -2209,7 +2209,7 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
         lines.push(format!(
             "{}: {}",
             text(language, "tui.tool_warning"),
-            localized_tool_warning(&warning.detail, language)
+            warning.detail_for(language)
         ));
     }
     for latency in diagnostics
@@ -2245,7 +2245,7 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
         lines.push(format!(
             "{}: {}",
             text(language, "tui.context_suggestion"),
-            localized_context_suggestion(&diagnostics.context_utilization.suggestion, language)
+            diagnostics.context_utilization.suggestion_for(language)
         ));
     }
     for item in diagnostics.large_params.iter().take(3) {
@@ -2261,7 +2261,7 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
         lines.push(format!(
             "  {} {}",
             item.timestamp,
-            localized_large_param_detail(&item.detail, language)
+            item.detail_for(language)
         ));
     }
     for item in diagnostics.unused_tools.iter().take(3) {
@@ -2276,28 +2276,26 @@ pub(super) fn diagnostics_native_text(session: &Session, language: Language) -> 
         lines.push(format!(
             "  [{}] {}",
             localized_level(&item.level, language),
-            localized_rare_tool_detail(&item.detail, language)
+            item.detail_for(language)
         ));
     }
     for item in diagnostics.stuck_patterns.iter().take(3) {
         lines.push(format!(
             "{}: {}",
             text(language, "tui.stuck_pattern"),
-            localized_stuck_pattern(&item.description, language)
+            item.description_for(language)
         ));
     }
     for fix in fix_suggestions(session).into_iter().take(3) {
+        let (_, description, action) = fix.text_for(language);
         lines.push(format!(
             "{} [{}]: {} — {}",
             text(language, "tui.fix"),
             localized_level(&fix.severity, language),
             fix.category,
-            localized_fix_action(&fix.action, language)
+            action
         ));
-        lines.push(format!(
-            "  {}",
-            localized_fix_description(&fix.description, language)
-        ));
+        lines.push(format!("  {description}"));
     }
     lines.join("\n")
 }
@@ -2358,81 +2356,6 @@ pub(super) fn diagnostic_actions(session: &Session, language: Language) -> Vec<S
     actions
 }
 
-pub(super) fn localized_level(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    match value {
-        "critical" => "严重",
-        "warning" => "警告",
-        "high" => "高",
-        "medium" => "中",
-        "good" => "良好",
-        "low" => "低",
-        "info" => "提示",
-        _ => value,
-    }
-    .to_string()
-}
-
-pub(super) fn localized_anomaly(kind: &str, language: Language) -> String {
-    if language == Language::En {
-        return kind.replace('_', " ");
-    }
-    match kind {
-        "hanging" => "卡顿",
-        "latency" => "延迟",
-        "tool_failures" => "工具失败",
-        "shallow_thinking" => "推理过浅",
-        "redaction" | "redacted" => "推理脱敏",
-        "no_tools" => "未使用工具",
-        _ => kind,
-    }
-    .to_string()
-}
-
-pub(super) fn anomaly_detail_for_tui(
-    anomaly: &agenttrace_core::Anomaly,
-    language: Language,
-) -> String {
-    if language == Language::En {
-        return empty_as_unknown(&anomaly.detail).to_string();
-    }
-    match anomaly.kind.as_str() {
-        "no_tools" => "无工具调用，仅包含对话".to_string(),
-        "hanging" => anomaly
-            .detail
-            .strip_suffix('s')
-            .map(|value| value.replace(" gap(s) >60s, max=", " 个间隔超过 60 秒，最长=") + "秒")
-            .unwrap_or_else(|| anomaly.detail.clone()),
-        "latency" => anomaly
-            .detail
-            .strip_prefix("p95 latency = ")
-            .and_then(|value| value.strip_suffix('s'))
-            .map(|value| format!("P95 延迟 = {value} 秒"))
-            .unwrap_or_else(|| anomaly.detail.clone()),
-        "tool_failures" => anomaly.detail.replace(" failed", " 次失败"),
-        "redaction" | "redacted" => anomaly.detail.replace(" block(s) redacted", " 个块已脱敏"),
-        "shallow_thinking" => anomaly
-            .detail
-            .replace("avg reasoning = ", "平均推理 = ")
-            .replace(" chars", " 字符")
-            .replace("very shallow", "非常浅"),
-        _ => anomaly.detail.clone(),
-    }
-}
-
-pub(super) fn localized_stuck_pattern(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    value
-        .replace(" gaps exceed 120s", " 个间隔超过 120 秒")
-        .replace("Repeated assistant response ", "助手重复响应 ")
-        .replace(" times", " 次")
-        .replace(" tool calls have no result", " 个工具调用没有结果")
-}
-
 fn pricing_status_label(value: &str, language: Language) -> String {
     if language == Language::En {
         return value.to_string();
@@ -2445,131 +2368,6 @@ fn pricing_status_label(value: &str, language: Language) -> String {
         _ => value,
     }
     .to_string()
-}
-
-fn localized_large_param_detail(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    if let Some((tool, size)) = value
-        .strip_prefix("Tool '")
-        .and_then(|value| value.split_once("' received "))
-        .and_then(|(tool, size)| {
-            size.strip_suffix(" bytes of arguments")
-                .map(|size| (tool, size))
-        })
-    {
-        return format!("工具 {tool} 收到 {size} 字节的参数。");
-    }
-    value.to_string()
-}
-
-fn localized_rare_tool_detail(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    value
-        .strip_prefix("Tool was used ")
-        .and_then(|value| value.strip_suffix(" time(s)."))
-        .map(|count| format!("该工具只调用了 {count} 次。"))
-        .unwrap_or_else(|| value.to_string())
-}
-
-fn localized_step_kind(value: &str, language: Language) -> String {
-    match value {
-        "tool" => text(language, "tui.tool"),
-        "meta" => text(language, "tui.note_2"),
-        _ => value,
-    }
-    .to_string()
-}
-
-fn localized_step_status(value: &str, language: Language) -> String {
-    match value {
-        "ok" => text(language, "tui.ok"),
-        "error" => text(language, "tui.error"),
-        "missing" => text(language, "tui.missing_result"),
-        "truncated" => text(language, "tui.truncated"),
-        _ => value,
-    }
-    .to_string()
-}
-
-fn localized_context_suggestion(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    match value {
-        "Reduce conversation or tool context before continuing." => {
-            "先缩短对话或工具上下文，再继续当前任务。"
-        }
-        _ => value,
-    }
-    .to_string()
-}
-
-fn localized_fix_description(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    match value {
-        "Long gaps indicate an unbounded operation." => "长时间无响应，可能没有设置执行上限。",
-        "Repeated failures increase latency and cost." => "反复失败会让任务更慢，也更花钱。",
-        "The session executed risky steps with little planning evidence." => {
-            "会话在缺少明确计划的情况下执行了高风险步骤。"
-        }
-        "Redacted reasoning limits failure attribution." => {
-            "推理内容被脱敏，较难判断问题从哪里开始。"
-        }
-        "The session did not inspect concrete artifacts." => "会话没有检查实际文件或其他具体产物。",
-        _ => value,
-    }
-    .to_string()
-}
-
-pub(super) fn localized_fix_action(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    match value {
-        "Add cancellation and a bounded timeout to long-running tools." => {
-            "为长时间运行的工具增加取消机制和有限超时。"
-        }
-        "Inspect failed arguments and stop retrying unchanged calls." => {
-            "检查失败参数，并停止重试未变化的调用。"
-        }
-        "Plan and verify the risky steps before execution." => "执行前规划并验证高风险步骤。",
-        "Check whether missing reasoning hides the failure boundary." => {
-            "检查缺失的推理是否掩盖了失败边界。"
-        }
-        "Inspect concrete artifacts instead of relying on chat-only reasoning." => {
-            "检查具体产物，不要只依赖对话推理。"
-        }
-        _ => value,
-    }
-    .to_string()
-}
-
-pub(super) fn localized_tool_warning(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    value
-        .replace("tool ", "工具 ")
-        .replace("uses broad authority", "使用了宽泛权限")
-        .replace("sensitive path", "敏感路径")
-}
-
-pub(super) fn cost_alert_message(value: &str, language: Language) -> String {
-    if language == Language::En {
-        return value.to_string();
-    }
-    value
-        .replace("Cost/turn is ", "每轮成本是基线的 ")
-        .replace("x the session baseline.", " 倍。")
-        .replace("Loop waste is ", "循环浪费占会话成本的 ")
-        .replace("% of session cost.", "% 。")
-        .replace("No comparable cost history.", "没有可比较的成本历史。")
 }
 
 pub(super) fn signal_lines(session: &Session, language: Language) -> Vec<String> {
@@ -2648,7 +2446,7 @@ pub(super) fn anomaly_lines(session: &Session, limit: usize, language: Language)
             "- {} {}: {}",
             localized_level(empty_as_unknown(&anomaly.severity), language),
             localized_anomaly(empty_as_unknown(&anomaly.kind), language),
-            anomaly_detail_for_tui(anomaly, language)
+            empty_as_unknown(&anomaly.detail_for(language))
         ));
     }
     if session.anomalies.len() > limit {

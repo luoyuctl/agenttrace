@@ -1,12 +1,12 @@
-use crate::{Anomaly, Diagnostics, Metrics, Session, ToolWarning};
+use crate::{Anomaly, Diagnostics, Message, Metrics, Session, ToolWarning};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 20;
-const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 5;
+pub(crate) const SESSION_CACHE_SCHEMA_VERSION: i64 = 21;
+const SQLITE_SNAPSHOT_SCHEMA_VERSION: i64 = 6;
 
 #[derive(Debug, Clone, Default)]
 pub struct SessionCache {
@@ -148,6 +148,8 @@ struct GoAnomaly {
     emoji: String,
     #[serde(default)]
     detail: String,
+    #[serde(default)]
+    i18n: Message,
 }
 
 pub fn session_cache_path() -> PathBuf {
@@ -629,6 +631,8 @@ struct GoToolWarning {
     detail: String,
     #[serde(default, rename = "Severity")]
     severity: String,
+    #[serde(default, rename = "I18n")]
+    i18n: Message,
 }
 
 impl GoToolWarning {
@@ -639,6 +643,7 @@ impl GoToolWarning {
             count: warning.count,
             detail: warning.detail.clone(),
             severity: warning.severity.clone(),
+            i18n: warning.i18n.clone(),
         }
     }
 
@@ -649,6 +654,7 @@ impl GoToolWarning {
             count: self.count,
             detail: self.detail,
             severity: self.severity,
+            i18n: self.i18n,
         }
     }
 }
@@ -729,6 +735,7 @@ impl GoAnomaly {
             severity: anomaly.severity.clone(),
             emoji: anomaly_emoji(&anomaly.severity).to_string(),
             detail: anomaly.detail.clone(),
+            i18n: anomaly.i18n.clone(),
         }
     }
 
@@ -737,6 +744,7 @@ impl GoAnomaly {
             kind: self.kind,
             severity: self.severity,
             detail: self.detail,
+            i18n: self.i18n,
         }
     }
 }
@@ -852,7 +860,7 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_snapshot_schema_five_round_trips_provenance_and_rejects_schema_four() {
+    fn sqlite_snapshot_schema_six_round_trips_provenance_and_rejects_schema_five() {
         let root = std::env::temp_dir().join(format!(
             "agenttrace-sqlite-schema-{}-{:?}",
             std::process::id(),
@@ -884,24 +892,24 @@ mod tests {
         store_sqlite_snapshot_at(&database, &snapshot, &[session]).expect("store snapshot");
         let raw = fs::read_to_string(&snapshot).expect("read snapshot");
         let doc: serde_json::Value = serde_json::from_str(&raw).expect("snapshot json");
-        assert_eq!(doc["schema_version"], 5);
+        assert_eq!(doc["schema_version"], 6);
         assert_eq!(
             doc.pointer("/sessions/0/Metrics/Provenance/Tokens")
                 .and_then(serde_json::Value::as_str),
             Some("reported_by_agent")
         );
         assert_eq!(
-            load_sqlite_snapshot_from(&database, &snapshot).expect("schema five cache hit")[0]
+            load_sqlite_snapshot_from(&database, &snapshot).expect("schema six cache hit")[0]
                 .metrics
                 .provenance
                 .duration,
             "timestamp_span"
         );
         let mut old = doc;
-        old["schema_version"] = serde_json::Value::from(4);
+        old["schema_version"] = serde_json::Value::from(5);
         fs::write(
             &snapshot,
-            serde_json::to_vec(&old).expect("schema four json"),
+            serde_json::to_vec(&old).expect("schema five json"),
         )
         .expect("write old snapshot");
         assert!(load_sqlite_snapshot_from(&database, &snapshot).is_none());

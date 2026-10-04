@@ -131,6 +131,7 @@ impl DerivedSession {
                     kind,
                     severity,
                     detail: "preserved derived history".to_string(),
+                    i18n: Default::default(),
                 })
                 .collect(),
             health: self.health,

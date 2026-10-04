@@ -829,6 +829,7 @@ fn inspect_command_respects_active_filters() {
         kind: "latency".to_string(),
         severity: "high".to_string(),
         detail: "p95 gap".to_string(),
+        i18n: Default::default(),
     });
     let mut critical = session("critical", "claude_code", "m", 40, 0.20, "bash");
     critical.cwd = "/tmp/in-scope".to_string();
@@ -962,6 +963,7 @@ fn commands_apply_go_style_triage_filters() {
         kind: "latency".to_string(),
         severity: "high".to_string(),
         detail: "p95 gap".to_string(),
+        i18n: Default::default(),
     });
     let mut app = App::new(
         vec![
@@ -1294,6 +1296,7 @@ fn overview_inspect_first_prioritizes_distinct_triage_entries() {
         kind: "latency".to_string(),
         severity: "medium".to_string(),
         detail: "p95 gap".to_string(),
+        i18n: Default::default(),
     });
     let mut failed = session("failed", "claude_code", "m", 85, 0.03, "read_file");
     failed.metrics.tool_calls_fail = 3;
@@ -1345,6 +1348,7 @@ fn renders_overview_and_list_with_test_backend() {
         kind: "latency".to_string(),
         severity: "medium".to_string(),
         detail: "p95 gap".to_string(),
+        i18n: Default::default(),
     });
     let mut app = App::new(
         vec![
@@ -1623,7 +1627,7 @@ fn ctrl_r_force_reload_clears_session_cache_before_loading() {
     fs::write(
             &cache_path,
             format!(
-                r#"{{"schema_version":20,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
+                r#"{{"schema_version":21,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
                 session_path_json,
                 file_mod_time_nanos_for_test(&metadata),
                 metadata.len()
@@ -1811,4 +1815,32 @@ fn file_mod_time_nanos_for_test(metadata: &fs::Metadata) -> i64 {
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|duration| duration.as_nanos().min(i64::MAX as u128) as i64)
         .unwrap_or(0)
+}
+
+#[test]
+fn live_detail_views_localize_core_messages() {
+    let mut value = session("zh-detail", "claude_code", "m", 60, 0.1, "bash");
+    value.metrics.gaps_sec = vec![400.0, 70.0];
+    value.anomalies = agenttrace_core::detect_anomalies(&value.metrics);
+    value.diagnostics.context_utilization = agenttrace_core::ContextUtilization {
+        risk_level: "critical".to_string(),
+        suggestion: "Reduce conversation or tool context before continuing.".to_string(),
+        suggestion_i18n: agenttrace_core::Message::new("msg.context.reduce"),
+        ..Default::default()
+    };
+
+    let timeline = detail_timeline_empty(&value, Language::Zh);
+    assert!(
+        timeline.contains("2 个间隔超过 60 秒，最长 400 秒"),
+        "{timeline}"
+    );
+    assert!(timeline.contains("[高]"), "{timeline}");
+    assert!(!timeline.contains("gap(s)"), "{timeline}");
+
+    let context = explorer_detail_context(&value, Language::Zh);
+    assert!(context.contains("先缩短对话或工具上下文"), "{context}");
+    assert!(!context.contains("Reduce conversation"), "{context}");
+
+    let english = detail_timeline_empty(&value, Language::En);
+    assert!(english.contains("2 gap(s) >60s, max=400s"), "{english}");
 }

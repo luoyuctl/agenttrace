@@ -1385,7 +1385,7 @@ fn render_detail_section(
                 )
             }
         }
-        DetailSection::Context => detail_context(session, app.language),
+        DetailSection::Context => explorer_detail_context(session, app.language),
         DetailSection::Files => detail_files(session, app.language),
         DetailSection::Timeline => unreachable!(),
     };
@@ -2178,10 +2178,12 @@ fn render_timeline_table(frame: &mut Frame<'_>, app: &App, session: &Session, ar
         .take(area.height.saturating_sub(4) as usize)
         .map(|step| {
             let name = short(&step.name, name_width);
-            let status = Cell::from(step.status.clone()).style(step_status_style(&step.status));
+            let status = Cell::from(localized_step_status(&step.status, app.language))
+                .style(step_status_style(&step.status));
+            let kind = localized_step_kind(&step.kind, app.language);
             if compact {
                 Row::new(vec![
-                    Cell::from(step.kind.clone()),
+                    Cell::from(kind),
                     Cell::from(name),
                     Cell::from(format_duration(step.duration_sec)),
                     status,
@@ -2202,7 +2204,7 @@ fn render_timeline_table(frame: &mut Frame<'_>, app: &App, session: &Session, ar
                 };
                 Row::new(vec![
                     Cell::from(started),
-                    Cell::from(step.kind.clone()),
+                    Cell::from(kind),
                     Cell::from(name),
                     Cell::from(format_duration(step.duration_sec)),
                     status,
@@ -2261,21 +2263,25 @@ fn step_status_style(status: &str) -> Style {
     }
 }
 
-fn detail_timeline_empty(session: &Session, language: Language) -> String {
+pub(super) fn detail_timeline_empty(session: &Session, language: Language) -> String {
     let mut lines = vec![
         text(language, "tui.what_happened").to_string(),
         String::new(),
         text(language, "tui.this_session_didn_t_record_a_step").to_string(),
     ];
     for anomaly in &session.anomalies {
-        lines.push(format!("• [{}] {}", anomaly.severity, anomaly.detail));
+        lines.push(format!(
+            "• [{}] {}",
+            localized_level(&anomaly.severity, language),
+            anomaly.detail_for(language)
+        ));
     }
     lines.push(String::new());
     lines.push(text(language, "tui.we_didn_t_see_a_compaction_event").to_string());
     lines.join("\n")
 }
 
-fn detail_context(session: &Session, language: Language) -> String {
+pub(super) fn explorer_detail_context(session: &Session, language: Language) -> String {
     let value = &session.diagnostics.context_utilization;
     let params = session
         .diagnostics
@@ -2312,7 +2318,7 @@ fn detail_context(session: &Session, language: Language) -> String {
         text(
             language, "tui.we_didn_t_see_a_compaction_event",
         ),
-        value.suggestion
+        value.suggestion_for(language)
     )
 }
 
@@ -2419,7 +2425,7 @@ fn primary_finding(session: &Session, language: Language) -> String {
         "anomaly" => session
             .anomalies
             .first()
-            .map(|anomaly| anomaly.detail.clone())
+            .map(|anomaly| anomaly.detail_for(language))
             .unwrap_or_else(|| text(language, "tui.something_unusual_showed_up").to_string()),
         "failures" => format!(
             "{}: {}",
@@ -2486,7 +2492,7 @@ fn explorer_evidence(session: &Session, language: Language) -> Vec<String> {
         .filter(|anomaly| anomaly.kind != "tool_failures")
         .take(3)
     {
-        evidence.push(anomaly.detail.clone());
+        evidence.push(anomaly.detail_for(language));
     }
     if evidence.is_empty() {
         evidence.push(text(language, "tui.there_s_not_much_extra_detail_for").to_string());
@@ -2521,7 +2527,7 @@ fn explorer_recommendation(session: &Session, language: Language) -> String {
         return text(language, "tui.check_the_failed_tool_calls_before_trying").to_string();
     }
     if !context.suggestion.trim().is_empty() && context.risk_level != "good" {
-        return context.suggestion.clone();
+        return context.suggestion_for(language);
     }
     text(language, "tui.open_what_happened_and_check_the_recorded").to_string()
 }

@@ -1039,6 +1039,7 @@ mod tests {
             count: 1,
             detail: String::new(),
             severity: "high".to_string(),
+            i18n: Default::default(),
         });
         let item = &mcp_governance(&[value]).items[0];
         assert_eq!(item.server, "demo");
