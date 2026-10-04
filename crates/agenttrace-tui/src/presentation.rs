@@ -1902,6 +1902,22 @@ pub(super) fn detail_summary_text(session: &Session, language: Language) -> Stri
             format_count(metrics.tool_results as i64)
         ),
     ]);
+    if metrics.subagent_count > 0 {
+        lines.push(format!(
+            "{}: {}  {}  {}",
+            text(language, "tui.subagents"),
+            format_count(metrics.subagent_count as i64),
+            format_compact_cost(metrics.subagent_cost),
+            format_tokens(metrics.subagent_tokens)
+        ));
+    }
+    if !metrics.parent_session.is_empty() {
+        lines.push(format!(
+            "{}: {}",
+            text(language, "tui.subagent_parent"),
+            short_path(&metrics.parent_session, 58)
+        ));
+    }
     lines.join("\n")
 }
 

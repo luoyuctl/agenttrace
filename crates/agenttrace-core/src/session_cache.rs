@@ -724,6 +724,7 @@ impl GoMetrics {
             duration_sec: self.duration_sec,
             cost_estimated: self.cost_estimated,
             provenance: self.provenance,
+            ..Metrics::default()
         }
     }
 }

@@ -833,6 +833,8 @@ tui:
   session: "session"
   session_at_a_glance: "Session at a glance"
   session_file: "Session file"
+  subagents: "Subagents"
+  subagent_parent: "Spawned by"
   session_overview: "Session Overview"
   session_summary: "Session Summary"
   sessions: "sessions"
