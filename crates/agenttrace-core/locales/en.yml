@@ -98,6 +98,7 @@ cli:
     dev_build: "This is a development build (v%{current}); the latest release is v%{latest}. Run `agenttrace update --force` to replace it with the release binary."
     downloading: "Downloading %{asset}..."
     incomplete_download: "Download of %{asset} looks incomplete (%{bytes} bytes); check your network or proxy and retry. The installed binary was not changed."
+    oversized_download: "%{asset} is larger than %{limit} MB, so it is not a valid agenttrace release asset. The installed binary was not changed."
     managed: "agenttrace was installed with %{manager}. Update it with:\n  %{command}\n(or run `agenttrace update --force` to overwrite the binary directly)"
     unknown_arg: "unknown argument for `agenttrace update`: %{value}"
     unsupported_platform: "No release binary is published for %{os}/%{arch}; build from source instead."

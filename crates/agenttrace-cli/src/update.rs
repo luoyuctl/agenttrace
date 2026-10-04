@@ -126,7 +126,17 @@ pub fn run(args: &[OsString], language: ReportLanguage) -> anyhow::Result<()> {
     )?))
     .ok_or_else(|| anyhow!("invalid checksum file for {asset}"))?;
     let binary = download(&agent, &base)?;
-    if binary.len() < MIN_BINARY_BYTES || binary.len() as u64 > MAX_DOWNLOAD_BYTES {
+    if binary.len() as u64 > MAX_DOWNLOAD_BYTES {
+        bail!(msg(
+            language,
+            "cli.update.oversized_download",
+            &[
+                ("asset", &asset),
+                ("limit", &(MAX_DOWNLOAD_BYTES / 1024 / 1024).to_string())
+            ]
+        ));
+    }
+    if binary.len() < MIN_BINARY_BYTES {
         bail!(msg(
             language,
             "cli.update.incomplete_download",
