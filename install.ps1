@@ -14,11 +14,17 @@ $ProgressPreference = "SilentlyContinue"
 $REPO = "luoyuctl/agenttrace"
 $BIN = "agenttrace.exe"
 
-# Detect architecture
-$ARCH = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-    "X64"   { "amd64" }
-    "Arm64" { "arm64" }
-    default { throw "Unsupported architecture: $_" }
+# Detect architecture. In interactive Windows PowerShell 5.1 the bundled PSReadLine 2.0
+# can shadow RuntimeInformation with a copy whose OSArchitecture is empty, so fall back
+# to the environment (PROCESSOR_ARCHITEW6432 is set for a 32-bit shell on a 64-bit OS).
+$osArch = try { "$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)" } catch { "" }
+if (-not $osArch) {
+    $osArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+}
+$ARCH = switch ($osArch) {
+    { $_ -in "X64", "AMD64" } { "amd64" }
+    "Arm64"                   { "arm64" }
+    default                   { throw "Unsupported architecture: '$osArch'" }
 }
 
 $asset = "agenttrace-windows-$ARCH.exe"
