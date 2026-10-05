@@ -132,7 +132,8 @@ fn rust_parses_workbuddy_messages_tools_usage_and_millis() {
 {"type":"reasoning","content":[],"rawContent":[{"type":"reasoning_text","text":"check first"}],"timestamp":1783777801000,"sessionId":"s1","cwd":"/tmp/project","providerData":{"model":"glm-5.2","agent":"cli"}}
 {"type":"function_call","name":"Read","callId":"c1","arguments":"{\"path\":\"a.rs\"}","timestamp":1783777802000,"sessionId":"s1","cwd":"/tmp/project","message":{"usage":{"input_tokens":100,"output_tokens":20,"cache_read_input_tokens":60}},"providerData":{"model":"glm-5.2","agent":"cli"}}
 {"type":"function_call_result","name":"Read","callId":"c1","status":"completed","output":{"type":"text","text":"ok"},"timestamp":1783777803000,"sessionId":"s1","cwd":"/tmp/project","providerData":{"model":"glm-5.2","agent":"cli"}}
-{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}],"timestamp":1783777804000,"sessionId":"s1","cwd":"/tmp/project","message":{"usage":{"input_tokens":120,"output_tokens":30,"cache_read_input_tokens":80}},"providerData":{"model":"glm-5.2","agent":"cli"}}
+{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}],"timestamp":1783777804000,"sessionId":"s1","cwd":"/tmp/project","message":{"usage":{"input_tokens":120,"output_tokens":30,"cache_read_input_tokens":80}},"providerData":{"model":"glm-5.2","agent":"cli","messageId":"m2"}}
+{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}],"timestamp":1783777804000,"sessionId":"s1","cwd":"/tmp/project","message":{"usage":{"input_tokens":120,"output_tokens":30,"cache_read_input_tokens":80}},"providerData":{"model":"glm-5.2","agent":"cli","messageId":"m2"}}
 "#,
     )
     .expect("write workbuddy session");
@@ -144,9 +145,12 @@ fn rust_parses_workbuddy_messages_tools_usage_and_millis() {
     assert_eq!(parsed.metrics.tool_calls_total, 1);
     assert_eq!(parsed.metrics.tool_calls_ok, 1);
     assert_eq!(parsed.metrics.reasoning_blocks, 1);
-    assert_eq!(parsed.metrics.tokens_input, 40);
-    assert_eq!(parsed.metrics.tokens_output, 30);
-    assert_eq!(parsed.metrics.tokens_cache_r, 80);
+    // Every per-request usage record counts; the repeated messageId "m2" counts once.
+    // input_tokens includes cached input: (100 - 60) + (120 - 80).
+    assert_eq!(parsed.metrics.tokens_input, 80);
+    assert_eq!(parsed.metrics.tokens_output, 50);
+    assert_eq!(parsed.metrics.tokens_cache_r, 140);
+    assert_eq!(parsed.metrics.usage_points.len(), 2);
     assert_eq!(parsed.metrics.session_start, "2026-07-11T13:50:00Z");
     assert_eq!(parsed.metrics.session_end, "2026-07-11T13:50:04Z");
 
@@ -414,7 +418,7 @@ fn rust_writes_and_reuses_go_compatible_session_cache() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(24)
+            Some(25)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
@@ -560,7 +564,7 @@ fn rust_refreshes_cache_entries_from_old_schema_version() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(24)
+            Some(25)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
