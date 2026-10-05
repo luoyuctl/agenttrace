@@ -30,7 +30,7 @@
       "Read"
     ],
     "websiteURL": "https://github.com/luoyuctl/agenttrace",
-    "privacyPolicyURL": "https://github.com/luoyuctl/agenttrace/blob/master/PRIVACY.md",
+    "privacyPolicyURL": "https://github.com/luoyuctl/agenttrace/blob/master/docs/PRIVACY.md",
     "termsOfServiceURL": "https://github.com/luoyuctl/agenttrace/blob/master/LICENSE",
     "defaultPrompt": [
       "Audit my latest AI coding-agent session with agenttrace.",

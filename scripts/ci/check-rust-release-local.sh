@@ -47,7 +47,7 @@ run_env AGENTTRACE_BIN="$bin" AGENTTRACE_REAL_CLI_OUT="$out_dir/real-cli-smoke" 
   scripts/ci/check-rust-real-cli-smoke.sh
 
 run scripts/ci/check-release-surfaces.sh
-run ruby -c homebrew/Formula/agenttrace.rb
+run ruby -c packaging/homebrew/Formula/agenttrace.rb
 run bash -n scripts/record-demo.sh scripts/record-real-marketing.sh scripts/ci/*.sh
 
 if [[ "${AGENTTRACE_SKIP_TUI_REAL_SMOKE:-}" == "1" ]]; then

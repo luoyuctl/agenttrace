@@ -13,8 +13,8 @@ Use this index to find the document that matches your role and task.
 ## Contributors
 
 - [Parser guide](guides/parser-guide.md) — add a session format safely with deterministic fixtures.
-- [Contributing](../CONTRIBUTING.md) — development setup, validation, privacy, and project expectations.
-- [Roadmap](../ROADMAP.md) — durable product directions and non-goals.
+- [Contributing](../.github/CONTRIBUTING.md) — development setup, validation, privacy, and project expectations.
+- [Roadmap](ROADMAP.md) — durable product directions and non-goals.
 
 ## Maintainers
 
@@ -31,4 +31,4 @@ Use this index to find the document that matches your role and task.
 - [Demo tape](demos/demo.tape) and [real-run tape](demos/real-run.tape)
 
 Security, privacy, and conduct policies remain at the repository root:
-[SECURITY](../SECURITY.md), [PRIVACY](../PRIVACY.md), and [CODE_OF_CONDUCT](../CODE_OF_CONDUCT.md).
+[SECURITY](../.github/SECURITY.md), [PRIVACY](PRIVACY.md), and [CODE_OF_CONDUCT](../.github/CODE_OF_CONDUCT.md).

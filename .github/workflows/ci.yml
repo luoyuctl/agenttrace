@@ -60,10 +60,10 @@ jobs:
         run: bash -n scripts/record-demo.sh scripts/ci/*.sh scripts/release/*.sh
 
       - name: Validate Homebrew formula syntax
-        run: ruby -c homebrew/Formula/agenttrace.rb
+        run: ruby -c packaging/homebrew/Formula/agenttrace.rb
 
       - name: Test npm package contract
-        run: npm --prefix npm test
+        run: npm --prefix packaging/npm test
 
   test:
     name: Test (${{ matrix.os }})

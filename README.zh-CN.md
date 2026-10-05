@@ -177,7 +177,7 @@ cargo build --release -p agenttrace
 target/release/agenttrace --doctor
 ```
 
-完整贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+完整贡献流程见 [CONTRIBUTING.md](.github/CONTRIBUTING.md)。
 
 ## 许可证
 

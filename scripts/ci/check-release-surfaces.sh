@@ -32,13 +32,13 @@ grep -q "npm install -g @zack78/agenttrace" README.md ||
 	fail "README must document npm installation"
 grep -q "npm install -g @zack78/agenttrace" README.zh-CN.md ||
 	fail "README.zh-CN must document npm installation"
-grep -q '"name": "@zack78/agenttrace"' npm/package.json ||
+grep -q '"name": "@zack78/agenttrace"' packaging/npm/package.json ||
 	fail "npm package must use the @zack78/agenttrace name"
-grep -q '"postinstall": "node scripts/install.js"' npm/package.json ||
+grep -q '"postinstall": "node scripts/install.js"' packaging/npm/package.json ||
 	fail "npm package must install the matching native release binary"
-grep -q '"access": "public"' npm/package.json ||
+grep -q '"access": "public"' packaging/npm/package.json ||
 	fail "npm package must declare public publish access"
-grep -q "checksum mismatch" npm/scripts/install.js ||
+grep -q "checksum mismatch" packaging/npm/scripts/install.js ||
 	fail "npm installer must verify release checksums"
 grep -q "render-channels.sh" .github/workflows/release.yml ||
 	fail "release workflow must render package-channel artifacts"
@@ -88,7 +88,7 @@ grep -q "gh release create" .github/workflows/release.yml ||
 	fail "release workflow must publish GitHub releases"
 
 if grep -R -Eqi "go install github.com/luoyuctl/agenttrace|go build .*cmd/agenttrace|setup-go|go-version-file" \
-	README.md README.zh-CN.md CONTRIBUTING.md docs/maintainers/launch-kit.md docs/maintainers/demo-playbook.md docs/guides/parser-guide.md docs/maintainers/agentops-prompt-rules.md install.sh install.ps1 .github homebrew skills; then
+	README.md README.zh-CN.md .github/CONTRIBUTING.md docs/maintainers/launch-kit.md docs/maintainers/demo-playbook.md docs/guides/parser-guide.md docs/maintainers/agentops-prompt-rules.md install.sh install.ps1 .github packaging/homebrew skills; then
 	fail "public release surfaces must not advertise Go build/install paths"
 fi
 
@@ -118,6 +118,6 @@ if git ls-files '*.go' go.mod go.sum 'cmd/**' 'internal/**' | while IFS= read -r
 	fail "Go implementation files must not be tracked in the Rust-only tree"
 fi
 
-npm_version="$(node -p "require('./npm/package.json').version")"
+npm_version="$(node -p "require('./packaging/npm/package.json').version")"
 [[ "$npm_version" = "0.0.0-release" ]] ||
 	fail "npm package must keep the release-version placeholder outside release CI"
