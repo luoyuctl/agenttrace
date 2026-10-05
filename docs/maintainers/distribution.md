@@ -17,11 +17,10 @@ install.sh
 install.ps1
 ```
 
-`install.cmd` is a thin CMD wrapper that runs `install.ps1`. Both installers download the
-release asset and its `.sha256`, refuse to install on a checksum mismatch, and add the install
-directory to the user's PATH. Standalone installs upgrade with `agenttrace update`, which uses
-the same assets and checksums; Homebrew, npm and cargo installs are pointed back to their
-package manager.
+Both installers download the release asset and its `.sha256`, refuse to install on a checksum
+mismatch, and add the install directory to the user's PATH. Standalone installs upgrade with
+`agenttrace update`, which uses the same assets and checksums; Homebrew, npm and cargo installs
+are pointed back to their package manager.
 
 These scripts remain at repository root because users invoke them through stable raw-GitHub URLs.
 
@@ -34,7 +33,7 @@ npm is also a release channel:
 - The workflow sets the npm package version from the `v*` tag immediately before packing and publishing it. Its postinstall hook downloads the matching checksummed GitHub Release binary.
 - The workflow renders the Homebrew Formula from the same `checksums.txt` artifact.
 
-WinGet is not a release channel; Windows users install with `install.ps1` / `install.cmd`.
+WinGet is not a release channel; Windows users install with `install.ps1`.
 
 The source tree deliberately uses non-release version placeholders. A release tag is the only source of a public version, so package metadata and rendered manifests never need manual version bumps.
 
