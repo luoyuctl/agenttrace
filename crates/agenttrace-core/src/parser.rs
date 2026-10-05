@@ -545,7 +545,7 @@ fn parse_workbuddy_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
                 .get("providerData")
                 .and_then(|data| string(data.get("messageId")))
                 .unwrap_or("");
-            if id.is_empty() || seen_usage.insert(id.to_string()) {
+            if id.is_empty() || seen_usage.insert(id) {
                 events.push(Event {
                     role: "meta".to_string(),
                     timestamp: timestamp.clone(),
