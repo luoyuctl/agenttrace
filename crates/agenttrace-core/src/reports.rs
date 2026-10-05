@@ -1966,7 +1966,6 @@ fn tool_display_name(name: &str) -> String {
         "claude_code_jsonl" => "Claude Code (JSONL)".to_string(),
         "codex_cli" => "Codex CLI".to_string(),
         "codex_rollout" => "Codex CLI (Rollout)".to_string(),
-        "gemini_cli" => "Gemini CLI".to_string(),
         "qwen_code" => "Qwen Code".to_string(),
         "opencode" => "OpenCode".to_string(),
         "opencode_db" => "OpenCode (DB)".to_string(),

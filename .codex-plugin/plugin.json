@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "agenttrace",
     "shortDescription": "Audit local AI agent sessions",
-    "longDescription": "Use the single Rust agenttrace CLI/TUI binary to inspect local Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Aider, Cursor, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi, Copilot-style, and generic JSON/JSONL sessions for spend, token use, evidence coverage, tool failures, latency, health, anomalies, diffs, and CI-ready gate signals.",
+    "longDescription": "Use the single Rust agenttrace CLI/TUI binary to inspect local Claude Code, Codex CLI, Qwen Code, Cline, Aider, Cursor, Hermes Agent, OpenCode, OpenClaw, Pi, Oh My Pi, Kimi, Copilot-style, and generic JSON/JSONL sessions for spend, token use, evidence coverage, tool failures, latency, health, anomalies, diffs, and CI-ready gate signals.",
     "developerName": "luoyuctl",
     "category": "Developer Tools",
     "capabilities": [

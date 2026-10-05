@@ -20,7 +20,7 @@ The script renders [the demo tape](../demos/demo.tape) into `assets/agenttrace-d
 
 ## Short Caption
 
-agenttrace is a local TUI for AI coding agent session history. It shows what Claude Code, Codex CLI, Gemini CLI, Qwen Code, Cline, Cursor exports, Aider, OpenCode, Kimi CLI, Pi, and generic JSON/JSONL traces spent across cost, tokens, and time, then helps diagnose why a task was slow.
+agenttrace is a local TUI for AI coding agent session history. It shows what Claude Code, Codex CLI, Qwen Code, Cline, Cursor exports, Aider, OpenCode, Kimi CLI, Pi, and generic JSON/JSONL traces spent across cost, tokens, and time, then helps diagnose why a task was slow.
 
 ## Verification Before Posting
 

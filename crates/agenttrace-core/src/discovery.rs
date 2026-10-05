@@ -433,9 +433,6 @@ fn walk_session_files_cached(
         if !is_special_session_file(&path) {
             continue;
         }
-        if is_gemini_temp_path(&path) && !is_gemini_temp_session_file(&path) {
-            continue;
-        }
         if is_open_code_storage_path(&path) && !is_open_code_storage_session_file(&path) {
             continue;
         }
@@ -488,9 +485,6 @@ fn walk_session_files(
             continue;
         }
         if !is_special_session_file(&path) {
-            continue;
-        }
-        if is_gemini_temp_path(&path) && !is_gemini_temp_session_file(&path) {
             continue;
         }
         if is_open_code_storage_path(&path) && !is_open_code_storage_session_file(&path) {
@@ -566,10 +560,6 @@ fn max_session_dir_depth(dir: &Path) -> usize {
     {
         return 3;
     }
-    if dir.file_name().and_then(|name| name.to_str()) == Some("tmp") && slash.contains("/.gemini/")
-    {
-        return 4;
-    }
     if is_open_code_storage_root(dir) {
         return 2;
     }
@@ -597,12 +587,6 @@ fn is_skipped_session_dir(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn is_gemini_temp_path(path: &Path) -> bool {
-    path.to_string_lossy()
-        .replace('\\', "/")
-        .contains("/.gemini/tmp/")
-}
-
 fn is_special_session_file(path: &Path) -> bool {
     let slash = path.to_string_lossy().replace('\\', "/");
     if slash.contains("/.claude/projects/") && slash.contains("/workflows/") {
@@ -615,16 +599,6 @@ fn is_special_session_file(path: &Path) -> bool {
         return slash.contains("/agent-transcripts/") && slash.ends_with(".jsonl");
     }
     true
-}
-
-fn is_gemini_temp_session_file(path: &Path) -> bool {
-    is_gemini_temp_path(path)
-        && matches!(
-            path.parent()
-                .and_then(Path::file_name)
-                .and_then(|name| name.to_str()),
-            Some("chats" | "checkpoints")
-        )
 }
 
 fn is_open_code_storage_root(path: &Path) -> bool {

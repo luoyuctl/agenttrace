@@ -22,7 +22,6 @@ body:
       options:
         - Claude Code
         - Codex CLI
-        - Gemini CLI
         - Qwen Code
         - Cline
         - Aider
