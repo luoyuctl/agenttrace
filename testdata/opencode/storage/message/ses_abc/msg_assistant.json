@@ -17,6 +17,7 @@
   "tokens": {
     "input": 42,
     "output": 17,
+    "reasoning": 5,
     "cache": {
       "read": 3,
       "write": 2

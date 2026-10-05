@@ -131,9 +131,6 @@ pub fn parse_raw_session(name: &str, path: &str, raw: &str) -> anyhow::Result<Se
         if let Some(events) = parse_cursor_export(&value) {
             return session_from_events(name, path, events);
         }
-        if let Some(events) = parse_gemini_value(&value) {
-            return session_from_events(name, path, events);
-        }
         if let Some(events) = parse_kimi_value(&value) {
             return session_from_events(name, path, events);
         }
@@ -158,6 +155,7 @@ fn parse_copilot_session_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
         return None;
     }
     let mut events = Vec::new();
+    let mut shutdown_usage: BTreeMap<String, (String, BTreeMap<String, i64>)> = BTreeMap::new();
     for entry in objs.iter() {
         let typ = string(entry.get("type")).unwrap_or("");
         let timestamp = string(entry.get("timestamp")).unwrap_or("").to_string();
@@ -221,23 +219,15 @@ fn parse_copilot_session_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
                 ..Event::default()
             }),
             "session.shutdown" => {
+                // modelMetrics are cumulative for the session and every resume writes
+                // another shutdown snapshot, so only the latest one per model counts.
                 if let Some(metrics) = data
                     .and_then(|data| data.get("modelMetrics"))
                     .and_then(Value::as_object)
                 {
                     for (model, metric) in metrics {
                         if let Some(usage) = metric.get("usage").and_then(usage_from_value) {
-                            events.insert(
-                                0,
-                                Event {
-                                    role: "meta".to_string(),
-                                    timestamp: timestamp.clone(),
-                                    usage,
-                                    model_used: model.clone(),
-                                    source_tool: "copilot_cli".to_string(),
-                                    ..Event::default()
-                                },
-                            );
+                            shutdown_usage.insert(model.clone(), (timestamp.clone(), usage));
                         }
                     }
                 }
@@ -245,6 +235,20 @@ fn parse_copilot_session_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
             _ => {}
         }
     }
+    let usage_events = shutdown_usage
+        .into_iter()
+        .map(|(model, (timestamp, mut usage))| {
+            subtract_cached_input(&mut usage);
+            Event {
+                role: "meta".to_string(),
+                timestamp,
+                usage,
+                model_used: model,
+                source_tool: "copilot_cli".to_string(),
+                ..Event::default()
+            }
+        });
+    events.splice(0..0, usage_events);
     non_empty(events)
 }
 
@@ -340,7 +344,7 @@ fn parse_kimi_wire_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
             "StatusUpdate" => {
                 if let Some(usage) = payload
                     .and_then(|payload| payload.get("token_usage"))
-                    .and_then(usage_from_value)
+                    .and_then(kimi_usage)
                 {
                     events.insert(
                         0,
@@ -1787,14 +1791,20 @@ fn qwen_tool_result_events(raw: Option<&Value>, ts: &str, model: &str) -> Vec<Ev
     events
 }
 
+/// Qwen Code builds this from Gemini-style metadata: `input_tokens` is `promptTokenCount`,
+/// which already contains `cachedContentTokenCount` (reported as `cache_read_input_tokens`).
 fn qwen_usage(raw: Option<&Value>) -> Option<BTreeMap<String, i64>> {
     let obj = raw.and_then(Value::as_object)?;
     let mut usage = BTreeMap::new();
-    let input = sum_numbers(
+    let cache_read = first_number(
+        obj,
+        &["cache_read_input_tokens", "cacheRead", "cached_tokens"],
+    );
+    let input = first_number(
         obj,
         &["input_tokens", "prompt_tokens", "input", "promptTokenCount"],
-    );
-    let output = sum_numbers(
+    ) - cache_read;
+    let output = first_number(
         obj,
         &[
             "output_tokens",
@@ -1803,11 +1813,7 @@ fn qwen_usage(raw: Option<&Value>) -> Option<BTreeMap<String, i64>> {
             "candidatesTokenCount",
         ],
     );
-    let cache_read = sum_numbers(
-        obj,
-        &["cache_read_input_tokens", "cacheRead", "cached_tokens"],
-    );
-    let cache_write = sum_numbers(obj, &["cache_creation_input_tokens", "cacheWrite"]);
+    let cache_write = first_number(obj, &["cache_creation_input_tokens", "cacheWrite"]);
     if input > 0 {
         usage.insert("input_tokens".to_string(), input);
     }
@@ -1899,7 +1905,7 @@ fn parse_codex_rollout_jsonl(raw: &str) -> Option<Vec<Event>> {
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
     let mut saw_codex = false;
-    let mut prev_token_total: Option<BTreeMap<String, i64>> = None;
+    let mut codex_totals = CodexTotals::default();
     let lines = raw
         .lines()
         .filter(|line| !codex_line_is_ignorable(line))
@@ -1953,10 +1959,9 @@ fn parse_codex_rollout_jsonl(raw: &str) -> Option<Vec<Event>> {
                     continue;
                 };
                 if string(payload.get("type")) == Some("token_count") {
-                    if let Some((usage, next_total)) =
-                        codex_token_count_usage(payload.get("info"), prev_token_total.as_ref())
+                    if let Some(usage) =
+                        codex_token_count_usage(payload.get("info"), &mut codex_totals)
                     {
-                        prev_token_total = next_total;
                         events.push(Event {
                             role: "meta".to_string(),
                             timestamp: ts,
@@ -2081,20 +2086,30 @@ fn codex_line_is_ignorable(line: &str) -> bool {
         && !line.contains(r#""payload":{"type":"token_count""#)
 }
 
+/// Codex `token_count` events carry `last_token_usage` (the call that just finished) and
+/// `total_token_usage` (a running total). The total is not monotonic: compaction resets it,
+/// forks inherit the parent's total, and the same total is re-emitted on rate-limit-only
+/// updates. Count `last_token_usage` once per distinct total, falling back to the delta
+/// from the previous total when `last` is missing.
 fn codex_token_count_usage(
     raw_info: Option<&Value>,
-    prev_total: Option<&TokenUsage>,
-) -> Option<(TokenUsage, Option<TokenUsage>)> {
+    totals: &mut CodexTotals,
+) -> Option<TokenUsage> {
     let info = raw_info?.as_object()?;
     let total = token_usage_map(info.get("total_token_usage"));
-    let (counts, next_total) = if !total.is_empty() {
-        let delta = token_usage_delta(&total, prev_total);
-        (delta, Some(token_usage_high_water(&total, prev_total)))
+    let last = token_usage_map(info.get("last_token_usage"));
+    let counts = if total.is_empty() {
+        last
     } else {
-        (
-            token_usage_map(info.get("last_token_usage")),
-            prev_total.cloned(),
-        )
+        let prev = totals.prev.replace(total.clone());
+        if !totals.seen.insert(total.clone()) {
+            return None;
+        }
+        if usage_has_values(&last) {
+            last
+        } else {
+            token_usage_delta(&total, prev.as_ref())
+        }
     };
     if counts.is_empty() || !usage_has_values(&counts) {
         return None;
@@ -2109,15 +2124,21 @@ fn codex_token_count_usage(
         .copied()
         .unwrap_or(0);
     let input = (counts.get("input_tokens").copied().unwrap_or(0) - cache_read).max(0);
-    let output = counts.get("output_tokens").copied().unwrap_or(0)
-        + counts.get("reasoning_output_tokens").copied().unwrap_or(0);
+    // reasoning_output_tokens is a breakdown of output_tokens, not an addition to it.
+    let output = counts.get("output_tokens").copied().unwrap_or(0);
 
     let mut usage = BTreeMap::new();
     usage.insert("input_tokens".to_string(), input);
     usage.insert("output_tokens".to_string(), output);
     usage.insert("cache_creation_input_tokens".to_string(), cache_write);
     usage.insert("cache_read_input_tokens".to_string(), cache_read);
-    Some((usage, next_total))
+    Some(usage)
+}
+
+#[derive(Default)]
+struct CodexTotals {
+    prev: Option<TokenUsage>,
+    seen: BTreeSet<TokenUsage>,
 }
 
 fn token_usage_map(raw: Option<&Value>) -> TokenUsage {
@@ -2140,17 +2161,6 @@ fn token_usage_map(raw: Option<&Value>) -> TokenUsage {
             .map(|value| ((*key).to_string(), value))
     })
     .collect()
-}
-
-// Codex can briefly rewind total_token_usage (e.g. after compaction) and then climb back;
-// tracking the high-water mark keeps the rebound from being counted twice.
-fn token_usage_high_water(cur: &TokenUsage, prev: Option<&TokenUsage>) -> TokenUsage {
-    let mut merged = prev.cloned().unwrap_or_default();
-    for (key, value) in cur {
-        let slot = merged.entry(key.clone()).or_insert(0);
-        *slot = (*slot).max(*value);
-    }
-    merged
 }
 
 fn token_usage_delta(cur: &TokenUsage, prev: Option<&TokenUsage>) -> TokenUsage {
@@ -2177,7 +2187,7 @@ fn parse_claude_code_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
     let mut saw_claude = false;
-    let mut seen_usage_snapshots = BTreeSet::new();
+    let mut usage_by_message: BTreeMap<String, usize> = BTreeMap::new();
     let mut cwd = String::new();
     for obj in objs.iter() {
         let typ = string(obj.get("type")).unwrap_or("");
@@ -2214,17 +2224,22 @@ fn parse_claude_code_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
                         model = next_model.to_string();
                     }
                 }
-                if let Some(usage_value) = message.get("usage") {
+                if let Some(usage) = message.get("usage").and_then(usage_from_value) {
+                    // Streaming writes one row per content block, each repeating the
+                    // message's usage with a growing output count. Fold them into one
+                    // meta event per message id so input/cache are counted once.
                     let message_id = string(message.get("id")).unwrap_or("");
-                    let usage_key = if message_id.is_empty() {
-                        String::new()
-                    } else {
-                        serde_json::to_string(usage_value)
-                            .map(|usage| format!("{message_id}:{usage}"))
-                            .unwrap_or_default()
-                    };
-                    if usage_key.is_empty() || seen_usage_snapshots.insert(usage_key) {
-                        if let Some(usage) = usage_from_value(usage_value) {
+                    match usage_by_message.get(message_id).copied() {
+                        Some(index) => {
+                            for (key, value) in usage {
+                                let slot = events[index].usage.entry(key).or_insert(0);
+                                *slot = (*slot).max(value);
+                            }
+                        }
+                        None => {
+                            if !message_id.is_empty() {
+                                usage_by_message.insert(message_id.to_string(), events.len());
+                            }
                             events.push(Event {
                                 role: "meta".to_string(),
                                 timestamp: ts.clone(),
@@ -2374,8 +2389,12 @@ fn parse_copilot_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
         }
         let ts = copilot_timestamp(span.get("startTimeUnixNano"));
         let usage = copilot_usage(span);
+        // `invoke_agent` spans repeat the session totals of their `chat` children; only the
+        // per-request `chat` spans carry usage that can be summed.
+        let is_chat = name == "chat.completion"
+            || copilot_string_attr(span, "gen_ai.operation.name").as_deref() == Some("chat");
         match name {
-            "chat.completion" => {
+            _ if is_chat => {
                 let content = copilot_span_content(span);
                 if !content.is_empty() {
                     events.push(Event {
@@ -2452,21 +2471,12 @@ fn parse_kimi_value(value: &Value) -> Option<Vec<Event>> {
     }
     let model = string(doc.get("model")).unwrap_or("unknown").to_string();
     let mut events = Vec::new();
-    if let Some(usage) = doc.get("usage").and_then(usage_from_value) {
-        events.push(Event {
-            role: "meta".to_string(),
-            usage,
-            model_used: model.clone(),
-            source_tool: "kimi_cli".to_string(),
-            ..Event::default()
-        });
-    }
-    if let Some(usage) = doc
-        .get("metadata")
-        .and_then(Value::as_object)
-        .and_then(|metadata| metadata.get("usage"))
-        .and_then(usage_from_value)
-    {
+    // `metadata.usage` mirrors `usage` in exports that carry both; count it only once.
+    if let Some(usage) = doc.get("usage").and_then(kimi_usage).or_else(|| {
+        doc.get("metadata")
+            .and_then(|metadata| metadata.get("usage"))
+            .and_then(kimi_usage)
+    }) {
         events.push(Event {
             role: "meta".to_string(),
             usage,
@@ -2733,157 +2743,6 @@ fn cursor_composer_message_events(composer: &Map<String, Value>, fallback_ts: &s
         });
     }
     events
-}
-
-fn parse_gemini_value(value: &Value) -> Option<Vec<Event>> {
-    let mut events = Vec::new();
-    let mut model = "unknown".to_string();
-    parse_gemini_object(value, &mut model, &mut events);
-    if events.is_empty() {
-        if let Some(arr) = value.as_array() {
-            parse_gemini_array(arr, "", &model, &mut events);
-        }
-    }
-    non_empty(events)
-}
-
-fn parse_gemini_object(value: &Value, model: &mut String, events: &mut Vec<Event>) {
-    let Some(obj) = value.as_object() else {
-        return;
-    };
-    for key in ["modelVersion", "model", "modelId"] {
-        if let Some(value) = string(obj.get(key)) {
-            if !value.is_empty() {
-                *model = value.to_string();
-            }
-        }
-    }
-    for key in ["usageMetadata", "usage", "tokenUsage"] {
-        if let Some(usage) = obj.get(key).and_then(gemini_usage) {
-            events.push(Event {
-                role: "meta".to_string(),
-                usage,
-                model_used: model.clone(),
-                source_tool: "gemini_cli".to_string(),
-                ..Event::default()
-            });
-        }
-    }
-    let fallback_ts = string(obj.get("timestamp")).unwrap_or("");
-    if let Some(contents) = obj.get("contents").and_then(Value::as_array) {
-        parse_gemini_array(contents, fallback_ts, model, events);
-    }
-    for key in [
-        "history",
-        "messages",
-        "conversation",
-        "clientHistory",
-        "chatHistory",
-    ] {
-        if let Some(contents) = obj.get(key).and_then(Value::as_array) {
-            parse_gemini_array(contents, fallback_ts, model, events);
-        }
-    }
-    if let Some(candidates) = obj.get("candidates").and_then(Value::as_array) {
-        for candidate in candidates {
-            if let Some(content) = candidate.get("content").and_then(Value::as_object) {
-                parse_gemini_content_object(content, fallback_ts, model, events);
-            }
-        }
-    }
-    if obj.contains_key("parts") {
-        parse_gemini_content_object(obj, fallback_ts, model, events);
-    }
-    for key in ["checkpoint", "session", "chat"] {
-        if let Some(nested) = obj.get(key) {
-            parse_gemini_object(nested, model, events);
-        }
-    }
-}
-
-fn parse_gemini_array(items: &[Value], fallback_ts: &str, model: &str, events: &mut Vec<Event>) {
-    for item in items {
-        if let Some(item) = item.as_object() {
-            parse_gemini_content_object(item, fallback_ts, model, events);
-        }
-    }
-}
-
-fn parse_gemini_content_object(
-    obj: &Map<String, Value>,
-    fallback_ts: &str,
-    model: &str,
-    events: &mut Vec<Event>,
-) {
-    let role = gemini_role(string(obj.get("role")).unwrap_or(""));
-    let ts = string(obj.get("timestamp")).unwrap_or(fallback_ts);
-    let Some(parts) = obj.get("parts").and_then(Value::as_array) else {
-        return;
-    };
-    for part in parts {
-        let Some(part) = part.as_object() else {
-            continue;
-        };
-        if let Some(text) = string(part.get("text")) {
-            if part
-                .get("thought")
-                .and_then(Value::as_bool)
-                .unwrap_or(false)
-            {
-                events.push(Event {
-                    role: "assistant".to_string(),
-                    reasoning: text.to_string(),
-                    timestamp: ts.to_string(),
-                    model_used: model.to_string(),
-                    source_tool: "gemini_cli".to_string(),
-                    ..Event::default()
-                });
-            } else {
-                events.push(Event {
-                    role: role.clone(),
-                    content: text.to_string(),
-                    timestamp: ts.to_string(),
-                    model_used: model.to_string(),
-                    source_tool: "gemini_cli".to_string(),
-                    ..Event::default()
-                });
-            }
-        }
-        if let Some(function_call) = part.get("functionCall").and_then(Value::as_object) {
-            let name = string(function_call.get("name")).unwrap_or("").to_string();
-            let args = jsonish(function_call.get("args"));
-            if !name.is_empty() || !args.is_empty() {
-                events.push(Event {
-                    role: "assistant".to_string(),
-                    timestamp: ts.to_string(),
-                    tool_calls: vec![ToolCall {
-                        name,
-                        args,
-                        ..ToolCall::default()
-                    }],
-                    model_used: model.to_string(),
-                    source_tool: "gemini_cli".to_string(),
-                    ..Event::default()
-                });
-            }
-        }
-        if let Some(function_response) = part.get("functionResponse").and_then(Value::as_object) {
-            let name = string(function_response.get("name"))
-                .unwrap_or("")
-                .to_string();
-            let content = jsonish(function_response.get("response"));
-            if !name.is_empty() || !content.is_empty() {
-                events.push(Event {
-                    role: "tool".to_string(),
-                    content,
-                    timestamp: ts.to_string(),
-                    tool_call_id: name,
-                    source_tool: "gemini_cli".to_string(),
-                    ..Event::default()
-                });
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -3265,6 +3124,7 @@ fn add_opencode_tokens(usage: &mut BTreeMap<String, i64>, raw: Option<&Value>) -
     };
     add_usage_value(usage, "input_tokens", tokens.get("input"));
     add_usage_value(usage, "output_tokens", tokens.get("output"));
+    add_usage_value(usage, "output_tokens", tokens.get("reasoning"));
     if let Some(cache) = tokens.get("cache").and_then(Value::as_object) {
         add_usage_value(usage, "cache_read_input_tokens", cache.get("read"));
         add_usage_value(usage, "cache_creation_input_tokens", cache.get("write"));
@@ -3493,13 +3353,6 @@ fn cursor_role(role: &str) -> String {
     }
 }
 
-fn gemini_role(role: &str) -> String {
-    match role {
-        "model" => "assistant".to_string(),
-        other => other.to_string(),
-    }
-}
-
 fn cline_role(role: &str) -> String {
     match role.to_ascii_lowercase().as_str() {
         "human" => "user".to_string(),
@@ -3567,49 +3420,6 @@ fn timestamp_millis_nanos(ms: i64) -> String {
     chrono::DateTime::<chrono::Utc>::from_timestamp(secs, nsec)
         .map(|ts| ts.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true))
         .unwrap_or_default()
-}
-
-fn gemini_usage(value: &Value) -> Option<BTreeMap<String, i64>> {
-    let obj = value.as_object()?;
-    let mut usage = BTreeMap::new();
-    usage.insert(
-        "input_tokens".to_string(),
-        first_number(
-            obj,
-            &[
-                "promptTokenCount",
-                "inputTokenCount",
-                "inputTokens",
-                "input_tokens",
-                "prompt_tokens",
-            ],
-        ),
-    );
-    usage.insert(
-        "output_tokens".to_string(),
-        first_number(
-            obj,
-            &[
-                "candidatesTokenCount",
-                "outputTokenCount",
-                "outputTokens",
-                "output_tokens",
-                "completion_tokens",
-            ],
-        ),
-    );
-    usage.insert(
-        "cache_read_input_tokens".to_string(),
-        first_number(
-            obj,
-            &[
-                "cachedContentTokenCount",
-                "cacheReadInputTokens",
-                "cache_read_input_tokens",
-            ],
-        ),
-    );
-    Some(usage)
 }
 
 fn first_number(obj: &Map<String, Value>, keys: &[&str]) -> i64 {
@@ -3849,6 +3659,25 @@ fn repair_lone_surrogates(line: &str) -> Option<String> {
     changed.then_some(out)
 }
 
+/// Kimi's `TokenUsage` splits input into `input_other` (uncached), `input_cache_read`, and
+/// `input_cache_creation`, so `input_other` already excludes cache hits.
+fn kimi_usage(value: &Value) -> Option<BTreeMap<String, i64>> {
+    let obj = value.as_object()?;
+    if !obj.contains_key("input_other") && !obj.contains_key("input_cache_read") {
+        return usage_from_value(value);
+    }
+    let mut usage = BTreeMap::new();
+    for (target, key) in [
+        ("input_tokens", "input_other"),
+        ("output_tokens", "output"),
+        ("cache_read_input_tokens", "input_cache_read"),
+        ("cache_creation_input_tokens", "input_cache_creation"),
+    ] {
+        usage.insert(target.to_string(), first_number(obj, &[key]));
+    }
+    usage_has_values(&usage).then_some(usage)
+}
+
 fn usage_from_value(value: &Value) -> Option<BTreeMap<String, i64>> {
     let obj = value.as_object()?;
     let mut usage = BTreeMap::new();
@@ -3914,23 +3743,48 @@ fn tool_result_content(block: &Map<String, Value>) -> String {
 
 fn copilot_usage(span: &Map<String, Value>) -> BTreeMap<String, i64> {
     let mut usage = BTreeMap::new();
-    for (target, key) in [
-        ("input_tokens", "gen_ai.usage.input_tokens"),
-        ("output_tokens", "gen_ai.usage.output_tokens"),
+    for (target, keys) in [
+        ("input_tokens", &["gen_ai.usage.input_tokens"][..]),
+        ("output_tokens", &["gen_ai.usage.output_tokens"][..]),
         (
             "cache_creation_input_tokens",
-            "gen_ai.usage.cache_creation_input_tokens",
+            &[
+                "gen_ai.usage.cache_creation.input_tokens",
+                "gen_ai.usage.cache_creation_input_tokens",
+            ][..],
         ),
         (
             "cache_read_input_tokens",
-            "gen_ai.usage.cache_read_input_tokens",
+            &[
+                "gen_ai.usage.cache_read.input_tokens",
+                "gen_ai.usage.cache_read_input_tokens",
+            ][..],
         ),
     ] {
-        if let Some(value) = copilot_i64_attr(span, key).filter(|value| *value > 0) {
+        if let Some(value) = keys
+            .iter()
+            .find_map(|key| copilot_i64_attr(span, key))
+            .filter(|value| *value > 0)
+        {
             usage.insert(target.to_string(), value);
         }
     }
+    // GenAI semantic conventions count cached tokens inside gen_ai.usage.input_tokens.
+    subtract_cached_input(&mut usage);
     usage
+}
+
+/// For sources whose input count already includes cache reads and writes, leave only the
+/// uncached part in `input_tokens` so cost is not charged twice.
+fn subtract_cached_input(usage: &mut BTreeMap<String, i64>) {
+    let cached = usage.get("cache_read_input_tokens").copied().unwrap_or(0)
+        + usage
+            .get("cache_creation_input_tokens")
+            .copied()
+            .unwrap_or(0);
+    if let Some(input) = usage.get_mut("input_tokens") {
+        *input = (*input - cached).max(0);
+    }
 }
 
 fn copilot_span_content(span: &Map<String, Value>) -> String {

@@ -236,7 +236,9 @@ fn rust_parses_copilot_session_state() {
 {"type":"user.message","timestamp":"2026-05-07T10:00:01Z","data":{"content":"inspect"}}
 {"type":"tool.execution_start","timestamp":"2026-05-07T10:00:02Z","data":{"toolName":"Read","toolCallId":"c1","arguments":{"path":"a.rs"}}}
 {"type":"tool.execution_complete","timestamp":"2026-05-07T10:00:03Z","data":{"toolCallId":"c1","success":true}}
-{"type":"session.shutdown","timestamp":"2026-05-07T10:00:04Z","data":{"modelMetrics":{"gpt-5.4":{"usage":{"inputTokens":100,"outputTokens":20,"cacheReadTokens":40}}}}}
+{"type":"session.shutdown","timestamp":"2026-05-07T10:00:04Z","data":{"modelMetrics":{"gpt-5.4":{"usage":{"inputTokens":60,"outputTokens":10,"cacheReadTokens":20}}}}}
+{"type":"session.start","timestamp":"2026-05-07T10:01:00Z","data":{"context":{"cwd":"/tmp/copilot"}}}
+{"type":"session.shutdown","timestamp":"2026-05-07T10:01:04Z","data":{"modelMetrics":{"gpt-5.4":{"usage":{"inputTokens":100,"outputTokens":20,"cacheReadTokens":40}}}}}
 "#,
     )
     .expect("write copilot session");
@@ -247,7 +249,9 @@ fn rust_parses_copilot_session_state() {
     assert_eq!(parsed.metrics.model_used, "gpt-5.4");
     assert_eq!(parsed.metrics.tool_calls_total, 1);
     assert_eq!(parsed.metrics.tool_calls_ok, 1);
-    assert_eq!(parsed.metrics.tokens_input, 100);
+    // The resumed session's shutdown is cumulative, and inputTokens includes cache reads.
+    assert_eq!(parsed.metrics.tokens_input, 60);
+    assert_eq!(parsed.metrics.tokens_output, 20);
     assert_eq!(parsed.metrics.tokens_cache_r, 40);
 
     let _ = fs::remove_dir_all(root);
@@ -265,7 +269,8 @@ fn rust_parses_kimi_wire_session() {
 {"timestamp":1770000001.0,"message":{"type":"ThinkPart","payload":{"text":"check"}}}
 {"timestamp":1770000002.0,"message":{"type":"ToolCall","payload":{"id":"c1","name":"Read","arguments":{"path":"a.rs"}}}}
 {"timestamp":1770000003.0,"message":{"type":"ToolResult","payload":{"id":"c1","result":"ok"}}}
-{"timestamp":1770000004.0,"message":{"type":"StatusUpdate","payload":{"token_usage":{"inputTokens":100,"outputTokens":20,"cacheReadInputTokens":40}}}}
+{"timestamp":1770000004.0,"message":{"type":"StatusUpdate","payload":{"token_usage":{"input_other":60,"output":15,"input_cache_read":30,"input_cache_creation":5},"message_id":"m1"}}}
+{"timestamp":1770000005.0,"message":{"type":"StatusUpdate","payload":{"token_usage":{"input_other":40,"output":5,"input_cache_read":10,"input_cache_creation":0},"message_id":"m2"}}}
 "#,
     )
     .expect("write kimi wire session");
@@ -276,7 +281,9 @@ fn rust_parses_kimi_wire_session() {
     assert_eq!(parsed.metrics.tool_calls_ok, 1);
     assert_eq!(parsed.metrics.reasoning_blocks, 1);
     assert_eq!(parsed.metrics.tokens_input, 100);
+    assert_eq!(parsed.metrics.tokens_output, 20);
     assert_eq!(parsed.metrics.tokens_cache_r, 40);
+    assert_eq!(parsed.metrics.tokens_cache_w, 5);
 
     let _ = fs::remove_dir_all(root);
 }
@@ -418,7 +425,7 @@ fn rust_writes_and_reuses_go_compatible_session_cache() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(25)
+            Some(26)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
@@ -564,7 +571,7 @@ fn rust_refreshes_cache_entries_from_old_schema_version() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(25)
+            Some(26)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
@@ -758,9 +765,33 @@ fn rust_parses_opencode_storage_session() {
     assert_eq!(parsed.metrics.tool_calls_total, 1);
     assert_eq!(parsed.metrics.tool_calls_ok, 1);
     assert_eq!(parsed.metrics.tokens_input, 42);
-    assert_eq!(parsed.metrics.tokens_output, 17);
+    // Reasoning tokens are billed as output, matching the OpenCode SQLite path.
+    assert_eq!(parsed.metrics.tokens_output, 22);
     assert_eq!(parsed.metrics.tokens_cache_r, 3);
     assert_eq!(parsed.metrics.tokens_cache_w, 2);
+}
+
+#[test]
+fn rust_copilot_otel_sums_chat_spans_not_agent_totals() {
+    let root = temp_root("agenttrace-rust-copilot-otel-chat");
+    fs::create_dir_all(&root).expect("create copilot otel temp dir");
+    let path = root.join("otel.jsonl");
+    fs::write(
+        &path,
+        r#"{"traceId":"t1","spanId":"agent","name":"invoke_agent copilot","attributes":{"gen_ai.operation.name":"invoke_agent","gen_ai.request.model":"gpt-5.4","gen_ai.usage.input_tokens":300,"gen_ai.usage.output_tokens":30,"gen_ai.usage.cache_read.input_tokens":150}}
+{"traceId":"t1","spanId":"c1","parentSpanId":"agent","name":"chat gpt-5.4","attributes":{"gen_ai.operation.name":"chat","gen_ai.request.model":"gpt-5.4","gen_ai.usage.input_tokens":100,"gen_ai.usage.output_tokens":10,"gen_ai.usage.cache_read.input_tokens":40}}
+{"traceId":"t1","spanId":"c2","parentSpanId":"agent","name":"chat gpt-5.4","attributes":{"gen_ai.operation.name":"chat","gen_ai.request.model":"gpt-5.4","gen_ai.usage.input_tokens":200,"gen_ai.usage.output_tokens":20,"gen_ai.usage.cache_read.input_tokens":110,"gen_ai.usage.cache_creation.input_tokens":10}}
+"#,
+    )
+    .expect("write copilot otel");
+
+    let metrics = parse_file(&path).expect("parse copilot otel").metrics;
+    assert_eq!(metrics.tokens_input, 140);
+    assert_eq!(metrics.tokens_output, 30);
+    assert_eq!(metrics.tokens_cache_r, 150);
+    assert_eq!(metrics.tokens_cache_w, 10);
+
+    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -907,7 +938,7 @@ fn rust_codex_rollout_token_counts_use_turn_context_model() {
     assert_eq!(metrics.source_tool, "codex_cli");
     assert_eq!(metrics.tokens_input, 800);
     assert_eq!(metrics.tokens_cache_r, 900);
-    assert_eq!(metrics.tokens_output, 190);
+    assert_eq!(metrics.tokens_output, 160);
     assert_eq!(metrics.tool_calls_total, 1);
     assert_eq!(metrics.tool_calls_ok, 1);
 
@@ -937,6 +968,33 @@ fn rust_codex_rollout_ignores_rewound_cumulative_totals() {
         .metrics;
     assert_eq!(metrics.tokens_input, 1500);
     assert_eq!(metrics.tokens_output, 150);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn rust_codex_rollout_counts_last_usage_across_resets_and_forks() {
+    let root = temp_root("agenttrace-rust-codex-token-reset");
+    fs::create_dir_all(&root).expect("create codex temp dir");
+    let session_path = root.join("rollout.jsonl");
+    fs::write(
+        &session_path,
+        r#"{"timestamp":"2026-05-03T10:00:00Z","type":"session_meta","payload":{"model":"gpt-5.4"}}
+{"timestamp":"2026-05-03T10:00:01Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":50000,"output_tokens":5000},"last_token_usage":{"input_tokens":1000,"output_tokens":100}}}}
+{"timestamp":"2026-05-03T10:00:02Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":50000,"output_tokens":5000},"last_token_usage":{"input_tokens":1000,"output_tokens":100}}}}
+{"timestamp":"2026-05-03T10:00:03Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":2000,"output_tokens":200},"last_token_usage":{"input_tokens":2000,"output_tokens":200}}}}
+{"timestamp":"2026-05-03T10:00:04Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":5000,"output_tokens":500},"last_token_usage":{"input_tokens":3000,"output_tokens":300}}}}
+"#,
+    )
+    .expect("write codex rollout");
+
+    let metrics = parse_file(&session_path)
+        .expect("parse codex rollout")
+        .metrics;
+    // A forked session's first total is inherited from its parent and a compaction resets
+    // the total below its previous high-water mark; per-call usage is still counted once.
+    assert_eq!(metrics.tokens_input, 6000);
+    assert_eq!(metrics.tokens_output, 600);
 
     let _ = fs::remove_dir_all(root);
 }
@@ -1030,6 +1088,7 @@ fn rust_claude_code_jsonl_deduplicates_assistant_usage_snapshots() {
         &session_path,
         r#"{"type":"assistant","timestamp":"2026-05-03T10:00:00Z","message":{"id":"msg_1","role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":7,"cache_creation_input_tokens":3},"content":[{"type":"text","text":"hello"}]}}
 {"type":"assistant","timestamp":"2026-05-03T10:00:01Z","message":{"id":"msg_1","role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":7,"cache_creation_input_tokens":3},"content":[{"type":"tool_use","id":"tool_1","name":"Read","input":{}}]}}
+{"type":"assistant","timestamp":"2026-05-03T10:00:02Z","message":{"id":"msg_1","role":"assistant","model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":42,"cache_read_input_tokens":7,"cache_creation_input_tokens":3},"content":[{"type":"text","text":"done"}]}}
 "#,
     )
     .expect("write claude jsonl");
@@ -1038,7 +1097,7 @@ fn rust_claude_code_jsonl_deduplicates_assistant_usage_snapshots() {
     let metrics = &parsed.metrics;
     assert_eq!(metrics.source_tool, "claude_code");
     assert_eq!(metrics.tokens_input, 100);
-    assert_eq!(metrics.tokens_output, 10);
+    assert_eq!(metrics.tokens_output, 42);
     assert_eq!(metrics.tokens_cache_r, 7);
     assert_eq!(metrics.tokens_cache_w, 3);
     assert_eq!(metrics.tool_calls_total, 1);
@@ -1353,7 +1412,8 @@ fn rust_parses_qwen_code_stream_jsonl() {
     assert_eq!(metrics.assistant_turns, 1);
     assert_eq!(metrics.tool_calls_total, 1);
     assert_eq!(metrics.tool_calls_ok, 1);
-    assert_eq!(metrics.tokens_input, 120);
+    // input_tokens is promptTokenCount, which already includes the 10 cached tokens.
+    assert_eq!(metrics.tokens_input, 110);
     assert_eq!(metrics.tokens_output, 45);
     assert_eq!(metrics.tokens_cache_r, 10);
     assert_eq!(metrics.tokens_cache_w, 5);
