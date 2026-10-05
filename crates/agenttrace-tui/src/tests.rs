@@ -1620,7 +1620,7 @@ fn ctrl_r_force_reload_clears_session_cache_before_loading() {
     fs::write(
             &cache_path,
             format!(
-                r#"{{"schema_version":26,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
+                r#"{{"schema_version":27,"entries":{{{0}:{{"mod_time":{1},"size":{2},"session":{{"Name":"cached","Path":{0},"Metrics":{{"SourceTool":"hermes_jsonl","ModelUsed":"cached-model","SessionStart":"2026-05-02T09:00:00Z","ToolArgUsage":{{}}}},"Health":91,"ToolWarnings":[],"Diagnostics":{{}}}}}}}}}}"#,
                 session_path_json,
                 file_mod_time_nanos_for_test(&metadata),
                 metadata.len()
