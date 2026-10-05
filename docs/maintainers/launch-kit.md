@@ -382,7 +382,7 @@ Before sharing a release publicly, compare these surfaces against `gh release li
 
 - README release links point at the latest public release, while the Homebrew
   badge remains version-neutral until the tap is verified separately.
-- `homebrew/Formula/agenttrace.rb` and `homebrew/README.md` match the current install story.
+- `packaging/homebrew/Formula/agenttrace.rb` and `packaging/homebrew/README.md` match the current install story.
 - GitHub Discussions, release notes, and launch copy do not point readers at stale release links.
 - Public CTAs use neutral product actions such as `Get agenttrace`, `Install`, or `Latest release`.
 

@@ -24,7 +24,7 @@ test("publishes one agenttrace command backed by the native installer", () => {
 	assert.match(installer, /win32/);
 
 	const releaseWorkflow = readFileSync(
-		join(packageRoot, "..", ".github", "workflows", "release.yml"),
+		join(packageRoot, "..", "..", ".github", "workflows", "release.yml"),
 		"utf8",
 	);
 	assert.match(

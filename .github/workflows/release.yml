@@ -168,13 +168,13 @@ jobs:
           # shellcheck disable=SC2016
           RELEASE_VERSION="$version" node -e '
             const fs = require("fs");
-            const file = "npm/package.json";
+            const file = "packaging/npm/package.json";
             const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
             manifest.version = process.env.RELEASE_VERSION;
             fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
           '
-          cd npm
-          npm pack --pack-destination ../dist
+          cd packaging/npm
+          npm pack --pack-destination ../../dist
 
       - name: Configure npm registry authentication
         env:

@@ -212,7 +212,7 @@ cargo build --release -p agenttrace
 target/release/agenttrace --doctor
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contribution flow.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full contribution flow.
 
 ## License
 

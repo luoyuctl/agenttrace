@@ -33,7 +33,7 @@ jobs:
         id: cliff
         uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff
         with:
-          config: cliff.toml
+          config: .github/cliff.toml
           args: --latest --strip header --tag ${{ env.TAG }}
         env:
           OUTPUT: release-entry.md

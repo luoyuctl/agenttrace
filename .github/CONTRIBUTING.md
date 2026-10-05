@@ -24,7 +24,7 @@ cargo fmt --check
 cargo clippy -- -D warnings
 cargo test
 cargo build --release -p agenttrace
-ruby -c homebrew/Formula/agenttrace.rb
+ruby -c packaging/homebrew/Formula/agenttrace.rb
 ```
 
 For TUI changes, also check narrow and wide terminals when possible:
@@ -45,7 +45,7 @@ checks that both catalogs stay in sync.
 
 ## Parser Contributions
 
-Parser PRs are very welcome. Please read [docs/guides/parser-guide.md](docs/guides/parser-guide.md) first.
+Parser PRs are very welcome. Please read [docs/guides/parser-guide.md](../docs/guides/parser-guide.md) first.
 
 A good parser PR includes:
 
@@ -60,7 +60,7 @@ sources should remain Aggregate or Limited instead of receiving synthetic event
 timestamps or fake tool spans.
 
 Agent-run parser, growth, release, or quality review work should also follow
-[docs/maintainers/agentops-prompt-rules.md](docs/maintainers/agentops-prompt-rules.md) before opening
+[docs/maintainers/agentops-prompt-rules.md](../docs/maintainers/agentops-prompt-rules.md) before opening
 or approving a PR.
 
 ## Privacy

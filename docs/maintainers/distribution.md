@@ -27,7 +27,7 @@ These scripts remain at repository root because users invoke them through stable
 
 ## Homebrew
 
-The checked-in `homebrew/Formula/agenttrace.rb` is a `HEAD` Formula used only for local validation. The release workflow generates the versioned, checksum-pinned Formula from the tag and GitHub Release assets, then publishes it to `luoyuctl/homebrew-tap`.
+The checked-in `packaging/homebrew/Formula/agenttrace.rb` is a `HEAD` Formula used only for local validation. The release workflow generates the versioned, checksum-pinned Formula from the tag and GitHub Release assets, then publishes it to `luoyuctl/homebrew-tap`.
 
 npm is also a release channel:
 

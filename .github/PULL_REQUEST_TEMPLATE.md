@@ -23,7 +23,7 @@ What changed and why?
 - [ ] `AGENTTRACE_BIN="$PWD/target/release/agenttrace" scripts/ci/check-rust-tui-real-smoke.sh`
 - [ ] `scripts/ci/check-rust-release-local.sh`
 - [ ] `scripts/ci/check-cargo-manifests.sh`
-- [ ] `ruby -c homebrew/Formula/agenttrace.rb`
+- [ ] `ruby -c packaging/homebrew/Formula/agenttrace.rb`
 
 ## Notes
 
