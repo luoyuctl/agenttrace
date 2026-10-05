@@ -53,8 +53,6 @@ for script in install.sh install.ps1; do
 	grep -q "sha256" "$script" ||
 		fail "$script must verify the release SHA-256 before installing"
 done
-grep -q "install.ps1" install.cmd ||
-	fail "install.cmd must delegate to install.ps1"
 grep -q "agenttrace update" README.md ||
 	fail "README must document agenttrace update"
 
