@@ -522,7 +522,7 @@ fn parse_workbuddy_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
     }
     let mut events = Vec::new();
     let mut model = "unknown".to_string();
-    let mut latest_usage = None;
+    let mut seen_usage = BTreeSet::new();
     for entry in objs.iter() {
         if let Some(next) = entry
             .get("providerData")
@@ -538,6 +538,24 @@ fn parse_workbuddy_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
             .map(timestamp_millis)
             .unwrap_or_default();
         let cwd = string(entry.get("cwd")).unwrap_or("").to_string();
+        // Each usage record covers one model request, so every record counts
+        // (deduplicated by messageId in case a record is written twice).
+        if let Some(usage) = workbuddy_usage(entry) {
+            let id = entry
+                .get("providerData")
+                .and_then(|data| string(data.get("messageId")))
+                .unwrap_or("");
+            if id.is_empty() || seen_usage.insert(id) {
+                events.push(Event {
+                    role: "meta".to_string(),
+                    timestamp: timestamp.clone(),
+                    usage,
+                    model_used: model.clone(),
+                    source_tool: "workbuddy".to_string(),
+                    ..Event::default()
+                });
+            }
+        }
         match string(entry.get("type")).unwrap_or("") {
             "message" => {
                 let role = string(entry.get("role")).unwrap_or("");
@@ -553,7 +571,6 @@ fn parse_workbuddy_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
                         ..Event::default()
                     });
                 }
-                latest_usage = workbuddy_usage(entry).or(latest_usage);
             }
             "reasoning" => {
                 let reasoning = workbuddy_content(
@@ -575,7 +592,6 @@ fn parse_workbuddy_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
                 }
             }
             "function_call" => {
-                latest_usage = workbuddy_usage(entry).or(latest_usage);
                 events.push(Event {
                     role: "assistant".to_string(),
                     timestamp,
@@ -604,18 +620,6 @@ fn parse_workbuddy_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
             _ => {}
         }
     }
-    if let Some(usage) = latest_usage {
-        events.insert(
-            0,
-            Event {
-                role: "meta".to_string(),
-                usage,
-                model_used: model,
-                source_tool: "workbuddy".to_string(),
-                ..Event::default()
-            },
-        );
-    }
     non_empty(events)
 }
 
@@ -629,6 +633,9 @@ fn workbuddy_content(value: Option<&Value>) -> String {
         .join("\n")
 }
 
+/// WorkBuddy reports `input_tokens` inclusive of cached input
+/// (`total_tokens == input_tokens + output_tokens`), so the cached part is
+/// subtracted to get uncached input.
 fn workbuddy_usage(entry: &Map<String, Value>) -> Option<TokenUsage> {
     let mut usage = entry
         .get("message")
