@@ -425,7 +425,7 @@ fn rust_writes_and_reuses_go_compatible_session_cache() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(26)
+            Some(27)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
@@ -571,7 +571,7 @@ fn rust_refreshes_cache_entries_from_old_schema_version() {
         let doc: Value = serde_json::from_str(&raw).expect("cache json");
         assert_eq!(
             doc.pointer("/schema_version").and_then(Value::as_i64),
-            Some(26)
+            Some(27)
         );
         let entry = doc
             .pointer(&format!("/entries/{}", escape_json_pointer(&session_path)))
@@ -1050,6 +1050,31 @@ fn rust_codex_rollout_prefers_cached_input_tokens_like_go() {
     assert_eq!(metrics.tokens_input, 900);
     assert_eq!(metrics.tokens_cache_r, 100);
     assert_eq!(metrics.tokens_output, 10);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn rust_workbuddy_clamps_cache_read_above_input_without_inflating_total() {
+    let root = temp_root("agenttrace-rust-workbuddy-cache-over-input");
+    fs::create_dir_all(&root).expect("create workbuddy temp dir");
+    let session_path = root.join("session.jsonl");
+    fs::write(
+        &session_path,
+        r#"{"type":"message","role":"user","content":[{"type":"input_text","text":"inspect"}],"timestamp":1783777800000,"sessionId":"s1","cwd":"/tmp/project","providerData":{"agent":"cli"}}
+{"type":"function_call","name":"Read","callId":"c1","arguments":"{}","timestamp":1783777801000,"sessionId":"s1","cwd":"/tmp/project","message":{"usage":{"input_tokens":100,"output_tokens":20,"cache_read_input_tokens":150}},"providerData":{"model":"glm-5.2","agent":"cli"}}
+"#,
+    )
+    .expect("write workbuddy session");
+
+    let parsed = parse_file(&session_path).expect("parse workbuddy session");
+    let metrics = &parsed.metrics;
+    assert_eq!(metrics.source_tool, "workbuddy");
+    // cache_read above a cache-inclusive input_tokens is a basis mismatch: the cached part
+    // is clamped to the reported input so the total never exceeds what WorkBuddy recorded.
+    assert_eq!(metrics.tokens_input, 0);
+    assert_eq!(metrics.tokens_cache_r, 100);
+    assert_eq!(metrics.tokens_output, 20);
 
     let _ = fs::remove_dir_all(root);
 }
