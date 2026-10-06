@@ -238,7 +238,7 @@ fn parse_copilot_session_jsonl(objs: &[JsonObject]) -> Option<Vec<Event>> {
     let usage_events = shutdown_usage
         .into_iter()
         .map(|(model, (timestamp, mut usage))| {
-            subtract_cached_input(&mut usage);
+            subtract_cached_input(&mut usage, CACHE_READ_AND_WRITE);
             Event {
                 role: "meta".to_string(),
                 timestamp,
@@ -646,10 +646,7 @@ fn workbuddy_usage(entry: &Map<String, Value>) -> Option<TokenUsage> {
         .and_then(|message| message.get("usage"))
         .or_else(|| entry.get("providerData").and_then(|data| data.get("usage")))
         .and_then(usage_from_value)?;
-    let cached = usage.get("cache_read_input_tokens").copied().unwrap_or(0);
-    if let Some(input) = usage.get_mut("input_tokens") {
-        *input = (*input - cached).max(0);
-    }
+    subtract_cached_input(&mut usage, &["cache_read_input_tokens"]);
     Some(usage)
 }
 
@@ -3770,21 +3767,28 @@ fn copilot_usage(span: &Map<String, Value>) -> BTreeMap<String, i64> {
         }
     }
     // GenAI semantic conventions count cached tokens inside gen_ai.usage.input_tokens.
-    subtract_cached_input(&mut usage);
+    subtract_cached_input(&mut usage, CACHE_READ_AND_WRITE);
     usage
 }
 
-/// For sources whose input count already includes cache reads and writes, leave only the
-/// uncached part in `input_tokens` so cost is not charged twice.
-fn subtract_cached_input(usage: &mut BTreeMap<String, i64>) {
-    let cached = usage.get("cache_read_input_tokens").copied().unwrap_or(0)
-        + usage
-            .get("cache_creation_input_tokens")
-            .copied()
-            .unwrap_or(0);
-    if let Some(input) = usage.get_mut("input_tokens") {
-        *input = (*input - cached).max(0);
+const CACHE_READ_AND_WRITE: &[&str] = &["cache_read_input_tokens", "cache_creation_input_tokens"];
+
+/// For sources whose `input_tokens` already includes the given cache counts, leave only
+/// the uncached part in `input_tokens` so cost is not charged twice. Each cache count is
+/// clamped to what is left of the input, so a ledger whose cached part exceeds its input
+/// neither goes negative nor inflates the total beyond what the source reported.
+fn subtract_cached_input(usage: &mut BTreeMap<String, i64>, cache_keys: &[&str]) {
+    let Some(input) = usage.get("input_tokens").copied() else {
+        return;
+    };
+    let mut remaining = input.max(0);
+    for key in cache_keys {
+        if let Some(value) = usage.get_mut(*key) {
+            *value = (*value).clamp(0, remaining);
+            remaining -= *value;
+        }
     }
+    usage.insert("input_tokens".to_string(), remaining);
 }
 
 fn copilot_span_content(span: &Map<String, Value>) -> String {
