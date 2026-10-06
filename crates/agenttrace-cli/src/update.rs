@@ -16,6 +16,8 @@ use std::time::Duration;
 const REPO: &str = "luoyuctl/agenttrace";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Total budget for reading a release binary, generous enough for slow links.
+const BODY_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const ATTEMPTS: u32 = 3;
 /// Release binaries are ~10 MB; anything far outside that is not a real asset.
 const MIN_BINARY_BYTES: usize = 1_000_000;
@@ -58,10 +60,12 @@ pub fn run(args: &[OsString], language: ReportLanguage) -> anyhow::Result<()> {
     }
 
     say(tr(language, "cli.update.checking"))?;
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(CONNECT_TIMEOUT)
-        .timeout_read(READ_TIMEOUT)
-        .build();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(CONNECT_TIMEOUT))
+        .timeout_recv_response(Some(READ_TIMEOUT))
+        .timeout_recv_body(Some(BODY_TIMEOUT))
+        .build()
+        .into();
     let latest_tag = latest_release_tag(&agent)?;
     let latest = latest_tag.trim_start_matches('v');
     let dev_build = is_dev_build(VERSION);
@@ -199,34 +203,40 @@ fn latest_release_tag(agent: &ureq::Agent) -> anyhow::Result<String> {
 
 fn latest_tag_from_redirect() -> anyhow::Result<String> {
     let url = format!("https://github.com/{REPO}/releases/latest");
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(CONNECT_TIMEOUT)
-        .timeout_read(READ_TIMEOUT)
-        .redirects(0)
-        .build();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(CONNECT_TIMEOUT))
+        .timeout_recv_response(Some(READ_TIMEOUT))
+        .max_redirects(0)
+        .build()
+        .into();
     let response = agent
         .head(&url)
         .call()
         .map_err(|error| anyhow!("{url}: {error}"))?;
     let location = response
-        .header("location")
+        .headers()
+        .get("location")
+        .and_then(|value| value.to_str().ok())
         .ok_or_else(|| anyhow!("{url}: no redirect location"))?;
     tag_from_release_url(location).ok_or_else(|| anyhow!("{url}: unexpected redirect {location}"))
 }
 
 fn latest_tag_from_api(agent: &ureq::Agent) -> anyhow::Result<String> {
     let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
-    let mut request = agent.get(&url).set("Accept", "application/vnd.github+json");
+    let mut request = agent
+        .get(&url)
+        .header("Accept", "application/vnd.github+json");
     if let Some(token) = std::env::var("GITHUB_TOKEN")
         .ok()
         .filter(|token| !token.is_empty())
     {
-        request = request.set("Authorization", &format!("Bearer {token}"));
+        request = request.header("Authorization", format!("Bearer {token}"));
     }
     let body = request
         .call()
         .map_err(|error| anyhow!("{url}: {error}"))?
-        .into_string()
+        .body_mut()
+        .read_to_string()
         .context("read latest release")?;
     let release: serde_json::Value = serde_json::from_str(&body).context("parse latest release")?;
     release["tag_name"]
@@ -265,6 +275,7 @@ fn download_once(agent: &ureq::Agent, url: &str) -> anyhow::Result<Vec<u8>> {
         .get(url)
         .call()
         .map_err(|error| anyhow!("{error}"))?
+        .into_body()
         .into_reader()
         // One byte past the cap, so an oversized body is detected instead of truncated.
         .take(MAX_DOWNLOAD_BYTES + 1)
