@@ -9,6 +9,7 @@ use std::time::{Duration, SystemTime};
 
 const PRICING_URL: &str =
     "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
+const MAX_PRICING_BYTES: u64 = 64 * 1024 * 1024;
 const CACHE_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 static PRICING_CATALOG: OnceLock<PricingCatalog> = OnceLock::new();
 static PRICING_OVERRIDE_MODELS: OnceLock<BTreeSet<String>> = OnceLock::new();
@@ -289,10 +290,16 @@ fn pricing_override_models() -> &'static BTreeSet<String> {
 
 fn download_pricing(timeout: Duration) -> anyhow::Result<(String, BTreeMap<String, Price>)> {
     let raw = ureq::get(PRICING_URL)
-        .timeout(timeout)
+        .config()
+        .timeout_global(Some(timeout))
+        .build()
         .call()
         .map_err(|err| anyhow!("download failed: {err}"))?
-        .into_string()
+        .body_mut()
+        .with_config()
+        // ureq caps string bodies at 10 MB by default; the LiteLLM table is ~3 MB and growing.
+        .limit(MAX_PRICING_BYTES)
+        .read_to_string()
         .context("read pricing response")?;
     let entries = convert_litellm(raw.as_bytes());
     if entries.is_empty() {
