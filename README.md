@@ -77,9 +77,16 @@ irm https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | i
 
 The install scripts download the release binary for your platform, verify its
 SHA-256 against the published checksum, and add the install directory to your
-PATH (`~/.local/bin`, or `%LOCALAPPDATA%\agenttrace` on Windows). Set
-`AGENTTRACE_VERSION=v0.9.1` (or `-Version v0.9.1` in PowerShell) to pin a
-release.
+PATH (`~/.local/bin`, or `%LOCALAPPDATA%\agenttrace` on Windows). To pin a
+release, set `AGENTTRACE_VERSION`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.sh | AGENTTRACE_VERSION=v0.9.1 sh
+```
+
+```powershell
+$env:AGENTTRACE_VERSION = "v0.9.1"; irm https://raw.githubusercontent.com/luoyuctl/agenttrace/master/install.ps1 | iex
+```
 
 Package managers:
 
